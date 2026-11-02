@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>THE PORT FORTRESS — Night Port Military Operation (FireGun FPS v0.1.0)</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="webgl-canvas"></canvas>
+
+    <!-- Sniper Scope Overlay (SR-9 ADS) -->
+    <div id="sniper-scope" class="hidden">
+      <div class="scope-vignette"></div>
+      <div class="scope-crosshair-h"></div>
+      <div class="scope-crosshair-v"></div>
+      <div class="scope-mil-dots"></div>
+      <div class="scope-range-box">
+        <div class="scope-range-label">RANGE</div>
+        <div id="scope-range-val" class="scope-range-val">47 m</div>
+      </div>
+      <div class="scope-code">PFT-08 // SR-9 OPTIC 8X</div>
+    </div>
+
+    <!-- Damage / Hit Flash Vignette -->
+    <div id="damage-vignette"></div>
+
+    <!-- Main Tactical HUD -->
+    <div id="hud">
+      <!-- Top-Left Minimap -->
+      <div class="hud-minimap-card">
+        <canvas id="minimap-canvas" width="168" height="168"></canvas>
+        <div class="minimap-footer">
+          <span class="hazard-stripe-mini"></span>
+          <span id="minimap-grid-label">GRID K2</span>
+        </div>
+      </div>
+
+      <!-- Top-Center Compass & Objective -->
+      <div class="hud-compass-wrap">
+        <div id="compass-strip" class="compass-strip">
+          <span>NW 300</span><span>330</span><span class="compass-main">N 000</span><span>030</span><span>NE 060</span><span id="compass-heading" class="compass-heading">070</span><span>E 090</span><span>120</span><span>SE 150</span>
+        </div>
+        <div id="objective-banner" class="objective-banner">
+          <span class="obj-diamond">◆</span>
+          <span id="objective-text">目標：肅清碼頭武裝守軍並奪還港務主控終端 (0 / 8)</span>
+          <span id="objective-dist" class="obj-dist">42m</span>
+        </div>
+      </div>
+
+      <!-- Top-Right Killfeed & Perf Telemetry -->
+      <div class="hud-top-right">
+        <div id="perf-badge" class="perf-badge">FPS: -- | P95: -- ms | DC: --</div>
+        <div id="killfeed" class="killfeed"></div>
+      </div>
+
+      <!-- Center Reticle, Hitmarker & Reload / Kill Popups -->
+      <div id="reticle-wrap" class="reticle-wrap">
+        <div class="reticle-line ret-top"></div>
+        <div class="reticle-line ret-bottom"></div>
+        <div class="reticle-line ret-left"></div>
+        <div class="reticle-line ret-right"></div>
+        <div id="hitmarker" class="hitmarker hidden"></div>
+      </div>
+
+      <div id="reload-box" class="reload-box hidden">
+        <div class="reload-title">リロード中 // RELOADING</div>
+        <div class="reload-bar-bg"><div id="reload-bar-fill" class="reload-bar-fill"></div></div>
+      </div>
+
+      <div id="kill-banner" class="kill-banner hidden">
+        <div class="kill-skull">☠</div>
+        <div id="kill-banner-text" class="kill-banner-text">ELIMINATED +100</div>
+      </div>
+
+      <!-- Bottom-Left Health & Armor -->
+      <div class="hud-status-card">
+        <div class="status-row">
+          <span class="status-icon hp-plus">+</span>
+          <span id="hp-val" class="status-num">100</span>
+          <div class="status-bar-bg"><div id="hp-bar" class="status-bar-fill hp-fill" style="width:100%"></div></div>
+          <span class="status-unit">HP</span>
+        </div>
+        <div class="status-row">
+          <span class="status-icon armor-shield">🛡</span>
+          <span id="armor-val" class="status-num armor-num">150</span>
+          <div class="status-bar-bg armor-segments">
+            <div id="armor-bar" class="status-bar-fill armor-fill" style="width:100%"></div>
+          </div>
+          <span class="status-unit">ARMOR</span>
+        </div>
+        <div class="stance-indicator">
+          <span id="stance-text">STAND // 站立</span>
+          <span class="controls-hint">[WASD]移動 [Shift]衝刺 [C]蹲下 [R]換彈 [右鍵]瞄準 [1/2/3]切槍 [L]武器庫</span>
+        </div>
+      </div>
+
+      <!-- Bottom-Right Weapon Slots & Ammo -->
+      <div class="hud-weapon-wrap">
+        <div class="weapon-slots">
+          <div id="slot-1" class="weapon-slot active"><span class="slot-key">1</span><span class="slot-name">AR-7</span></div>
+          <div id="slot-2" class="weapon-slot"><span class="slot-key">2</span><span class="slot-name">SR-9</span></div>
+          <div id="slot-3" class="weapon-slot"><span class="slot-key">3</span><span class="slot-name">RL-7</span></div>
+        </div>
+        <div class="ammo-card">
+          <div class="weapon-silhouette-col">
+            <div id="weapon-icon-svg" class="weapon-silhouette">︻╦╤─</div>
+            <div id="weapon-title" class="weapon-title">AR-7 カービン</div>
+            <div class="hazard-stripe-mini"></div>
+          </div>
+          <div class="ammo-count-col">
+            <div class="ammo-numbers">
+              <span id="ammo-mag" class="ammo-mag">36</span>
+              <span class="ammo-sep">/</span>
+              <span id="ammo-reserve" class="ammo-reserve">120</span>
+            </div>
+            <div class="fire-mode-row">
+              <span id="fire-mode-badge" class="fire-mode-badge">AUTO</span>
+              <div id="ammo-ticks" class="ammo-ticks">||||||||||||||||||||</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3D Loadout Inspection Overlay (Key: L) -->
+    <div id="loadout-modal" class="modal-overlay hidden">
+      <div class="loadout-panel">
+        <div class="loadout-header">
+          <div class="loadout-title">LOADOUT <span class="sub-tag">// 戰術裝備檢視</span></div>
+          <div class="loadout-tabs">
+            <button data-wep="0" class="loadout-tab active">[1] AR-7 カービン</button>
+            <button data-wep="1" class="loadout-tab">[2] SR-9 スナイパー</button>
+            <button data-wep="2" class="loadout-tab">[3] RL-7 ロケット</button>
+          </div>
+          <div class="loadout-code">CONTAINER ARMS // A 02-17</div>
+        </div>
+        <div class="loadout-body">
+          <div class="loadout-info">
+            <div id="loadout-cat" class="loadout-cat">SNIPER / ボルトアクション</div>
+            <h2 id="loadout-name">SR-9 スナイパー</h2>
+            <p id="loadout-desc">高精度栓動狙擊步槍。配備 8 倍測距光學瞄準鏡與雙腳架，單發即可遠距離擊穿重型護甲。</p>
+            <div class="stats-box">
+              <div class="stats-header">STATS</div>
+              <div class="stat-row"><span>威力 (DAMAGE)</span><div class="stat-bar"><div id="stat-dmg" style="width:95%"></div></div><b id="stat-dmg-v">95</b></div>
+              <div class="stat-row"><span>連射 (FIRE RATE)</span><div class="stat-bar"><div id="stat-rof" style="width:15%"></div></div><b id="stat-rof-v">15</b></div>
+              <div class="stat-row"><span>安定性 (STABILITY)</span><div class="stat-bar"><div id="stat-stb" style="width:55%"></div></div><b id="stat-stb-v">55</b></div>
+              <div class="stat-row"><span>射程 (RANGE)</span><div class="stat-bar"><div id="stat-rng" style="width:98%"></div></div><b id="stat-rng-v">98</b></div>
+              <div class="stat-row"><span>装弾数 (CAPACITY)</span><div class="stat-bar"><div id="stat-cap" style="width:20%"></div></div><b id="stat-cap-v">5</b></div>
+            </div>
+          </div>
+        </div>
+        <div class="loadout-footer">
+          <span>[1/2/3] 切換武器</span>
+          <span>[滑鼠拖曳] 旋轉檢視</span>
+          <span>[L / Esc] 返回戰鬥</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mission Complete Summary Overlay -->
+    <div id="mission-modal" class="modal-overlay hidden">
+      <div class="mission-card">
+        <div class="mission-hazard-left"></div>
+        <div class="mission-content">
+          <h1 class="mission-h1">MISSION COMPLETE</h1>
+          <div class="mission-sub-row">
+            <span class="mission-sub-gold">MISSION 01 — 港の奪還 (MIDNIGHT HARBOR)</span>
+            <span class="mission-code">PFT-08 // HARBOR TERMINAL</span>
+          </div>
+          <div class="mission-grid">
+            <div class="mission-stats">
+              <div class="m-stat-row"><span>TIME</span><b id="m-time">02:48</b></div>
+              <div class="m-stat-row"><span>ELIMINATIONS</span><b id="m-kills">8</b></div>
+              <div class="m-stat-row"><span>ACCURACY</span><b id="m-acc">76%</b></div>
+              <div class="m-stat-row"><span>HEADSHOTS</span><b id="m-hs">4</b></div>
+              <div class="m-stat-row"><span>DAMAGE TAKEN</span><b id="m-dmg">35</b></div>
+              <div class="m-stat-row"><span>DIFFICULTY</span><b>ふつう (STANDARD)</b></div>
+            </div>
+            <div class="mission-rank-box">
+              <div class="rank-label">RANK</div>
+              <div id="m-rank" class="rank-letter">S</div>
+            </div>
+          </div>
+          <div class="mission-actions">
+            <button id="btn-retry" class="btn-gold">RETRY MISSION</button>
+            <button id="btn-continue" class="btn-dark">CONTINUE FREE ROAM</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

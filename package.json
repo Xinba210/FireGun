@@ -1,0 +1,23 @@
+{
+  "name": "firegun-realistic-fps",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5199",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview --host 127.0.0.1 --port 5199",
+    "build:assets": "node tools/build_assets_glb.mjs && node tools/build_audio_wav.mjs",
+    "verify": "node tools/qa/verify_fps.mjs"
+  },
+  "dependencies": {
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.180.0",
+    "playwright": "^1.56.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.12"
+  }
+}

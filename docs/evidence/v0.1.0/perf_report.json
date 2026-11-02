@@ -1,0 +1,66 @@
+{
+  "timestamp": "2026-11-02T14:41:57.057Z",
+  "version": "0.1.0",
+  "branch": "feat/v0.1.0-night-port-vertical-slice",
+  "status": "PASS",
+  "viewport": "1376x768 (screenshots) / 1280x720 (video)",
+  "videoRecorderMime": "video/mp4;codecs=avc1",
+  "performance": {
+    "avgFps": 42,
+    "p95FrameTimeMs": 30.4,
+    "drawCalls": 140,
+    "triangles": 167400,
+    "geometries": 59,
+    "textures": 80,
+    "gpuRenderer": "ANGLE (AMD, AMD Radeon(TM) 610M (0x0000164E) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "isSoftwareRenderer": false
+  },
+  "performanceDuringDualVideoEncode": {
+    "avgFps": 18.9,
+    "p95FrameTimeMs": 163.9,
+    "drawCalls": 142,
+    "triangles": 167872,
+    "geometries": 69,
+    "textures": 80,
+    "gpuRenderer": "ANGLE (AMD, AMD Radeon(TM) 610M (0x0000164E) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "isSoftwareRenderer": false
+  },
+  "gameplayState": {
+    "playerPos": [
+      -6.5,
+      0,
+      18.5
+    ],
+    "yaw": 0.02,
+    "pitch": -0.08,
+    "hp": 100,
+    "armor": 122,
+    "activeWeapon": "RL-7 ロケット",
+    "mag": 0,
+    "enemiesAlive": 6,
+    "enemiesTotal": 8,
+    "kills": 2
+  },
+  "errors": [],
+  "evidenceFiles": [
+    "ab_comparison_hero.png",
+    "ab_comparison_lane.png",
+    "ab_optimization_before_after.png",
+    "cam_hero_before.png",
+    "cam_hero_render.png",
+    "cam_lane_before.png",
+    "cam_lane_render.png",
+    "gameplay_walk_aim_shoot_reload_ai.mp4",
+    "gameplay_walk_aim_shoot_reload_ai.webm",
+    "perf_report.json",
+    "view_01_dock_entrance.png",
+    "view_02_cargo_ship_quay.png",
+    "view_03_container_alley_ads.png",
+    "view_04_overhead_catwalk_rl7.png",
+    "view_05_gantry_crane_lookup.png",
+    "view_06_sniper_scope_ads.png",
+    "view_07_warehouse_reload.png",
+    "view_08_loadout_3d_inspect.png",
+    "view_09_mission_complete.png"
+  ]
+}

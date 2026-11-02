@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.blender_user/
+.blender_temp/
+assets/source_cc0/
+*.log
+.DS_Store

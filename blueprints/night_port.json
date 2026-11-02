@@ -1,0 +1,100 @@
+{
+  "id": "night_port",
+  "name": {
+    "zh": "午夜港口軍事行動（PFT-08 貨櫃碼頭）",
+    "en": "Midnight Harbor Operation (PFT-08 Container Terminal)"
+  },
+  "seed": 20261102,
+  "reference": {
+    "heroImage": "reference/concept/port_overview_hero.jpg",
+    "laneImage": "reference/concept/port_combat_lane_mid.jpg",
+    "weaponImage": "reference/concept/weapon_carbine_sheet.jpg",
+    "soldierImage": "reference/concept/soldier_tactical_sheet.jpg",
+    "capture": [1376, 768],
+    "source": "AGY image-generator (Gemini 4 Argon / 2026-11-02)"
+  },
+  "cameras": {
+    "hero": {
+      "name": "CAM_HERO (Concept Overview Match, Pitch 26 deg)",
+      "position": [0.0, 14.5, 36.0],
+      "target": [0.0, 3.2, -12.0],
+      "fov": 46
+    },
+    "lane": {
+      "name": "CAM_LANE (Combat Corridor Match)",
+      "position": [-6.5, 2.1, 18.0],
+      "target": [-6.5, 2.4, -18.0],
+      "fov": 50
+    },
+    "view1": {
+      "name": "VIEW_01_DOCK_ENTRANCE",
+      "position": [0.0, 1.75, 29.0],
+      "target": [0.0, 2.0, 0.0],
+      "fov": 60
+    },
+    "view2": {
+      "name": "VIEW_02_CARGO_SHIP_QUAY",
+      "position": [-11.5, 2.2, 16.0],
+      "target": [-22.0, 8.5, -18.0],
+      "fov": 55
+    },
+    "view3": {
+      "name": "VIEW_03_CONTAINER_ALLEY",
+      "position": [-5.5, 1.75, 8.0],
+      "target": [-5.5, 2.2, -20.0],
+      "fov": 58
+    },
+    "view4": {
+      "name": "VIEW_04_OVERHEAD_CATWALK",
+      "position": [6.2, 6.2, 6.0],
+      "target": [-4.0, 3.0, -14.0],
+      "fov": 60
+    },
+    "view5": {
+      "name": "VIEW_05_GANTRY_CRANE_LOOK_UP",
+      "position": [-7.0, 1.8, -4.0],
+      "target": [-4.0, 19.0, -26.0],
+      "fov": 62
+    },
+    "view6": {
+      "name": "VIEW_06_WAREHOUSE_INTERIOR",
+      "position": [19.0, 1.8, 4.0],
+      "target": [19.0, 2.2, -16.0],
+      "fov": 60
+    },
+    "view7": {
+      "name": "VIEW_07_GUARD_POST_PLAZA",
+      "position": [12.5, 2.0, 22.0],
+      "target": [16.5, 2.2, 8.0],
+      "fov": 56
+    },
+    "view8": {
+      "name": "VIEW_08_SHIP_DECK_BRIDGE",
+      "position": [-18.0, 6.8, -6.0],
+      "target": [-22.0, 12.0, -32.0],
+      "fov": 56
+    }
+  },
+  "style": {
+    "sky": {
+      "top": "#060b14",
+      "horizon": "#132235",
+      "clouds": "#1a2d44"
+    },
+    "fog": {
+      "color": "#0d1826",
+      "density": 0.011
+    },
+    "lights": {
+      "moonColor": "#4c6e96",
+      "moonIntensity": 1.15,
+      "sodiumColor": "#ffaa44",
+      "fireColor": "#ff6a1a"
+    },
+    "exposure": 1.08
+  },
+  "spawn": {
+    "position": [0.0, 0.0, 28.0],
+    "yaw": 0.0
+  }
+}

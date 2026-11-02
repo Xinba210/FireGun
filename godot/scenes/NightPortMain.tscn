@@ -1,0 +1,109 @@
+[gd_scene load_steps=3 format=3 uid="uid://nightportmain01"]
+
+[ext_resource type="Script" path="res://scripts/night_port_level.gd" id="1_level"]
+[ext_resource type="Script" path="res://scripts/player_fps.gd" id="2_player"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_plr"]
+radius = 0.38
+height = 1.75
+
+[node name="NightPortMain" type="Node3D"]
+script = ExtResource("1_level")
+
+[node name="PlayerFPS" type="CharacterBody3D" parent="."]
+position = Vector3(0, 0, 28)
+script = ExtResource("2_player")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PlayerFPS"]
+position = Vector3(0, 0.88, 0)
+shape = SubResource("CapsuleShape3D_plr")
+
+[node name="Head" type="Node3D" parent="PlayerFPS"]
+position = Vector3(0, 1.72, 0)
+
+[node name="Camera3D" type="Camera3D" parent="PlayerFPS/Head"]
+fov = 60.0
+
+[node name="WeaponRayCast" type="RayCast3D" parent="PlayerFPS/Head/Camera3D"]
+target_position = Vector3(0, 0, -120)
+
+[node name="WeaponAudio3D" type="AudioStreamPlayer3D" parent="PlayerFPS/Head/Camera3D"]
+max_distance = 60.0
+
+[node name="TacticalHUD" type="CanvasLayer" parent="."]
+
+[node name="TopBar" type="Control" parent="TacticalHUD"]
+layout_mode = 3
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -260.0
+offset_top = 18.0
+offset_right = 260.0
+offset_bottom = 64.0
+
+[node name="ObjectiveLabel" type="Label" parent="TacticalHUD/TopBar"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+text = "目標：肅清碼頭武裝守軍並奪還港務主控終端 (0 / 8)"
+horizontal_alignment = 1
+
+[node name="BottomLeft" type="Control" parent="TacticalHUD"]
+layout_mode = 3
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = -68.0
+offset_right = 320.0
+offset_bottom = -20.0
+
+[node name="HpArmorLabel" type="Label" parent="TacticalHUD/BottomLeft"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+text = "+ HP 100   |   ARMOR 150"
+
+[node name="BottomRight" type="Control" parent="TacticalHUD"]
+layout_mode = 3
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -320.0
+offset_top = -68.0
+offset_right = -24.0
+offset_bottom = -20.0
+
+[node name="AmmoLabel" type="Label" parent="TacticalHUD/BottomRight"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+text = "AR-7 カービン  |  36 / 120"
+horizontal_alignment = 2
+
+[node name="MissionCompletePanel" type="Panel" parent="TacticalHUD"]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -280.0
+offset_top = -120.0
+offset_right = 280.0
+offset_bottom = 120.0
+
+[node name="StatsLabel" type="Label" parent="TacticalHUD/MissionCompletePanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+text = "MISSION COMPLETE"
+horizontal_alignment = 1
+vertical_alignment = 1
