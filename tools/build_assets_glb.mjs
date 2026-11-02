@@ -148,88 +148,146 @@ function generatePbrSet(name, size, evalPixel) {
 console.log('Generating high-detail PBR texture maps...');
 const TEX_SETS = {
   wet_concrete: generatePbrSet('wet_concrete', 256, (u, v) => {
-    const n = fbm(u, v, 10, 4, 11);
-    const puddle = fbm(u, v, 4, 3, 99) > 0.56 ? 1.0 : 0.0;
-    const crack = Math.abs(fbm(u, v, 18, 3, 42) - 0.5) < 0.018 ? 0.72 : 1.0;
-    const base = (0.28 + n * 0.14) * crack * (1.0 - puddle * 0.28);
+    const macro = fbm(u, v, 5, 4, 11);
+    const micro = fbm(u, v, 24, 3, 29);
+    const puddleField = fbm(u, v, 4, 4, 99);
+    // Smooth wet transition band instead of hard binary step
+    const wetness = Math.max(0, Math.min(1, (puddleField - 0.48) * 5.2));
+    const crackVal = Math.abs(fbm(u, v, 14, 3, 42) - 0.5);
+    const crack = crackVal < 0.014 ? 0.68 : 1.0;
+    const tireTrack = Math.sin(u * Math.PI * 16) > 0.85 ? 0.92 : 1.0;
+    const dryLuma = (0.19 + macro * 0.09 + micro * 0.05) * crack * tireTrack;
+    const base = dryLuma * (1.0 - wetness * 0.42);
+    const dryHeight = (0.35 + macro * 0.30 + micro * 0.18) * crack;
     return {
-      r: base * 0.94,
-      g: base * 0.98,
-      b: base * 1.06,
-      roughness: puddle > 0.5 ? 0.07 : 0.68 - n * 0.14,
-      metallic: puddle > 0.5 ? 0.22 : 0.05,
-      height: puddle > 0.5 ? 0.5 : n * crack,
-      ao: crack,
+      r: base * 0.92,
+      g: base * 0.97,
+      b: base * 1.08,
+      roughness: 0.68 - wetness * 0.56 - micro * 0.04,
+      metallic: 0.06 + wetness * 0.28,
+      height: dryHeight * (1.0 - wetness * 0.85) + 0.5 * (wetness * 0.85),
+      ao: crack * (0.9 + micro * 0.1),
     };
   }),
   container_red: generatePbrSet('container_red', 256, (u, v) => {
-    const rib = Math.sin(u * Math.PI * 36);
-    const rust = fbm(u, v, 12, 4, 21) > 0.66 ? 1.0 : 0.0;
-    const grime = fbm(u, v, 8, 3, 33);
+    const ribWave = Math.sin(u * Math.PI * 44);
+    const rib = Math.sign(ribWave) * Math.pow(Math.abs(ribWave), 0.55);
+    const streak = fbm(u * 6, v * 1.8, 8, 3, 19);
+    const edgeWear = (v < 0.05 || v > 0.95 || u < 0.03 || u > 0.97) ? 0.35 : 0.0;
+    const rustNoise = fbm(u, v, 16, 4, 21) + edgeWear * 0.45 - Math.abs(rib) * 0.15;
+    const rust = Math.max(0, Math.min(1, (rustNoise - 0.74) * 6.0));
+    const grime = fbm(u, v, 10, 3, 33) * 0.7 + streak * 0.3;
+    const shade = (0.82 + rib * 0.14) * (0.76 + grime * 0.28) * (1.0 - v * 0.12);
     return {
-      r: rust ? 0.44 : (0.68 + rib * 0.06) * (0.85 + grime * 0.2),
-      g: rust ? 0.22 : (0.19 + rib * 0.02) * (0.85 + grime * 0.2),
-      b: rust ? 0.15 : (0.16 + rib * 0.02) * (0.85 + grime * 0.2),
-      roughness: rust ? 0.78 : 0.42 + grime * 0.18,
-      metallic: rust ? 0.18 : 0.32,
-      height: 0.5 + rib * 0.35 - rust * 0.12,
-      ao: 0.88 + rib * 0.12,
+      r: (1 - rust) * (0.52 * shade) + rust * 0.31,
+      g: (1 - rust) * (0.13 * shade) + rust * 0.15,
+      b: (1 - rust) * (0.12 * shade) + rust * 0.11,
+      roughness: 0.38 + grime * 0.22 + rust * 0.32,
+      metallic: (1 - rust) * 0.38 + rust * 0.12,
+      height: 0.5 + rib * 0.38 - rust * 0.08,
+      ao: 0.84 + rib * 0.16,
     };
   }),
   container_blue: generatePbrSet('container_blue', 256, (u, v) => {
-    const rib = Math.sin(u * Math.PI * 36);
-    const rust = fbm(u, v, 12, 4, 51) > 0.68 ? 1.0 : 0.0;
-    const grime = fbm(u, v, 8, 3, 63);
+    const ribWave = Math.sin(u * Math.PI * 44);
+    const rib = Math.sign(ribWave) * Math.pow(Math.abs(ribWave), 0.55);
+    const streak = fbm(u * 6, v * 1.8, 8, 3, 49);
+    const edgeWear = (v < 0.05 || v > 0.95 || u < 0.03 || u > 0.97) ? 0.35 : 0.0;
+    const rustNoise = fbm(u, v, 16, 4, 51) + edgeWear * 0.45 - Math.abs(rib) * 0.15;
+    const rust = Math.max(0, Math.min(1, (rustNoise - 0.75) * 6.0));
+    const grime = fbm(u, v, 10, 3, 63) * 0.7 + streak * 0.3;
+    const shade = (0.82 + rib * 0.14) * (0.76 + grime * 0.28) * (1.0 - v * 0.12);
     return {
-      r: rust ? 0.38 : (0.18 + rib * 0.02) * (0.85 + grime * 0.2),
-      g: rust ? 0.22 : (0.36 + rib * 0.04) * (0.85 + grime * 0.2),
-      b: rust ? 0.16 : (0.62 + rib * 0.06) * (0.85 + grime * 0.2),
-      roughness: rust ? 0.78 : 0.42 + grime * 0.18,
-      metallic: rust ? 0.18 : 0.32,
-      height: 0.5 + rib * 0.35 - rust * 0.12,
-      ao: 0.88 + rib * 0.12,
+      r: (1 - rust) * (0.13 * shade) + rust * 0.29,
+      g: (1 - rust) * (0.26 * shade) + rust * 0.16,
+      b: (1 - rust) * (0.46 * shade) + rust * 0.12,
+      roughness: 0.38 + grime * 0.22 + rust * 0.32,
+      metallic: (1 - rust) * 0.38 + rust * 0.12,
+      height: 0.5 + rib * 0.38 - rust * 0.08,
+      ao: 0.84 + rib * 0.16,
     };
   }),
   container_green: generatePbrSet('container_green', 256, (u, v) => {
-    const rib = Math.sin(u * Math.PI * 36);
-    const rust = fbm(u, v, 12, 4, 71) > 0.68 ? 1.0 : 0.0;
-    const grime = fbm(u, v, 8, 3, 83);
+    const ribWave = Math.sin(u * Math.PI * 44);
+    const rib = Math.sign(ribWave) * Math.pow(Math.abs(ribWave), 0.55);
+    const streak = fbm(u * 6, v * 1.8, 8, 3, 69);
+    const edgeWear = (v < 0.05 || v > 0.95 || u < 0.03 || u > 0.97) ? 0.35 : 0.0;
+    const rustNoise = fbm(u, v, 16, 4, 71) + edgeWear * 0.45 - Math.abs(rib) * 0.15;
+    const rust = Math.max(0, Math.min(1, (rustNoise - 0.75) * 6.0));
+    const grime = fbm(u, v, 10, 3, 83) * 0.7 + streak * 0.3;
+    const shade = (0.82 + rib * 0.14) * (0.76 + grime * 0.28) * (1.0 - v * 0.12);
     return {
-      r: rust ? 0.38 : (0.24 + rib * 0.02) * (0.85 + grime * 0.2),
-      g: rust ? 0.22 : (0.42 + rib * 0.04) * (0.85 + grime * 0.2),
-      b: rust ? 0.16 : (0.26 + rib * 0.02) * (0.85 + grime * 0.2),
-      roughness: rust ? 0.78 : 0.44 + grime * 0.18,
-      metallic: rust ? 0.18 : 0.30,
-      height: 0.5 + rib * 0.35 - rust * 0.12,
-      ao: 0.88 + rib * 0.12,
+      r: (1 - rust) * (0.17 * shade) + rust * 0.29,
+      g: (1 - rust) * (0.30 * shade) + rust * 0.16,
+      b: (1 - rust) * (0.20 * shade) + rust * 0.12,
+      roughness: 0.40 + grime * 0.22 + rust * 0.32,
+      metallic: (1 - rust) * 0.36 + rust * 0.12,
+      height: 0.5 + rib * 0.38 - rust * 0.08,
+      ao: 0.84 + rib * 0.16,
     };
   }),
   rusted_steel: generatePbrSet('rusted_steel', 256, (u, v) => {
     const n = fbm(u, v, 10, 4, 105);
-    const rust = fbm(u, v, 16, 4, 205) > 0.55 ? 1.0 : 0.0;
-    const seam = (Math.abs((u * 4) % 1) < 0.03 || Math.abs((v * 4) % 1) < 0.03) ? 0.78 : 1.0;
+    const streak = fbm(u * 8, v * 2, 6, 3, 155);
+    const rustRaw = fbm(u, v, 14, 4, 205) * 0.75 + streak * 0.25;
+    const rust = Math.max(0, Math.min(1, (rustRaw - 0.62) * 4.5));
+    const seam = (Math.abs((u * 4) % 1) < 0.022 || Math.abs((v * 4) % 1) < 0.022) ? 0.74 : 1.0;
+    const steelR = 0.22 + n * 0.08;
+    const steelG = 0.25 + n * 0.08;
+    const steelB = 0.29 + n * 0.09;
     return {
-      r: (rust ? 0.48 : 0.34 + n * 0.10) * seam,
-      g: (rust ? 0.25 : 0.37 + n * 0.10) * seam,
-      b: (rust ? 0.18 : 0.42 + n * 0.10) * seam,
-      roughness: rust ? 0.76 : 0.38 + n * 0.18,
-      metallic: rust ? 0.22 : 0.45,
-      height: (0.5 + (n - 0.5) * 0.3) * seam,
+      r: ((1 - rust) * steelR + rust * 0.36) * seam,
+      g: ((1 - rust) * steelG + rust * 0.19) * seam,
+      b: ((1 - rust) * steelB + rust * 0.13) * seam,
+      roughness: (1 - rust) * (0.36 + n * 0.16) + rust * 0.78,
+      metallic: (1 - rust) * 0.56 + rust * 0.18,
+      height: (0.5 + (n - 0.5) * 0.26 - rust * 0.06) * seam,
       ao: seam,
     };
   }),
   gunmetal_pbr: generatePbrSet('gunmetal_pbr', 256, (u, v) => {
     const brush = fbm(u * 4, v * 24, 12, 3, 301);
-    const edgeWear = fbm(u, v, 18, 3, 309) > 0.72 ? 0.18 : 0.0;
-    const base = 0.24 + brush * 0.08 + edgeWear;
+    const edgeWear = fbm(u, v, 18, 3, 309) > 0.74 ? 0.14 : 0.0;
+    const base = 0.18 + brush * 0.07 + edgeWear;
     return {
       r: base,
       g: base * 1.03,
       b: base * 1.08,
-      roughness: 0.26 + brush * 0.12 - edgeWear * 0.4,
-      metallic: 0.58,
+      roughness: 0.28 + brush * 0.12 - edgeWear * 0.3,
+      metallic: 0.64,
       height: 0.5 + (brush - 0.5) * 0.18,
       ao: 0.95,
+    };
+  }),
+  wood_crate: generatePbrSet('wood_crate', 256, (u, v) => {
+    const grain = fbm(u * 2, v * 18, 10, 3, 401);
+    const plank = Math.abs((v * 6) % 1) < 0.04 ? 0.62 : 1.0;
+    const frame = (u < 0.08 || u > 0.92 || v < 0.08 || v > 0.92 || Math.abs(u - v) < 0.05) ? 0.78 : 1.0;
+    const dirt = fbm(u, v, 8, 3, 419);
+    const base = (0.14 + grain * 0.08) * plank * frame * (0.75 + dirt * 0.35);
+    return {
+      r: base * 1.18,
+      g: base * 0.86,
+      b: base * 0.54,
+      roughness: 0.78 + (1 - plank) * 0.15,
+      metallic: 0.04,
+      height: (0.4 + grain * 0.3) * plank * frame,
+      ao: plank * frame,
+    };
+  }),
+  tactical_camo: generatePbrSet('tactical_camo', 256, (u, v) => {
+    const c1 = fbm(u, v, 6, 3, 501);
+    const c2 = fbm(u, v, 12, 3, 521);
+    const panel = (Math.abs((u * 2) % 1) < 0.025 || Math.abs((v * 2) % 1) < 0.025) ? 0.72 : 1.0;
+    const patch = c1 > 0.56 ? 0.75 : c2 < 0.42 ? 1.15 : 0.95;
+    return {
+      r: 0.11 * patch * panel,
+      g: 0.13 * patch * panel,
+      b: 0.09 * patch * panel,
+      roughness: 0.58 + c2 * 0.16,
+      metallic: 0.24,
+      height: (0.5 + (c2 - 0.5) * 0.2) * panel,
+      ao: panel,
     };
   }),
 };
@@ -450,7 +508,99 @@ function appendCylinder(geom, cx, cy, cz, rTop, rBot, height, segs = 16, axis = 
   }
   for (let i = 0; i < segs; i++) {
     const i0 = base + i * 2;
+    if (axis === 'y') {
+      geom.indices.push(i0, i0 + 2, i0 + 3, i0, i0 + 3, i0 + 1);
+    } else {
+      geom.indices.push(i0, i0 + 3, i0 + 2, i0, i0 + 1, i0 + 3);
+    }
+  }
+  // Add Top and Bottom Disc Caps so cylinders are solid 3D volumes
+  for (let cap = 0; cap < 2; cap++) {
+    const r = cap === 0 ? rBot : rTop;
+    if (r <= 1e-4) continue;
+    const h = cap === 0 ? -half : half;
+    const sgn = cap === 0 ? -1 : 1;
+    let nx = 0, ny = 0, nz = 0;
+    if (axis === 'y') ny = sgn;
+    else if (axis === 'z') nz = sgn;
+    else nx = sgn;
+
+    const cIdx = geom.positions.length / 3;
+    geom.positions.push(
+      axis === 'x' ? cx + h : cx,
+      axis === 'y' ? cy + h : cy,
+      axis === 'z' ? cz + h : cz
+    );
+    geom.normals.push(nx, ny, nz);
+    geom.uvs.push(0.5, 0.5);
+
+    for (let i = 0; i <= segs; i++) {
+      const a = (i / segs) * Math.PI * 2;
+      const ca = Math.cos(a), sa = Math.sin(a);
+      let px = cx, py = cy, pz = cz;
+      if (axis === 'y') { px += ca * r; py += h; pz += sa * r; }
+      else if (axis === 'z') { px += ca * r; py += sa * r; pz += h; }
+      else { px += h; py += ca * r; pz += sa * r; }
+      geom.positions.push(px, py, pz);
+      geom.normals.push(nx, ny, nz);
+      geom.uvs.push(0.5 + ca * 0.5, 0.5 + sa * 0.5);
+    }
+    for (let i = 0; i < segs; i++) {
+      const flip = (axis === 'y') ? (cap === 1) : (cap === 0);
+      if (flip) {
+        geom.indices.push(cIdx, cIdx + 1 + i + 1, cIdx + 1 + i);
+      } else {
+        geom.indices.push(cIdx, cIdx + 1 + i, cIdx + 1 + i + 1);
+      }
+    }
+  }
+}
+
+function appendBeam(geom, x1, y1, z1, x2, y2, z2, r = 0.08, segs = 6) {
+  const dx = x2 - x1, dy = y2 - y1, dz = z2 - z1;
+  const len = Math.hypot(dx, dy, dz);
+  if (len < 1e-4) return;
+  const dir = [dx / len, dy / len, dz / len];
+  const up = Math.abs(dir[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+  let ux = dir[1] * up[2] - dir[2] * up[1];
+  let uy = dir[2] * up[0] - dir[0] * up[2];
+  let uz = dir[0] * up[1] - dir[1] * up[0];
+  const uLen = Math.hypot(ux, uy, uz) || 1;
+  ux /= uLen; uy /= uLen; uz /= uLen;
+  const vx = dir[1] * uz - dir[2] * uy;
+  const vy = dir[2] * ux - dir[0] * uz;
+  const vz = dir[0] * uy - dir[1] * ux;
+
+  const base = geom.positions.length / 3;
+  for (let i = 0; i <= segs; i++) {
+    const t = i / segs;
+    const a = t * Math.PI * 2;
+    const ca = Math.cos(a), sa = Math.sin(a);
+    const nx = ux * ca + vx * sa;
+    const ny = uy * ca + vy * sa;
+    const nz = uz * ca + vz * sa;
+    geom.positions.push(x1 + nx * r, y1 + ny * r, z1 + nz * r);
+    geom.normals.push(nx, ny, nz);
+    geom.uvs.push(t, 0);
+    geom.positions.push(x2 + nx * r, y2 + ny * r, z2 + nz * r);
+    geom.normals.push(nx, ny, nz);
+    geom.uvs.push(t, len * 0.5);
+  }
+  for (let i = 0; i < segs; i++) {
+    const i0 = base + i * 2;
     geom.indices.push(i0, i0 + 2, i0 + 3, i0, i0 + 3, i0 + 1);
+  }
+}
+
+function appendCatenaryChain(geom, x1, y1, z1, x2, y2, z2, sag = 0.28, segs = 8, radius = 0.032) {
+  let px = x1, py = y1, pz = z1;
+  for (let s = 1; s <= segs; s++) {
+    const t = s / segs;
+    const nx = x1 + (x2 - x1) * t;
+    const nz = z1 + (z2 - z1) * t;
+    const ny = y1 + (y2 - y1) * t - Math.sin(t * Math.PI) * sag;
+    appendBeam(geom, px, py, pz, nx, ny, nz, radius, 5);
+    px = nx; py = ny; pz = nz;
   }
 }
 
@@ -568,16 +718,22 @@ function buildPortEnvironmentGlb() {
   const matRustedSteel = b.addPbrTextureMaterial('MI_Rusted_Steel', TEX_SETS.rusted_steel);
   const matGunmetal = b.addPbrTextureMaterial('MI_Dark_Steel', TEX_SETS.gunmetal_pbr);
 
-  const matPuddle = b.addSolidPbrMaterial('MI_Water_Puddle', [0.05, 0.08, 0.12, 1], 0.03, 0.85);
-  const matSea = b.addSolidPbrMaterial('MI_Harbor_Sea', [0.02, 0.05, 0.09, 1], 0.09, 0.65);
-  const matShipRed = b.addSolidPbrMaterial('MI_Ship_Waterline', [0.42, 0.11, 0.09, 1], 0.65, 0.35);
-  const matShipBridge = b.addSolidPbrMaterial('MI_Ship_Superstructure', [0.68, 0.70, 0.72, 1], 0.58, 0.25);
-  const matLitWindow = b.addSolidPbrMaterial('MI_Warm_Window_Emissive', [1.0, 0.82, 0.48, 1], 0.2, 0.0, [2.2, 1.45, 0.65]);
-  const matFloodlight = b.addSolidPbrMaterial('MI_Sodium_Lamp', [1.0, 0.75, 0.35, 1], 0.1, 0.0, [3.0, 1.8, 0.6]);
-  const matFireGlow = b.addSolidPbrMaterial('MI_Fire_Embers', [1.0, 0.42, 0.08, 1], 0.2, 0.0, [3.2, 1.0, 0.15]);
-  const matHazard = b.addSolidPbrMaterial('MI_Hazard_Yellow', [0.85, 0.62, 0.08, 1], 0.5, 0.2);
-  const matWood = b.addSolidPbrMaterial('MI_Wood_Crate', [0.38, 0.27, 0.16, 1], 0.78, 0.05);
-  const matExplosive = b.addSolidPbrMaterial('MI_Explosive_Red', [0.76, 0.12, 0.09, 1], 0.38, 0.65);
+  const matPuddle = b.addSolidPbrMaterial('MI_Water_Puddle', [0.06, 0.10, 0.15, 1], 0.02, 0.92);
+  const matSea = b.addSolidPbrMaterial('MI_Harbor_Sea', [0.02, 0.05, 0.09, 1], 0.08, 0.72);
+  const matShipRed = b.addSolidPbrMaterial('MI_Ship_Waterline', [0.36, 0.11, 0.09, 1], 0.62, 0.35);
+  const matShipBridge = b.addPbrTextureMaterial('MI_Ship_Superstructure', TEX_SETS.gunmetal_pbr, {
+    baseColorFactor: [0.95, 1.0, 1.05, 1],
+    roughnessFactor: 0.65,
+    metallicFactor: 0.35,
+  });
+  const matLitWindow = b.addSolidPbrMaterial('MI_Warm_Window_Emissive', [1.0, 0.82, 0.48, 1], 0.2, 0.0, [2.4, 1.55, 0.68]);
+  const matFloodlight = b.addSolidPbrMaterial('MI_Sodium_Lamp', [1.0, 0.75, 0.35, 1], 0.1, 0.0, [3.2, 1.9, 0.65]);
+  const matFireGlow = b.addSolidPbrMaterial('MI_Fire_Embers', [1.0, 0.42, 0.08, 1], 0.2, 0.0, [3.5, 1.1, 0.18]);
+  const matHazard = b.addSolidPbrMaterial('MI_Hazard_Yellow', [0.78, 0.54, 0.08, 1], 0.48, 0.28);
+  const matWood = b.addPbrTextureMaterial('MI_Wood_Crate', TEX_SETS.wood_crate);
+  const matExplosive = b.addSolidPbrMaterial('MI_Explosive_Red', [0.68, 0.10, 0.08, 1], 0.36, 0.65);
+  const matOliveVehicle = b.addPbrTextureMaterial('MI_Tactical_Vehicle_OD', TEX_SETS.tactical_camo);
+  const matRubber = b.addSolidPbrMaterial('MI_Tire_Rubber', [0.06, 0.07, 0.08, 1], 0.84, 0.08);
 
   const gConcrete = makeGeometryCollector();
   const gPuddles = makeGeometryCollector();
@@ -595,47 +751,89 @@ function buildPortEnvironmentGlb() {
   const gHazard = makeGeometryCollector();
   const gWood = makeGeometryCollector();
   const gExplosive = makeGeometryCollector();
+  const gVehicleOD = makeGeometryCollector();
+  const gRubber = makeGeometryCollector();
 
-  // 1. Main Concrete Dock Platform & Sea Basin
+  // 1. Main Concrete Dock Platform & Sea Basin + Southern Dock Edge
   appendBox(gConcrete, 4, -1.0, 0, 56, 2.0, 88, 0.18);
   appendBox(gSea, -42, -1.6, 0, 60, 0.4, 120, 0.08);
-  // Seawall Coping & Yellow Hazard Stripes & Mooring Bollards + Crane Rails
+  // Seawall Coping & Yellow Hazard Stripes & Mooring Bollards + Hanging Bollard Chains
   appendBox(gConcrete, -23.5, 0.18, 0, 1.2, 0.36, 86, 0.25);
   for (let z = -38; z <= 38; z += 4) {
     appendBox(gHazard, -23.1, 0.37, z, 0.35, 0.02, 1.8, 1);
+    // Rubber Cylindrical Dock Fenders along Quay Wall
+    appendCylinder(gRubber, -24.18, -0.1, z, 0.32, 0.32, 1.4, 10, 'y');
   }
+  const westBollardZs = [];
   for (let z = -34; z <= 34; z += 8.5) {
+    westBollardZs.push(z);
     appendCylinder(gDarkSteel, -23.3, 0.55, z, 0.26, 0.32, 0.75, 12, 'y');
     appendCylinder(gDarkSteel, -23.3, 0.92, z, 0.36, 0.36, 0.12, 12, 'y');
   }
-  // Crane railway tracks along west lane
-  appendBox(gDarkSteel, -11.5, 0.03, 0, 0.18, 0.06, 78, 0.5);
-  appendBox(gDarkSteel, -3.5, 0.03, 0, 0.18, 0.06, 78, 0.5);
+  for (let i = 0; i < westBollardZs.length - 1; i++) {
+    appendCatenaryChain(gDarkSteel, -23.3, 0.78, westBollardZs[i], -23.3, 0.78, westBollardZs[i + 1], 0.32, 7, 0.032);
+  }
+  // Foreground Southern Seawall Bollards & Heavy Chains (matching CAM_HERO bottom foreground!)
+  const southBollardXs = [-20, -13, -6, 1, 8];
+  appendBox(gConcrete, -6, 0.16, 29.8, 32, 0.32, 0.95, 0.25);
+  for (let i = 0; i < southBollardXs.length; i++) {
+    const bx = southBollardXs[i];
+    appendCylinder(gDarkSteel, bx, 0.52, 29.8, 0.25, 0.31, 0.72, 12, 'y');
+    appendCylinder(gDarkSteel, bx, 0.88, 29.8, 0.35, 0.35, 0.11, 12, 'y');
+    if (i < southBollardXs.length - 1) {
+      appendCatenaryChain(gDarkSteel, bx, 0.74, 29.8, southBollardXs[i + 1], 0.74, 29.8, 0.28, 7, 0.035);
+    }
+  }
 
-  // Reflective Wet Puddle Patches across dock lanes
+  // Crane railway tracks along west lane
+  appendBox(gDarkSteel, -11.5, 0.03, 0, 0.22, 0.07, 78, 0.5);
+  appendBox(gDarkSteel, -3.5, 0.03, 0, 0.22, 0.07, 78, 0.5);
+
+  // Reflective Wet Puddle Patches across dock lanes (Organic multi-layered shapes)
   const puddles = [
-    [-6.5, 22, 5.5, 8.0], [-5.0, 6, 4.8, 9.5], [-7.5, -12, 5.2, 10.0],
-    [2.5, 16, 6.0, 7.5], [8.0, -4, 5.5, 8.5], [14.0, 18, 4.5, 6.5],
+    [-6.5, 22, 6.2, 8.8], [-3.2, 25.0, 5.2, 5.5], [-5.2, 8, 5.4, 11.0],
+    [-7.5, -12, 5.6, 10.5], [2.5, 16, 6.4, 8.2], [8.5, -4, 5.8, 9.0],
+    [14.2, 18.5, 5.8, 7.2], [16.5, 9.5, 6.0, 8.0],
   ];
   for (const [px, pz, sx, sz] of puddles) {
     appendBox(gPuddles, px, 0.015, pz, sx, 0.01, sz, 0.3);
   }
 
-  // 2. Moored Cargo Ship ("MV ATLANTIC") along West Quay (x = -33)
+  // 2. Moored Cargo Ship ("MV ATLANTIC MARINER") along West Quay (x = -33)
   appendBox(gShipRed, -33, -0.2, -8, 15.5, 2.8, 66, 0.12); // Lower waterline hull
   appendBox(gSteel, -33, 3.8, -8, 16.0, 5.6, 68, 0.14); // Main rusted hull
-  appendBox(gSteel, -33, 5.2, 29, 11.0, 6.2, 9, 0.15); // Bow forecastle
-  // Ship Deck Cargo Containers
+  // Hull structural rib strakes & bulwark rail
+  appendBox(gDarkSteel, -24.9, 6.65, -8, 0.35, 0.45, 68, 0.25);
+  appendBox(gDarkSteel, -24.95, 2.2, -8, 0.25, 0.3, 66, 0.25);
+  // Raked Bow Forecastle + Tapered Prow + Mast & Bow Floodlight
+  appendBox(gSteel, -33, 5.4, 28.5, 12.6, 6.4, 10, 0.15);
+  appendBox(gSteel, -33, 5.8, 34.5, 7.8, 6.6, 6.5, 0.15);
+  appendBox(gSteel, -33, 6.2, 38.2, 3.6, 6.8, 4.0, 0.15);
+  appendCylinder(gDarkSteel, -33, 12.2, 35.5, 0.16, 0.28, 6.8, 10, 'y'); // Foremast
+  appendBox(gDarkSteel, -33, 13.8, 35.5, 2.6, 0.18, 0.18, 1); // Foremast yardarm
+  appendBox(gLamps, -33, 15.2, 35.5, 0.65, 0.45, 0.65, 1); // Bow mast beacon
+  // Heavy Mooring Hawsers (Ropes from Ship Bow/Stern to Quay Bollards)
+  appendCatenaryChain(gDarkSteel, -27.2, 6.2, 28.0, -23.3, 0.85, 25.5, 0.85, 8, 0.045);
+  appendCatenaryChain(gDarkSteel, -27.2, 6.2, 18.0, -23.3, 0.85, 17.0, 0.75, 8, 0.045);
+  appendCatenaryChain(gDarkSteel, -25.2, 5.8, -16.0, -23.3, 0.85, -17.0, 0.65, 8, 0.045);
+
+  // Ship Deck Cargo Containers (Multi-stack)
   appendBox(gContRed, -35.5, 7.9, -2, 3.2, 2.6, 12, 0.25);
   appendBox(gContBlue, -30.5, 7.9, -2, 3.2, 2.6, 12, 0.25);
   appendBox(gContGreen, -35.5, 10.5, -2, 3.2, 2.6, 12, 0.25);
+  appendBox(gContRed, -30.5, 10.5, -2, 3.2, 2.6, 12, 0.25);
   appendBox(gContRed, -30.5, 7.9, 13, 3.2, 2.6, 12, 0.25);
+  appendBox(gContBlue, -35.5, 7.9, 13, 3.2, 2.6, 12, 0.25);
+  appendBox(gContGreen, -30.5, 10.5, 13, 3.2, 2.6, 12, 0.25);
   // Multi-story Bridge Superstructure at Stern (z = -26)
   appendBox(gShipBridge, -33, 9.2, -26, 14.2, 5.2, 13, 0.2);
   appendBox(gShipBridge, -33, 13.4, -26.5, 12.4, 3.4, 10.5, 0.2);
-  appendBox(gShipBridge, -33, 16.4, -25.5, 13.6, 2.6, 7.5, 0.2); // Navigation Bridge Wings
+  appendBox(gShipBridge, -33, 16.4, -25.5, 13.8, 2.6, 7.5, 0.2); // Navigation Bridge Wings
+  appendBox(gDarkSteel, -33, 11.9, -19.2, 14.4, 0.18, 0.8, 0.3); // Exterior bridge catwalk
   appendCylinder(gSteel, -33, 20.5, -28.5, 1.3, 1.6, 5.8, 14, 'y'); // Smokestack Funnel
+  appendCylinder(gHazard, -33, 21.8, -28.5, 1.36, 1.42, 1.2, 14, 'y'); // Funnel band
   appendCylinder(gDarkSteel, -33, 21.5, -24.5, 0.18, 0.32, 8.0, 10, 'y'); // Radar Mast
+  appendBox(gDarkSteel, -33, 23.8, -24.5, 3.8, 0.22, 0.22, 1); // Radar Crossbar
   // Illuminated Bridge Windows & Portholes
   for (let wx = -38; wx <= -28; wx += 2.5) {
     appendBox(gWindows, wx, 9.5, -19.4, 1.2, 0.9, 0.1, 1);
@@ -651,26 +849,59 @@ function buildPortEnvironmentGlb() {
 
   // 3. Towering Port Gantry Crane straddling West Lane (x = -11.5 to -3.5, z = -18)
   const craneZ = -18;
+  const zA = craneZ - 4.5, zB = craneZ + 4.5;
   for (const lx of [-11.5, -3.5]) {
-    for (const lz of [craneZ - 4.5, craneZ + 4.5]) {
+    for (const lz of [zA, craneZ + 4.5]) {
       appendBox(gSteel, lx, 11.0, lz, 0.95, 22.0, 0.95, 0.25); // 4 Portal Legs
+      // Bogie Wheel Trucks at base of each crane leg
+      appendBox(gDarkSteel, lx, 0.45, lz, 1.35, 0.85, 2.6, 0.3);
     }
     appendBox(gSteel, lx, 6.5, craneZ, 0.7, 0.7, 9.2, 0.25); // Cross strut low
     appendBox(gSteel, lx, 14.5, craneZ, 0.7, 0.7, 9.2, 0.25); // Cross strut mid
     appendBox(gSteel, lx, 21.5, craneZ, 0.9, 1.1, 10.2, 0.25); // Top portal beam
+    // Diagonal X-Bracing Trusses along Crane Portal Sides
+    appendBeam(gSteel, lx, 1.0, zA, lx, 6.5, zB, 0.18, 6);
+    appendBeam(gSteel, lx, 1.0, zB, lx, 6.5, zA, 0.18, 6);
+    appendBeam(gSteel, lx, 6.5, zA, lx, 14.5, zB, 0.18, 6);
+    appendBeam(gSteel, lx, 6.5, zB, lx, 14.5, zA, 0.18, 6);
+    appendBeam(gSteel, lx, 14.5, zA, lx, 21.5, zB, 0.18, 6);
+    appendBeam(gSteel, lx, 14.5, zB, lx, 21.5, zA, 0.18, 6);
   }
+  // Cross portal bracing between West (-11.5) and East (-3.5) legs at y = 14.5 & y = 21.5
+  appendBox(gSteel, -7.5, 14.5, zA, 8.2, 0.65, 0.65, 0.25);
+  appendBox(gSteel, -7.5, 14.5, zB, 8.2, 0.65, 0.65, 0.25);
+  appendBeam(gSteel, -11.5, 14.5, zA, -3.5, 21.5, zA, 0.18, 6);
+  appendBeam(gSteel, -3.5, 14.5, zA, -11.5, 21.5, zA, 0.18, 6);
+
   // Horizontal Boom extending from x = -38 (over Cargo Ship) to x = +8 (over Container Yard)
   appendBox(gSteel, -15.0, 22.4, craneZ - 2.2, 46.0, 1.2, 1.0, 0.2);
   appendBox(gSteel, -15.0, 22.4, craneZ + 2.2, 46.0, 1.2, 1.0, 0.2);
   for (let bx = -36; bx <= 6; bx += 4.2) {
     appendBox(gSteel, bx, 22.4, craneZ, 0.5, 0.8, 4.4, 0.25);
+    if (bx < 4) {
+      appendBeam(gSteel, bx, 22.4, craneZ - 2.2, bx + 4.2, 22.4, craneZ + 2.2, 0.14, 5);
+    }
   }
-  // Upper A-Frame Tower & Stay Cables + Operator Cab + Spreader Hook
+  // Upper A-Frame Tower & Stay Cables + Operator Cab + Suspended Container Spreader
   appendBox(gSteel, -7.5, 27.5, craneZ - 2.0, 0.8, 9.5, 0.8, 0.25);
   appendBox(gSteel, -7.5, 27.5, craneZ + 2.0, 0.8, 9.5, 0.8, 0.25);
   appendBox(gSteel, -7.5, 32.0, craneZ, 1.0, 0.9, 4.8, 0.25);
+  // Diagonal Forestay & Backstay Tension Cables from Apex (y=32) to Boom ends (y=22.8)
+  for (const cz of [craneZ - 2.0, craneZ + 2.0]) {
+    appendBeam(gDarkSteel, -7.5, 31.8, cz, -34.0, 22.8, cz, 0.09, 6);
+    appendBeam(gDarkSteel, -7.5, 31.8, cz, -19.0, 22.8, cz, 0.08, 6);
+    appendBeam(gDarkSteel, -7.5, 31.8, cz, 5.5, 22.8, cz, 0.09, 6);
+  }
   appendBox(gDarkSteel, -6.5, 19.8, craneZ, 3.4, 2.8, 3.6, 0.25); // Operator Cabin
   appendBox(gWindows, -6.5, 19.6, craneZ + 1.82, 2.4, 1.2, 0.1, 1);
+  // Suspended Spreader Frame & Hoist Cables at x = -18.5 (between ship & quay)
+  appendBox(gDarkSteel, -18.5, 21.6, craneZ, 2.8, 0.7, 3.8, 0.25); // Trolley
+  for (const cxOff of [-1.0, 1.0]) {
+    for (const czOff of [-1.2, 1.2]) {
+      appendBeam(gDarkSteel, -18.5 + cxOff, 21.4, craneZ + czOff, -18.5 + cxOff, 12.2, craneZ + czOff, 0.04, 5);
+    }
+  }
+  appendBox(gHazard, -18.5, 12.0, craneZ, 2.6, 0.55, 6.1, 0.3); // Yellow Container Spreader Beam
   // Floodlights under Crane Boom
   for (const fx of [-24, -14, -7.5, 0]) {
     appendBox(gLamps, fx, 21.6, craneZ, 1.1, 0.25, 0.8, 1);
@@ -681,9 +912,13 @@ function buildPortEnvironmentGlb() {
     const sx = rotY ? len : 2.44;
     const sz = rotY ? 2.44 : len;
     appendBox(matGeom, cx, cy + 1.3, cz, sx, 2.6, sz, 0.35);
-    // Corner castings & vertical door bars
+    // Corner castings, top/bottom frame rails & vertical locking bars
     appendBox(gDarkSteel, cx - sx * 0.48, cy + 1.3, cz + sz * 0.5, 0.12, 2.6, 0.12, 1);
     appendBox(gDarkSteel, cx + sx * 0.48, cy + 1.3, cz + sz * 0.5, 0.12, 2.6, 0.12, 1);
+    appendBox(gDarkSteel, cx - sx * 0.48, cy + 1.3, cz - sz * 0.5, 0.12, 2.6, 0.12, 1);
+    appendBox(gDarkSteel, cx + sx * 0.48, cy + 1.3, cz - sz * 0.5, 0.12, 2.6, 0.12, 1);
+    appendBox(gDarkSteel, cx - sx * 0.18, cy + 1.3, cz + sz * 0.505, 0.04, 2.4, 0.04, 1);
+    appendBox(gDarkSteel, cx + sx * 0.18, cy + 1.3, cz + sz * 0.505, 0.04, 2.4, 0.04, 1);
   }
   // Left-Center Stack Row (separating West Quay Lane from Center Plaza)
   addContainer(gContRed, -1.8, 0, 14, 6.1);
@@ -716,15 +951,30 @@ function buildPortEnvironmentGlb() {
   addContainer(gContRed, 12.0, 0, -24, 6.1);
 
   // 5. Elevated Steel Catwalk & Walkable Staircases (concept-to-playable-3d: slope <= 0.8)
-  // Main Catwalk along x = 6.2 at height y = 5.25 from z = 14 to z = -18, plus Cross-Bridge at z = 2
   appendBox(gSteel, 6.2, 5.25, -2, 2.2, 0.18, 32, 0.3);
   appendBox(gSteel, -0.5, 5.25, 2, 14.0, 0.18, 2.2, 0.3); // Overhead bridge across combat lane!
-  // Railings
-  appendBox(gDarkSteel, 5.15, 5.85, -2, 0.08, 1.1, 32, 0.3);
-  appendBox(gDarkSteel, 7.25, 5.85, -2, 0.08, 1.1, 32, 0.3);
-  appendBox(gDarkSteel, -0.5, 5.85, 0.95, 14.0, 1.1, 0.08, 0.3);
-  appendBox(gDarkSteel, -0.5, 5.85, 3.05, 14.0, 1.1, 0.08, 0.3);
-  // South Staircase (z = 21.5 -> z = 14.0, y = 0 -> y = 5.25; horizontal = 7.5m, rise = 5.25m, slope = 0.70 < 0.8!)
+  // Railings + Vertical Stanchion Posts every 2.5m (matching concept art dense handrail grid)
+  appendBox(gDarkSteel, 5.15, 6.15, -2, 0.06, 0.06, 32, 0.3);
+  appendBox(gDarkSteel, 5.15, 5.68, -2, 0.05, 0.05, 32, 0.3);
+  appendBox(gDarkSteel, 7.25, 6.15, -2, 0.06, 0.06, 32, 0.3);
+  appendBox(gDarkSteel, 7.25, 5.68, -2, 0.05, 0.05, 32, 0.3);
+  for (let rz = -17.5; rz <= 13.5; rz += 2.2) {
+    appendBox(gDarkSteel, 5.15, 5.75, rz, 0.06, 1.0, 0.06, 1);
+    appendBox(gDarkSteel, 7.25, 5.75, rz, 0.06, 1.0, 0.06, 1);
+  }
+  appendBox(gDarkSteel, -0.5, 6.15, 0.95, 14.0, 0.06, 0.06, 0.3);
+  appendBox(gDarkSteel, -0.5, 5.68, 0.95, 14.0, 0.05, 0.05, 0.3);
+  appendBox(gDarkSteel, -0.5, 6.15, 3.05, 14.0, 0.06, 0.06, 0.3);
+  appendBox(gDarkSteel, -0.5, 5.68, 3.05, 14.0, 0.05, 0.05, 0.3);
+  for (let rx = -7.0; rx <= 5.0; rx += 2.0) {
+    appendBox(gDarkSteel, rx, 5.75, 0.95, 0.06, 1.0, 0.06, 1);
+    appendBox(gDarkSteel, rx, 5.75, 3.05, 0.06, 1.0, 0.06, 1);
+  }
+  // Stair Stringers & Handrails + Steps
+  appendBeam(gDarkSteel, 5.3, 0.1, 21.5, 5.3, 5.25, 14.0, 0.08, 6);
+  appendBeam(gDarkSteel, 7.1, 0.1, 21.5, 7.1, 5.25, 14.0, 0.08, 6);
+  appendBeam(gDarkSteel, 5.3, 1.0, 21.5, 5.3, 6.15, 14.0, 0.045, 6);
+  appendBeam(gDarkSteel, 7.1, 1.0, 21.5, 7.1, 6.15, 14.0, 0.045, 6);
   const stairSteps = 18;
   for (let s = 0; s < stairSteps; s++) {
     const t = (s + 0.5) / stairSteps;
@@ -740,59 +990,150 @@ function buildPortEnvironmentGlb() {
     appendBox(gSteel, 6.2, sy, sz, 1.8, 0.12, 0.45, 0.5);
   }
 
-  // 6. Eastern Corrugated Port Warehouse (x = 19, z = -8, width 14, length 30)
-  // Accessible interior with open South & West bay doors!
+  // 6. Eastern Corrugated Port Warehouse with Pitched Gable Roof & Skylights (x = 19, z = -8)
   appendBox(gContBlue, 25.8, 4.2, -8, 0.4, 8.4, 30, 0.2); // East Wall
   appendBox(gContBlue, 19.0, 4.2, -22.8, 14.0, 8.4, 0.4, 0.2); // North Wall
   appendBox(gContBlue, 12.2, 4.2, -16.5, 0.4, 8.4, 13, 0.2); // West Wall North Half
   appendBox(gContBlue, 12.2, 4.2, 2.5, 0.4, 8.4, 9, 0.2); // West Wall South Half (leaves 8m wide bay doorway!)
   appendBox(gContBlue, 12.2, 7.0, -5.5, 0.4, 2.8, 8, 0.2); // West Bay Lintel
   appendBox(gContBlue, 22.0, 4.2, 6.8, 8.0, 8.4, 0.4, 0.2); // South Wall East Half
-  appendBox(gSteel, 19.0, 8.6, -8, 14.8, 0.5, 31, 0.2); // Warehouse Roof
-  // Warehouse Interior Lamps & Crates
+  // Pitched Gable Roof (Apex at x = 19.0, y = 10.6; Eaves at x = 11.8 & 26.2, y = 8.4)
+  for (let s = 0; s < 7; s++) {
+    const t = (s + 0.5) / 7;
+    const lx = 11.8 + t * 7.2;
+    const rx = 26.2 - t * 7.2;
+    const ry = 8.4 + t * 2.15;
+    appendBox(gSteel, lx, ry, -8, 1.15, 0.22, 31.2, 0.25);
+    appendBox(gSteel, rx, ry, -8, 1.15, 0.22, 31.2, 0.25);
+  }
+  appendBox(gDarkSteel, 19.0, 10.65, -8, 0.8, 0.28, 31.4, 0.3); // Roof Ridge Cap
+  // Roof Skylight Panels & Interior Steel Roof Trusses
+  for (const sz of [-16, -8, 0]) {
+    appendBox(gWindows, 16.0, 9.65, sz, 2.2, 0.26, 2.8, 1);
+    appendBox(gWindows, 22.0, 9.65, sz, 2.2, 0.26, 2.8, 1);
+    appendBox(gDarkSteel, 19.0, 8.2, sz, 13.4, 0.25, 0.25, 0.3); // Interior Tie Beam
+  }
+  // Warehouse Exterior Wall Sconces, HVAC Ducts & Electrical Conduits
+  appendBox(gDarkSteel, 11.8, 6.2, 2.5, 0.7, 1.1, 1.4, 0.5); // HVAC Unit
+  appendBox(gDarkSteel, 11.8, 6.2, -13.5, 0.7, 1.1, 1.4, 0.5);
+  appendBox(gLamps, 11.95, 6.2, -5.5, 0.25, 0.25, 1.2, 1); // Bay Door Overhead Lamp
   appendBox(gLamps, 19.0, 8.2, -4, 1.8, 0.15, 0.6, 1);
   appendBox(gLamps, 19.0, 8.2, -14, 1.8, 0.15, 0.6, 1);
   appendBox(gWindows, 22.0, 5.5, 7.02, 3.6, 1.2, 0.08, 1);
+  appendBox(gWindows, 22.0, 3.2, 7.02, 3.6, 1.0, 0.08, 1);
 
-  // 7. Guard Post Security Booth (x = 14.5, z = 16.5) matching Hero Concept Art right foreground
+  // 7. Guard Post Security Booth (x = 14.5, z = 16.5) + Security Boom Barrier Gate
   appendBox(gSteel, 14.5, 1.4, 16.5, 3.4, 2.8, 3.4, 0.3);
-  appendBox(gDarkSteel, 14.5, 2.9, 16.5, 3.8, 0.25, 3.8, 0.3);
+  appendBox(gDarkSteel, 14.5, 2.9, 16.5, 3.9, 0.28, 3.9, 0.3);
+  appendBox(gDarkSteel, 15.4, 3.3, 15.8, 0.9, 0.55, 1.1, 0.4); // Rooftop AC unit
   appendBox(gWindows, 14.5, 1.55, 18.22, 2.4, 1.1, 0.08, 1);
   appendBox(gWindows, 12.78, 1.55, 16.5, 0.08, 1.1, 2.4, 1);
+  // Security Checkpoint Boom Barrier & Pedestal (x = 12.2, z = 19.2)
+  appendBox(gHazard, 12.2, 0.6, 19.2, 0.45, 1.2, 0.45, 1);
+  appendBeam(gHazard, 12.2, 1.05, 19.2, 8.2, 2.35, 19.2, 0.06, 6);
 
-  // 8. Port Light Poles (Sodium Floodlight Towers)
+  // 8. Two Tactical Armored Humvees / LTVs parked outside Warehouse (Matching CAM_HERO Concept Art!)
+  function addTacticalHumvee(cx, cz, rot90 = false) {
+    const mapX = (lx, lz) => (rot90 ? cx + lz : cx + lx);
+    const mapZ = (lx, lz) => (rot90 ? cz - lx : cz + lz);
+    const mapS = (sx, sz) => (rot90 ? [sz, sx] : [sx, sz]);
+
+    // Main Armored Chassis & Sloped Hood & Rear Troop Bed
+    const [bSx, bSz] = mapS(2.2, 4.6);
+    appendBox(gVehicleOD, mapX(0, 0), 0.95, mapZ(0, 0), bSx, 0.95, bSz, 0.4);
+    const [cSx, cSz] = mapS(2.05, 2.3);
+    appendBox(gVehicleOD, mapX(0, -0.15), 1.72, mapZ(0, -0.15), cSx, 0.78, cSz, 0.4);
+    // Roof & Turret Ring + Roof Gun Shield
+    const [tSx, tSz] = mapS(0.95, 0.95);
+    appendCylinder(gDarkSteel, mapX(0, -0.1), 2.22, mapZ(0, -0.1), 0.48, 0.52, 0.25, 10, 'y');
+    appendBox(gVehicleOD, mapX(0, 0.35), 2.42, mapZ(0, 0.35), tSx * 0.7, 0.42, tSz * 0.15, 0.4);
+    appendBeam(gDarkSteel, mapX(0, -0.1), 2.38, mapZ(0, -0.1), mapX(0, 0.95), 2.42, mapZ(0, 0.95), 0.04, 6);
+    // Ballistic Windshield & Side Windows
+    const [wSx, wSz] = mapS(1.78, 0.08);
+    appendBox(gWindows, mapX(0, 1.02), 1.72, mapZ(0, 1.02), wSx, 0.46, wSz, 1);
+    // Front Bullbar & Glowing Tactical Headlights
+    const [gSx, gSz] = mapS(2.25, 0.18);
+    appendBox(gDarkSteel, mapX(0, 2.35), 0.82, mapZ(0, 2.35), gSx, 0.55, gSz, 0.5);
+    const [hlSx, hlSz] = mapS(0.28, 0.08);
+    appendBox(gLamps, mapX(-0.75, 2.32), 0.98, mapZ(-0.75, 2.32), hlSx, 0.22, hlSz, 1);
+    appendBox(gLamps, mapX(0.75, 2.32), 0.98, mapZ(0.75, 2.32), hlSx, 0.22, hlSz, 1);
+    // 4 Heavy Off-Road Wheels
+    for (const wx of [-1.08, 1.08]) {
+      for (const wz of [-1.45, 1.45]) {
+        const [tySx, tySz] = mapS(0.38, 0.88);
+        appendBox(gRubber, mapX(wx, wz), 0.44, mapZ(wx, wz), tySx, 0.88, tySz, 0.5);
+        const [rmSx, rmSz] = mapS(0.42, 0.46);
+        appendBox(gDarkSteel, mapX(wx, wz), 0.44, mapZ(wx, wz), rmSx, 0.46, rmSz, 0.5);
+      }
+    }
+  }
+  addTacticalHumvee(11.8, 10.5, false); // Humvee 1 parked beside elevated staircase & warehouse
+  addTacticalHumvee(18.5, 12.2, true);  // Humvee 2 parked facing plaza outside guard post
+
+  // Industrial Port Forklift & Cable Reels & Wooden Pallets
+  appendBox(gHazard, -8.8, 0.65, -18.5, 1.4, 1.1, 2.3, 0.4); // Forklift body
+  appendBox(gDarkSteel, -8.8, 1.65, -18.3, 1.25, 1.1, 1.5, 0.4); // Forklift cab cage
+  appendBox(gDarkSteel, -8.8, 1.35, -19.8, 0.9, 2.5, 0.15, 0.4); // Forklift mast
+  // Wooden Cable Spool Reels & Pallet Stacks along West Combat Lane (matching CAM_LANE Concept Art!)
+  for (const [rx, rz] of [[-4.2, 6.2], [-9.2, 14.5], [14.2, 4.5]]) {
+    appendCylinder(gWood, rx - 0.34, 0.58, rz, 0.58, 0.58, 0.10, 12, 'x'); // Left wooden flange disc
+    appendCylinder(gWood, rx + 0.34, 0.58, rz, 0.58, 0.58, 0.10, 12, 'x'); // Right wooden flange disc
+    appendCylinder(gDarkSteel, rx, 0.58, rz, 0.38, 0.38, 0.62, 12, 'x');    // Coiled steel cable core
+    appendCylinder(gDarkSteel, rx, 0.58, rz, 0.12, 0.12, 0.88, 10, 'x');    // Steel axle rod
+  }
+  for (const [px, pz] of [[-5.0, 14.5], [-3.8, 10.8], [2.8, 8.8], [13.5, 14.0]]) {
+    appendBox(gWood, px, 0.08, pz, 1.4, 0.16, 1.4, 0.5);
+    appendBox(gWood, px, 0.26, pz, 1.35, 0.16, 1.35, 0.5);
+  }
+
+  // 9. Port Light Poles (Twin-Head High-Mast Floodlight Towers)
   const poles = [
     [-12.0, 20.0], [-12.0, 2.0], [11.5, 21.0], [11.5, 4.0], [11.5, -14.0], [-1.0, -18.0]
   ];
   for (const [px, pz] of poles) {
-    appendCylinder(gDarkSteel, px, 5.5, pz, 0.12, 0.18, 11.0, 10, 'y');
-    appendBox(gDarkSteel, px, 11.1, pz, 1.4, 0.18, 0.5, 1);
-    appendBox(gLamps, px, 10.95, pz, 1.1, 0.12, 0.4, 1);
+    appendCylinder(gConcrete, px, 0.45, pz, 0.36, 0.42, 0.9, 10, 'y'); // Concrete pedestal base
+    appendCylinder(gDarkSteel, px, 5.8, pz, 0.12, 0.20, 11.2, 10, 'y');
+    appendBox(gDarkSteel, px, 11.35, pz, 1.8, 0.20, 0.55, 1);
+    appendBox(gLamps, px - 0.52, 11.18, pz, 0.62, 0.14, 0.42, 1);
+    appendBox(gLamps, px + 0.52, 11.18, pz, 0.62, 0.14, 0.42, 1);
   }
 
-  // 9. Concrete Jersey Barriers, Fire Barrels, Explosive Red Drums & Tactical Cover Crates
+  // 10. Concrete Jersey Barriers, Fire Barrels, Explosive Red Drums & Tactical Cover Crates
   const barriers = [
     [-4.5, 24.5, 0], [-0.5, 23.5, 0], [3.5, 23.0, 0], [9.5, 22.5, 0],
     [-8.5, 10.0, 1], [-8.5, -4.0, 1], [3.5, -14.0, 0], [15.5, -2.0, 0],
   ];
   for (const [bx, bz, rot] of barriers) {
-    appendBox(gConcrete, bx, 0.55, bz, rot ? 0.65 : 2.8, 1.1, rot ? 2.8 : 0.65, 0.5);
+    // Tapered Jersey Barrier profile (wide base + narrower top wall)
+    appendBox(gConcrete, bx, 0.22, bz, rot ? 0.82 : 2.8, 0.44, rot ? 2.8 : 0.82, 0.5);
+    appendBox(gConcrete, bx, 0.72, bz, rot ? 0.46 : 2.76, 0.68, rot ? 2.76 : 0.46, 0.5);
   }
-  // Fire Barrels (with glowing embers top)
+  // Fire Barrels (with glowing embers + burning wood logs & tipped barrel next to foreground fire!)
   const fireBarrels = [[-3.2, 25.5], [-4.8, 9.5], [4.5, -1.5], [-8.0, -15.0], [15.0, 11.0]];
   for (const [fx, fz] of fireBarrels) {
     appendCylinder(gSteel, fx, 0.48, fz, 0.32, 0.32, 0.96, 14, 'y');
-    appendCylinder(gFire, fx, 0.94, fz, 0.28, 0.28, 0.08, 12, 'y');
+    appendCylinder(gDarkSteel, fx, 0.32, fz, 0.335, 0.335, 0.05, 14, 'y'); // Barrel rib ring
+    appendCylinder(gDarkSteel, fx, 0.66, fz, 0.335, 0.335, 0.05, 14, 'y');
+    appendCylinder(gFire, fx, 0.94, fz, 0.29, 0.29, 0.08, 12, 'y');
+    appendBeam(gWood, fx - 0.14, 0.88, fz - 0.1, fx + 0.16, 1.18, fz + 0.12, 0.05, 5);
+    appendBeam(gWood, fx + 0.12, 0.88, fz - 0.14, fx - 0.15, 1.15, fz + 0.1, 0.05, 5);
   }
-  // Explosive Red Fuel Drums
+  // Tipped steel barrel beside foreground fire barrel (-2.4, 25.2) matching CAM_HERO Concept Art!
+  appendCylinder(gSteel, -2.35, 0.32, 25.2, 0.31, 0.31, 0.94, 14, 'x');
+
+  // Explosive Red Fuel Drums (with steel reinforcing ribs)
   const redDrums = [[-6.8, 12.0], [2.2, 6.5], [-4.5, -11.0], [17.5, -6.5], [17.5, -15.0]];
   for (const [dx, dz] of redDrums) {
     appendCylinder(gExplosive, dx, 0.48, dz, 0.31, 0.31, 0.96, 14, 'y');
+    appendCylinder(gHazard, dx, 0.48, dz, 0.316, 0.316, 0.16, 14, 'y');
   }
-  // Wooden Tactical Crates
+  // Wooden Tactical Crates with Dark Steel Corner Framing (eliminating plain beige cube look!)
   const woodCrates = [[-4.8, 13.0], [-5.2, 11.2], [3.8, 7.5], [16.5, -10.0], [21.0, -12.5]];
   for (const [wx, wz] of woodCrates) {
-    appendBox(gWood, wx, 0.65, wz, 1.3, 1.3, 1.3, 0.5);
+    appendBox(gWood, wx, 0.65, wz, 1.28, 1.28, 1.28, 0.5);
+    appendBox(gDarkSteel, wx, 1.28, wz, 1.32, 0.06, 1.32, 0.5);
+    appendBox(gDarkSteel, wx, 0.04, wz, 1.32, 0.06, 1.32, 0.5);
+    appendBox(gDarkSteel, wx, 0.65, wz, 1.31, 0.12, 1.31, 0.5);
   }
 
   const rootNode = b.addNode('NightPort_Environment', [
@@ -812,6 +1153,8 @@ function buildPortEnvironmentGlb() {
     b.addMeshPrimitive('Hazard_Stripes', gHazard.positions, gHazard.normals, gHazard.uvs, gHazard.indices, matHazard),
     b.addMeshPrimitive('Wooden_Crates', gWood.positions, gWood.normals, gWood.uvs, gWood.indices, matWood),
     b.addMeshPrimitive('Explosive_Drums', gExplosive.positions, gExplosive.normals, gExplosive.uvs, gExplosive.indices, matExplosive),
+    b.addMeshPrimitive('Tactical_Vehicles_OD', gVehicleOD.positions, gVehicleOD.normals, gVehicleOD.uvs, gVehicleOD.indices, matOliveVehicle),
+    b.addMeshPrimitive('Tire_Rubber_Fenders', gRubber.positions, gRubber.normals, gRubber.uvs, gRubber.indices, matRubber),
   ]);
 
   b.RootNodes.push(rootNode);
@@ -846,32 +1189,38 @@ function buildTacticalSoldierGlb() {
     return bvIdx;
   }
 
-  // Create Tactical Military PBR Materials matching AGY soldier_tactical_sheet.jpg
+  // Create Tactical Military PBR Materials matching AGY soldier_tactical_sheet.jpg (Dark Night-Ops Camo)
   gltf.materials = gltf.materials || [];
   const matCamoUniform = gltf.materials.length;
   gltf.materials.push({
     name: 'MI_Tactical_Camo_Uniform',
-    pbrMetallicRoughness: { baseColorFactor: [0.27, 0.31, 0.22, 1.0], roughnessFactor: 0.78, metallicFactor: 0.05 },
+    pbrMetallicRoughness: { baseColorFactor: [0.06, 0.08, 0.06, 1.0], roughnessFactor: 0.78, metallicFactor: 0.12 },
   });
   const matPlateCarrier = gltf.materials.length;
   gltf.materials.push({
     name: 'MI_Tactical_PlateCarrier_OD',
-    pbrMetallicRoughness: { baseColorFactor: [0.32, 0.34, 0.24, 1.0], roughnessFactor: 0.68, metallicFactor: 0.12 },
+    pbrMetallicRoughness: { baseColorFactor: [0.09, 0.11, 0.07, 1.0], roughnessFactor: 0.65, metallicFactor: 0.22 },
   });
   const matBalaclavaBoots = gltf.materials.length;
   gltf.materials.push({
     name: 'MI_Tactical_Balaclava_Boots',
-    pbrMetallicRoughness: { baseColorFactor: [0.11, 0.12, 0.13, 1.0], roughnessFactor: 0.62, metallicFactor: 0.18 },
+    pbrMetallicRoughness: { baseColorFactor: [0.04, 0.04, 0.05, 1.0], roughnessFactor: 0.62, metallicFactor: 0.25 },
   });
   const matHelmet = gltf.materials.length;
   gltf.materials.push({
     name: 'MI_Ballistic_Helmet_OD',
-    pbrMetallicRoughness: { baseColorFactor: [0.24, 0.28, 0.20, 1.0], roughnessFactor: 0.52, metallicFactor: 0.25 },
+    pbrMetallicRoughness: { baseColorFactor: [0.07, 0.09, 0.06, 1.0], roughnessFactor: 0.48, metallicFactor: 0.35 },
+  });
+  const matVisorGlow = gltf.materials.length;
+  gltf.materials.push({
+    name: 'MI_Tactical_Visor_Amber',
+    pbrMetallicRoughness: { baseColorFactor: [0.95, 0.55, 0.12, 1.0], roughnessFactor: 0.15, metallicFactor: 0.85 },
+    emissiveFactor: [1.4, 0.55, 0.08],
   });
   const matRifle = gltf.materials.length;
   gltf.materials.push({
     name: 'MI_Soldier_Rifle_Gunmetal',
-    pbrMetallicRoughness: { baseColorFactor: [0.12, 0.13, 0.15, 1.0], roughnessFactor: 0.32, metallicFactor: 0.85 },
+    pbrMetallicRoughness: { baseColorFactor: [0.06, 0.07, 0.08, 1.0], roughnessFactor: 0.30, metallicFactor: 0.85 },
   });
 
   // Graft modular skinned meshes (Male_Ranger_Body, Arms, Legs, Feet_Boots) onto the 65-bone skin
@@ -963,8 +1312,11 @@ function buildTacticalSoldierGlb() {
   appendCylinder(gHelmet, 0, 0.135, -0.005, 0.095, 0.105, 0.11, 16, 'y'); // Rounded Helmet Dome
   appendCylinder(gHelmet, 0, 0.195, -0.005, 0.055, 0.095, 0.035, 16, 'y'); // Top crown
   appendBox(gHelmet, 0, 0.15, 0.098, 0.038, 0.032, 0.022, 1); // NVG Shroud Mount
-  appendBox(gHelmet, 0, 0.095, 0.082, 0.135, 0.038, 0.03, 1); // Tactical Goggles
   addRigidAttachmentNode(0, 'Tactical_Helmet_Rigid', gHelmet, matHelmet);
+
+  const gVisor = makeGeometryCollector();
+  appendBox(gVisor, 0, 0.095, 0.082, 0.135, 0.036, 0.03, 1); // Tactical Amber Visor Goggles
+  addRigidAttachmentNode(0, 'Tactical_Visor_Rigid', gVisor, matVisorGlow);
 
   // 2) Rigid Plate Carrier Chest Pouches attached to spine_03 (node 50)
   const gVest = makeGeometryCollector();

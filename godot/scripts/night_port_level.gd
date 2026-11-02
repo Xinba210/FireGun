@@ -75,6 +75,22 @@ func _setup_environment_and_lights() -> void:
 		omni.shadow_enabled = true
 		add_child(omni)
 
+	# Night Rain GPUParticles3D
+	var rain := GPUParticles3D.new()
+	rain.name = "NightRainParticles"
+	rain.amount = 900
+	rain.lifetime = 1.2
+	rain.position = Vector3(0, 18, 0)
+	var pmat := ParticleProcessMaterial.new()
+	pmat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	pmat.emission_box_extents = Vector3(32, 2, 36)
+	pmat.direction = Vector3(-0.08, -1.0, 0.04)
+	pmat.spread = 2.0
+	pmat.initial_velocity_min = 18.0
+	pmat.initial_velocity_max = 22.0
+	rain.process_material = pmat
+	add_child(rain)
+
 func _load_port_glb() -> void:
 	if ResourceLoader.exists(PORT_ENV_PATH):
 		var packed: PackedScene = load(PORT_ENV_PATH)

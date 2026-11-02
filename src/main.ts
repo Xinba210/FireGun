@@ -163,17 +163,27 @@ scene.fog = new THREE.FogExp2('#0e1c30', 0.0075);
 // Generate Real-time Night Harbor PMREM Environment Map for PBR Metallic/Wet Specular Reflections
 const pmremGen = new THREE.PMREMGenerator(renderer);
 const envScene = new THREE.Scene();
-envScene.background = new THREE.Color('#182c46');
+envScene.background = new THREE.Color('#13243b');
 const envSkyLight = new THREE.HemisphereLight(0x6b96c8, 0x382818, 2.8);
 envScene.add(envSkyLight);
-const envWarmBounce = new THREE.Mesh(
-  new THREE.SphereGeometry(8, 16, 12),
-  new THREE.MeshBasicMaterial({ color: 0xffaa44 })
-);
-envWarmBounce.position.set(12, 6, -10);
-envScene.add(envWarmBounce);
-scene.environment = pmremGen.fromScene(envScene, 0.04).texture;
-scene.environmentIntensity = 1.65;
+// Add warm sodium lamp globes & cool crane lights into the PMREM bake scene so puddles & wet asphalt reflect realistic harbor light pools!
+const envLights: [number, number, number, number, number][] = [
+  [12, 8, -10, 0xffaa44, 5.5],
+  [-14, 9, 14, 0xff9e3d, 5.0],
+  [0, 12, 18, 0xffb85c, 4.5],
+  [-24, 15, -18, 0x7cb6ff, 4.0],
+  [-4, 4, 22, 0xff6a1a, 3.8],
+];
+for (const [ex, ey, ez, col, rad] of envLights) {
+  const orb = new THREE.Mesh(
+    new THREE.SphereGeometry(rad, 14, 10),
+    new THREE.MeshBasicMaterial({ color: col })
+  );
+  orb.position.set(ex, ey, ez);
+  envScene.add(orb);
+}
+scene.environment = pmremGen.fromScene(envScene, 0.035).texture;
+scene.environmentIntensity = 1.75;
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.08, 220);
 scene.add(camera);
@@ -305,63 +315,183 @@ function buildAtmosphereAndLights() {
   craneFill.position.set(22, 28, 18);
   scene.add(craneFill);
 
-  // 3. Pre-allocated Sodium Port Floodlights + Volumetric Light Cones (No runtime PointLight additions!)
-  const coneGeo = new THREE.ConeGeometry(4.2, 11.0, 18, 1, true);
-  const coneMat = new THREE.MeshBasicMaterial({
-    color: 0xffb357,
+  // 3. Pre-allocated Sodium Port Floodlights + Soft Volumetric God-Ray Shader Cones (Zero hard edges!)
+  const coneGeo = new THREE.ConeGeometry(4.6, 11.2, 24, 1, true);
+  const coneMat = new THREE.ShaderMaterial({
     transparent: true,
-    opacity: 0.065,
-    side: THREE.DoubleSide,
     depthWrite: false,
+    side: THREE.DoubleSide,
     blending: THREE.AdditiveBlending,
+    uniforms: {
+      beamColor: { value: new THREE.Color(0xffb454) },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      varying vec3 vNormalW;
+      varying vec3 vWorldPos;
+      void main() {
+        vUv = uv;
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vWorldPos = wp.xyz;
+        vNormalW = normalize(mat3(modelMatrix) * normal);
+        gl_Position = projectionMatrix * viewMatrix * wp;
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 beamColor;
+      varying vec2 vUv;
+      varying vec3 vNormalW;
+      varying vec3 vWorldPos;
+      void main() {
+        vec3 viewDir = normalize(cameraPosition - vWorldPos);
+        float fresnel = pow(abs(dot(vNormalW, viewDir)), 1.9);
+        // vUv.y is 1 at apex (lamp head) and 0 at bottom ground
+        float vertFade = smoothstep(0.0, 0.75, vUv.y) * (1.0 - smoothstep(0.92, 1.0, vUv.y));
+        float coreGlow = pow(vUv.y, 1.8) * 0.08;
+        float alpha = (fresnel * 0.085 * vertFade) + coreGlow;
+        gl_FragColor = vec4(beamColor, alpha);
+      }
+    `,
   });
 
   const sodiumPositions: [number, number, number, number][] = [
-    [-12.0, 10.8, 20.0, 36],
-    [-12.0, 10.8, 2.0, 36],
-    [11.5, 10.8, 21.0, 36],
-    [11.5, 10.8, 4.0, 36],
-    [11.5, 10.8, -14.0, 36],
-    [-7.5, 19.5, -18.0, 44], // Gantry Crane Overhead Floodlight
-    [19.0, 8.0, -8.0, 32],    // Warehouse Interior Light
+    [-12.0, 11.0, 20.0, 38],
+    [-12.0, 11.0, 2.0, 38],
+    [11.5, 11.0, 21.0, 38],
+    [11.5, 11.0, 4.0, 38],
+    [11.5, 11.0, -14.0, 38],
+    [-7.5, 19.5, -18.0, 46], // Gantry Crane Overhead Floodlight
+    [19.0, 8.0, -8.0, 34],    // Warehouse Interior Light
   ];
 
   for (const [lx, ly, lz, range] of sodiumPositions) {
-    const pt = new THREE.PointLight(0xffae4c, 42, range, 1.45);
+    const pt = new THREE.PointLight(0xffae4c, 45, range, 1.45);
     pt.position.set(lx, ly, lz);
     scene.add(pt);
 
     const cone = new THREE.Mesh(coneGeo, coneMat);
-    cone.position.set(lx, ly - 5.4, lz);
+    cone.position.set(lx, ly - 5.5, lz);
     scene.add(cone);
   }
 }
 
-// Fire Barrels & Flickering Embers
+// Fire Barrels: Volumetric Flickering Shader Flames + Rising Ember Sparks + Night Rain Streaks
 const fireLights: THREE.PointLight[] = [];
 const fireFlames: THREE.Mesh[] = [];
+const fireShaderMats: THREE.ShaderMaterial[] = [];
+let emberParticles: THREE.Points | null = null;
+let rainLines: THREE.LineSegments | null = null;
+
 function setupFireBarrels() {
   const coords: [number, number][] = [
     [-3.2, 25.5], [-4.8, 9.5], [4.5, -1.5], [-8.0, -15.0], [15.0, 11.0],
   ];
-  const flameGeo = new THREE.ConeGeometry(0.28, 0.72, 8);
-  const flameMat = new THREE.MeshBasicMaterial({
-    color: 0xff7718,
-    transparent: true,
-    opacity: 0.86,
-    blending: THREE.AdditiveBlending,
-  });
-  for (const [fx, fz] of coords) {
-    const fl = new THREE.PointLight(0xff6414, 14, 15, 1.7);
-    fl.position.set(fx, 1.45, fz);
+  const flamePlaneGeo = new THREE.PlaneGeometry(0.85, 1.15, 6, 10);
+
+  coords.forEach(([fx, fz], idx) => {
+    const fl = new THREE.PointLight(0xff6818, 16, 16, 1.65);
+    fl.position.set(fx, 1.5, fz);
     scene.add(fl);
     fireLights.push(fl);
 
-    const flame = new THREE.Mesh(flameGeo, flameMat);
-    flame.position.set(fx, 1.25, fz);
-    scene.add(flame);
-    fireFlames.push(flame);
+    const fMat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      uniforms: {
+        uTime: { value: 1.5 + idx * 1.3 },
+      },
+      vertexShader: `
+        uniform float uTime;
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          vec3 pos = position;
+          float sway = sin(uTime * 6.5 + uv.y * 5.0) * 0.08 * uv.y;
+          pos.x += sway;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float uTime;
+        varying vec2 vUv;
+        void main() {
+          float dx = abs(vUv.x - 0.5) * 2.0;
+          float wave = sin(vUv.y * 10.0 - uTime * 9.0) * 0.14 * vUv.y;
+          float width = (1.0 - vUv.y * 0.78) + wave;
+          float mask = smoothstep(width, width * 0.2, dx);
+          float vFade = smoothstep(0.0, 0.18, vUv.y) * (1.0 - smoothstep(0.55, 1.0, vUv.y));
+          float alpha = mask * vFade;
+          vec3 innerCol = vec3(1.0, 0.92, 0.55);
+          vec3 outerCol = vec3(1.0, 0.32, 0.04);
+          vec3 col = mix(outerCol, innerCol, smoothstep(0.65, 0.0, dx) * (1.0 - vUv.y * 0.6));
+          gl_FragColor = vec4(col, alpha * 0.92);
+        }
+      `,
+    });
+    fireShaderMats.push(fMat);
+
+    const flameGroup = new THREE.Group();
+    flameGroup.position.set(fx, 1.38, fz);
+    for (let k = 0; k < 3; k++) {
+      const p = new THREE.Mesh(flamePlaneGeo, fMat);
+      p.rotation.y = (k * Math.PI) / 3;
+      flameGroup.add(p);
+    }
+    scene.add(flameGroup);
+    fireFlames.push(flameGroup as unknown as THREE.Mesh);
+  });
+
+  // Rising Ember Sparks above all 5 Fire Barrels (Single Points Draw Call!)
+  const sparkCount = 120;
+  const sparkPos = new Float32Array(sparkCount * 3);
+  for (let i = 0; i < sparkCount; i++) {
+    const [bx, bz] = coords[i % coords.length];
+    const h = (i / sparkCount) * 2.6;
+    const angle = i * 2.399;
+    const rad = 0.08 + (i % 7) * 0.035;
+    sparkPos[i * 3] = bx + Math.cos(angle) * rad;
+    sparkPos[i * 3 + 1] = 1.0 + h;
+    sparkPos[i * 3 + 2] = bz + Math.sin(angle) * rad;
   }
+  const sparkGeo = new THREE.BufferGeometry();
+  sparkGeo.setAttribute('position', new THREE.BufferAttribute(sparkPos, 3));
+  const sparkMat = new THREE.PointsMaterial({
+    color: 0xffa834,
+    size: 0.075,
+    transparent: true,
+    opacity: 0.88,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  emberParticles = new THREE.Points(sparkGeo, sparkMat);
+  scene.add(emberParticles);
+
+  // Night Rain Streak Lines across the Harbor (Single LineSegments Draw Call!)
+  const rainDrops = 750;
+  const rainVerts = new Float32Array(rainDrops * 6);
+  for (let i = 0; i < rainDrops; i++) {
+    const rx = ((i * 73) % 64) - 30;
+    const ry = ((i * 41) % 24) + 0.5;
+    const rz = ((i * 97) % 68) - 32;
+    rainVerts[i * 6] = rx;
+    rainVerts[i * 6 + 1] = ry;
+    rainVerts[i * 6 + 2] = rz;
+    rainVerts[i * 6 + 3] = rx - 0.08;
+    rainVerts[i * 6 + 4] = ry - 0.85;
+    rainVerts[i * 6 + 5] = rz + 0.04;
+  }
+  const rainGeo = new THREE.BufferGeometry();
+  rainGeo.setAttribute('position', new THREE.BufferAttribute(rainVerts, 3));
+  const rainMat = new THREE.LineBasicMaterial({
+    color: 0x8cb4dc,
+    transparent: true,
+    opacity: 0.18,
+    depthWrite: false,
+  });
+  rainLines = new THREE.LineSegments(rainGeo, rainMat);
+  scene.add(rainLines);
 }
 
 buildAtmosphereAndLights();
@@ -444,6 +574,8 @@ function registerStaticColliders() {
     [-4.0, 2.6, -26, 6.2, 5.2, 2.5],
     [4.5, 1.3, -26, 6.2, 2.6, 2.5],
     [14.5, 1.4, 16.5, 3.5, 2.8, 3.5], // Guard Post
+    [11.8, 1.1, 10.5, 2.4, 2.2, 4.7], // Tactical Humvee 1
+    [18.5, 1.1, 12.2, 4.7, 2.2, 2.4], // Tactical Humvee 2
     [25.8, 4.2, -8, 0.6, 8.4, 30],    // Warehouse East Wall
     [19.0, 4.2, -22.8, 14.0, 8.4, 0.6], // Warehouse North Wall
   ];
@@ -504,11 +636,19 @@ async function loadAllAssets() {
     loadGlbAsset('assets/models/soldier_tactical_animated.glb'),
   ]);
 
-  // 1. Add Night Port Environment
+  // 1. Add Night Port Environment & Enhance Wet Puddle Specular Reflections
   portGltf.scene.traverse((obj) => {
     if ((obj as THREE.Mesh).isMesh) {
-      obj.castShadow = true;
-      obj.receiveShadow = true;
+      const m = obj as THREE.Mesh;
+      m.castShadow = true;
+      m.receiveShadow = true;
+      const mat = m.material as THREE.MeshStandardMaterial;
+      if (mat && mat.name === 'MI_Water_Puddle') {
+        m.castShadow = false;
+        mat.roughness = 0.025;
+        mat.metalness = 0.92;
+        mat.envMapIntensity = 2.6;
+      }
     }
   });
   scene.add(portGltf.scene);
@@ -1309,15 +1449,37 @@ function getPerfSummary() {
 let lastTime = performance.now();
 
 function stepSimulation(dt: number, elapsedSec: number) {
-  // 1. Flickering Fire Barrels (frozen in ?capture mode per concept-to-playable-3d!)
+  // 1. Flickering Fire Barrels, Rising Embers & Night Rain (frozen in ?capture mode per concept-to-playable-3d!)
   const t = captureMode ? 1.5 : elapsedSec;
   fireLights.forEach((fl, i) => {
-    fl.intensity = 13.5 + Math.sin(t * 11 + i * 2.1) * 2.4;
+    fl.intensity = 15.5 + Math.sin(t * 11 + i * 2.1) * 2.6;
+  });
+  fireShaderMats.forEach((sm, i) => {
+    sm.uniforms.uTime.value = t + i * 1.3;
   });
   fireFlames.forEach((fm, i) => {
-    const s = 0.92 + Math.sin(t * 14 + i) * 0.14;
-    fm.scale.set(s, 0.9 + Math.cos(t * 12 + i) * 0.18, s);
+    const s = 0.94 + Math.sin(t * 14 + i) * 0.1;
+    fm.scale.set(s, 0.92 + Math.cos(t * 12 + i) * 0.14, s);
   });
+  if (emberParticles && !captureMode) {
+    const posAttr = emberParticles.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const arr = posAttr.array as Float32Array;
+    const barrelCoords = [[-3.2, 25.5], [-4.8, 9.5], [4.5, -1.5], [-8.0, -15.0], [15.0, 11.0]];
+    for (let i = 0; i < posAttr.count; i++) {
+      arr[i * 3 + 1] += dt * (1.25 + (i % 5) * 0.22);
+      arr[i * 3] += Math.sin(t * 4.0 + i) * dt * 0.18;
+      if (arr[i * 3 + 1] > 3.8) {
+        const [bx, bz] = barrelCoords[i % barrelCoords.length];
+        arr[i * 3] = bx + Math.cos(i * 2.4) * 0.15;
+        arr[i * 3 + 1] = 0.95;
+        arr[i * 3 + 2] = bz + Math.sin(i * 2.4) * 0.15;
+      }
+    }
+    posAttr.needsUpdate = true;
+  }
+  if (rainLines && !captureMode) {
+    rainLines.position.y = -((t * 18) % 4.0);
+  }
 
   if (loadoutOpen) {
     loadoutWeaponHolder.rotation.y += dt * 0.45;
