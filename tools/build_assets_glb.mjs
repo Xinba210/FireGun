@@ -116,7 +116,7 @@ function generatePbrSet(name, size, evalPixel) {
   }
 
   const normal = Buffer.alloc(size * size * 4);
-  const strength = 4.5;
+  const strength = 2.15;
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const hL = heights[y * size + ((x - 1 + size) % size)];
@@ -301,6 +301,7 @@ class GlbBuilder {
     this.bufferViews = [];
     this.accessors = [];
     this.images = [];
+    this.samplers = [{ magFilter: 9729, minFilter: 9987, wrapS: 10497, wrapT: 10497 }];
     this.textures = [];
     this.materials = [];
     this.meshes = [];
@@ -326,7 +327,7 @@ class GlbBuilder {
     const imgIdx = this.images.length;
     this.images.push({ name, bufferView: bv, mimeType: 'image/png' });
     const texIdx = this.textures.length;
-    this.textures.push({ source: imgIdx });
+    this.textures.push({ source: imgIdx, sampler: 0 });
     return texIdx;
   }
 
@@ -352,9 +353,9 @@ class GlbBuilder {
     return matIdx;
   }
 
-  addSolidPbrMaterial(name, color, roughness = 0.5, metallic = 0.2, emissive = [0, 0, 0]) {
+  addSolidPbrMaterial(name, color, roughness = 0.5, metallic = 0.2, emissive = [0, 0, 0], alphaMode = undefined) {
     const matIdx = this.materials.length;
-    this.materials.push({
+    const mat = {
       name,
       pbrMetallicRoughness: {
         baseColorFactor: color,
@@ -362,7 +363,9 @@ class GlbBuilder {
         metallicFactor: metallic,
       },
       emissiveFactor: emissive,
-    });
+    };
+    if (alphaMode) mat.alphaMode = alphaMode;
+    this.materials.push(mat);
     return matIdx;
   }
 
@@ -425,6 +428,7 @@ class GlbBuilder {
       nodes: this.nodes,
       meshes: this.meshes,
       materials: this.materials,
+      samplers: this.textures.length ? this.samplers : undefined,
       textures: this.textures.length ? this.textures : undefined,
       images: this.images.length ? this.images : undefined,
       accessors: this.accessors,
@@ -606,99 +610,248 @@ function appendCatenaryChain(geom, x1, y1, z1, x2, y2, z2, sag = 0.28, segs = 8,
 
 // ---------------------------------------------------------------------------
 // 3. Build Weapons Pack GLB (public/assets/models/weapons_pack.glb)
+//    High-Detail Tactical Weapons matching AGY weapon_carbine_sheet.jpg:
+//    - AR-7 Tactical Carbine (M-LOK ventilated handguard, hollow EOTech hood, PEQ-15 laser, trigger guard, dust cover, forward assist, CTR skeleton stock, ribbed PMAG)
+//    - SR-9 Bolt-Action Sniper (Fluted barrel, 2-chamber muzzle brake, bolt handle + knob, 8x scope with windage/elevation turrets & scope rings, cheek riser, folding bipod)
+//    - RL-7 Anti-Armor Rocket Launcher (Front/rear rubber bumper collars, clamp bands, optical sight assembly, venturi cone, protruding HEAT warhead)
 // ---------------------------------------------------------------------------
 function buildWeaponsPackGlb() {
   const b = new GlbBuilder();
-  const matGunmetal = b.addPbrTextureMaterial('MI_Gunmetal_Anodized', TEX_SETS.gunmetal_pbr);
-  const matPolymer = b.addSolidPbrMaterial('MI_Polymer_Grip', [0.09, 0.10, 0.11, 1], 0.62, 0.15);
-  const matGlass = b.addSolidPbrMaterial('MI_Optic_Lens', [0.15, 0.65, 0.85, 0.65], 0.08, 0.9, [0.08, 0.35, 0.45]);
-  const matReticle = b.addSolidPbrMaterial('MI_Reticle_Red', [1.0, 0.2, 0.1, 1], 0.1, 0.0, [2.5, 0.3, 0.1]);
-  const matOlive = b.addSolidPbrMaterial('MI_Launcher_Olive', [0.22, 0.27, 0.18, 1], 0.52, 0.45);
-  const matBrass = b.addSolidPbrMaterial('MI_Brass_Detail', [0.78, 0.62, 0.25, 1], 0.28, 0.92);
+  const matGunmetal = b.addPbrTextureMaterial('MI_Gunmetal_Anodized', TEX_SETS.gunmetal_pbr, {
+    normalScale: 0.28,
+    baseColorFactor: [0.68, 0.72, 0.78, 1],
+    roughnessFactor: 0.72,
+    metallicFactor: 0.88,
+  });
+  const matDarkSteel = b.addPbrTextureMaterial('MI_Barrel_DarkSteel', TEX_SETS.gunmetal_pbr, {
+    normalScale: 0.22,
+    baseColorFactor: [0.42, 0.45, 0.50, 1],
+    roughnessFactor: 0.55,
+    metallicFactor: 0.92,
+  });
+  const matPolymer = b.addPbrTextureMaterial('MI_Polymer_Grip', TEX_SETS.gunmetal_pbr, {
+    normalScale: 0.35,
+    baseColorFactor: [0.28, 0.30, 0.33, 1],
+    roughnessFactor: 1.0,
+    metallicFactor: 0.15,
+  });
+  const matFdePolymer = b.addPbrTextureMaterial('MI_Polymer_FDE_Accent', TEX_SETS.tactical_camo, {
+    normalScale: 0.25,
+    baseColorFactor: [1.1, 1.0, 0.82, 1],
+    roughnessFactor: 0.95,
+    metallicFactor: 0.18,
+  });
+  const matGlass = b.addSolidPbrMaterial('MI_Optic_Lens', [0.15, 0.72, 0.92, 0.22], 0.05, 0.9, [0.04, 0.18, 0.24], 'BLEND');
+  const matReticle = b.addSolidPbrMaterial('MI_Reticle_Red', [1.0, 0.2, 0.1, 1], 0.1, 0.0, [2.8, 0.35, 0.12]);
+  const matLaserGreen = b.addSolidPbrMaterial('MI_Laser_Lens_Green', [0.2, 1.0, 0.4, 1], 0.1, 0.0, [0.8, 2.6, 1.1]);
+  const matOlive = b.addPbrTextureMaterial('MI_Launcher_Olive', TEX_SETS.tactical_camo, {
+    normalScale: 0.3,
+    baseColorFactor: [1.35, 1.45, 1.25, 1],
+    roughnessFactor: 0.65,
+    metallicFactor: 0.38,
+  });
+  const matBrass = b.addSolidPbrMaterial('MI_Brass_Detail', [0.82, 0.64, 0.26, 1], 0.26, 0.92);
 
   // --- Weapon 1: AR-7 Tactical Carbine ---
   const arMetal = makeGeometryCollector();
+  const arSteel = makeGeometryCollector();
   const arPoly = makeGeometryCollector();
+  const arFdePolymer = makeGeometryCollector();
+  const arBrass = makeGeometryCollector();
   const arLens = makeGeometryCollector();
   const arRet = makeGeometryCollector();
+  const arLaser = makeGeometryCollector();
 
-  // Receiver & Barrel & M-LOK Handguard & Picatinny Rail teeth
-  appendBox(arMetal, 0, 0.02, -0.04, 0.046, 0.068, 0.24, 2); // Upper/Lower Receiver
-  appendBox(arMetal, 0, 0.028, -0.26, 0.042, 0.052, 0.26, 2); // M-LOK Handguard
-  appendCylinder(arMetal, 0, 0.028, -0.45, 0.011, 0.011, 0.24, 16, 'z'); // Barrel
-  appendCylinder(arMetal, 0, 0.028, -0.57, 0.015, 0.014, 0.055, 16, 'z'); // Flash Hider
-  // Picatinny rail teeth along top
-  for (let z = -0.37; z <= 0.06; z += 0.018) {
-    appendBox(arMetal, 0, 0.058, z, 0.024, 0.007, 0.010, 1);
+  // Upper & Lower Forged Receivers with Magwell Flare
+  appendBox(arMetal, 0, 0.034, -0.035, 0.044, 0.042, 0.22, 0.8); // Upper Receiver
+  appendBox(arMetal, 0, -0.002, -0.025, 0.042, 0.036, 0.19, 0.8); // Lower Receiver
+  appendBox(arMetal, 0, -0.024, -0.065, 0.046, 0.024, 0.072, 0.6); // Flared Magwell lip
+  // Brass Deflector, Dust Cover, Bolt Carrier Group (visible in port) & Forward Assist
+  appendBox(arSteel, 0.023, 0.034, -0.025, 0.004, 0.018, 0.068, 0.5); // Ejection port Bolt Carrier
+  appendBox(arPoly, 0.024, 0.022, -0.025, 0.005, 0.012, 0.066, 0.5);  // Open Dust Cover flap
+  appendBox(arMetal, 0.025, 0.034, 0.022, 0.012, 0.018, 0.020, 0.5);  // Brass deflector bump
+  appendCylinder(arMetal, 0.024, 0.028, 0.055, 0.007, 0.008, 0.032, 10, 'z'); // Forward Assist plunger
+  // Ambidextrous Charging Handle & Fire Selector Switch
+  appendBox(arMetal, 0, 0.052, 0.082, 0.052, 0.010, 0.026, 0.5); // Charging handle T-latch
+  appendBox(arSteel, -0.023, 0.002, 0.032, 0.006, 0.008, 0.024, 0.5); // Fire selector lever
+  // Trigger Guard & Curved Trigger
+  appendBox(arPoly, 0, -0.028, -0.005, 0.018, 0.006, 0.052, 0.5); // Trigger guard bow
+  appendBeam(arSteel, 0, -0.010, 0.002, 0, -0.024, -0.006, 0.0035, 6); // Trigger blade
+
+  // M-LOK Ventilated Free-Float Handguard (slotted octagonal shroud around gas tube + barrel)
+  appendBox(arMetal, 0, 0.052, -0.255, 0.036, 0.012, 0.27, 0.8);  // Handguard Top Rail Spine
+  appendBox(arMetal, 0, 0.006, -0.255, 0.034, 0.010, 0.27, 0.8);  // Handguard Bottom Spine
+  // Left & Right M-LOK Slotted Side Walls (creates genuine see-through ventilation slots!)
+  for (const side of [-0.019, 0.019]) {
+    appendBox(arMetal, side, 0.041, -0.255, 0.006, 0.012, 0.27, 0.8); // Upper side rail
+    appendBox(arMetal, side, 0.017, -0.255, 0.006, 0.012, 0.27, 0.8); // Lower side rail
+    for (let z = -0.38; z <= -0.13; z += 0.048) {
+      appendBox(arMetal, side, 0.029, z, 0.007, 0.016, 0.016, 0.5); // M-LOK bridge ribs between slots
+    }
   }
-  // Ejection port & charging handle
-  appendBox(arMetal, 0.024, 0.032, -0.02, 0.005, 0.022, 0.065, 1);
-  appendBox(arMetal, 0, 0.052, 0.085, 0.036, 0.012, 0.03, 1);
-  // Holo Sight housing
-  appendBox(arMetal, 0, 0.084, -0.03, 0.044, 0.046, 0.072, 1);
-  appendBox(arLens, 0, 0.088, -0.03, 0.034, 0.030, 0.004, 1);
-  appendBox(arRet, 0, 0.088, -0.033, 0.005, 0.005, 0.002, 1);
+  // Internal Gas Block, Silver Gas Tube & Heavy Barrel + 3-Prong Flash Hider
+  appendCylinder(arSteel, 0, 0.029, -0.33, 0.015, 0.015, 0.032, 12, 'z'); // Low-profile gas block
+  appendCylinder(arBrass, 0, 0.042, -0.21, 0.0035, 0.0035, 0.22, 8, 'z'); // Stainless gas tube
+  appendCylinder(arSteel, 0, 0.029, -0.34, 0.011, 0.012, 0.42, 16, 'z');  // Match barrel
+  appendCylinder(arSteel, 0, 0.029, -0.57, 0.015, 0.014, 0.058, 16, 'z'); // Muzzle compensator collar
+  appendBox(arPoly, 0, 0.029, -0.585, 0.008, 0.031, 0.032, 0.5);          // Compensator vent ports
 
-  // Polymer Stock, Pistol Grip, Vertical Foregrip, Curved 30-rd Mag
-  appendBox(arPoly, 0, 0.018, 0.18, 0.040, 0.052, 0.18, 1); // Buffer & Stock
-  appendBox(arPoly, 0, -0.015, 0.255, 0.042, 0.115, 0.032, 1); // Buttpad
-  appendBox(arPoly, 0, -0.048, 0.035, 0.032, 0.095, 0.044, 1); // Pistol grip
-  appendCylinder(arPoly, 0, -0.042, -0.25, 0.015, 0.014, 0.088, 14, 'y'); // Vertical Foregrip
-  appendBox(arPoly, 0, -0.075, -0.065, 0.028, 0.135, 0.056, 1); // 30-rd Magazine
-  appendBox(arPoly, 0, -0.145, -0.075, 0.030, 0.045, 0.058, 1); // Mag curve lower
+  // Full-length Picatinny Rail Teeth (Upper Receiver + Handguard)
+  for (let z = -0.38; z <= 0.065; z += 0.016) {
+    appendBox(arMetal, 0, 0.059, z, 0.024, 0.006, 0.008, 0.5);
+  }
+
+  // Hollow EOTech Holographic Weapon Sight (with open window frame, side buttons & locking lever)
+  appendBox(arMetal, 0, 0.068, -0.03, 0.042, 0.014, 0.076, 0.5);    // Sight base clamp
+  appendBox(arMetal, -0.020, 0.092, -0.03, 0.006, 0.038, 0.056, 0.5); // Left protective hood wall
+  appendBox(arMetal, 0.020, 0.092, -0.03, 0.006, 0.038, 0.056, 0.5);  // Right protective hood wall
+  appendBox(arMetal, 0, 0.110, -0.03, 0.046, 0.006, 0.058, 0.5);     // Top protective hood arch
+  appendCylinder(arPoly, 0.024, 0.082, -0.025, 0.006, 0.006, 0.006, 10, 'x'); // Windage turret button
+  appendBox(arLens, 0, 0.092, -0.03, 0.034, 0.030, 0.003, 0.5);      // Anti-reflective glass window
+  appendBox(arRet, 0, 0.092, -0.033, 0.004, 0.004, 0.002, 0.5);      // Glowing Holo Red Dot
+
+  // Top-Mounted PEQ-15 Tactical Laser Module at Front of Handguard
+  appendBox(arPoly, 0, 0.070, -0.32, 0.042, 0.018, 0.068, 0.5);
+  appendCylinder(arLaser, 0.012, 0.070, -0.356, 0.004, 0.004, 0.004, 10, 'z'); // Green laser emitter lens
+
+  // Skeletonized CTR Tactical Buttstock, Buffer Tube, Ergonomic Pistol Grip, Vertical Foregrip & Ribbed PMAG
+  appendCylinder(arMetal, 0, 0.028, 0.16, 0.016, 0.016, 0.18, 12, 'z'); // Mil-spec buffer tube
+  appendBox(arPoly, 0, 0.032, 0.185, 0.040, 0.032, 0.17, 0.6);          // Stock cheek weld comb
+  appendBox(arPoly, 0, -0.012, 0.258, 0.044, 0.118, 0.024, 0.6);        // Rubber recoil buttpad
+  appendBeam(arPoly, 0, -0.052, 0.248, 0, 0.018, 0.115, 0.012, 8);      // Skeletonized diagonal strut
+  // Ergonomic Angled Pistol Grip (raked backward at 18 deg)
+  appendBeam(arPoly, 0, -0.012, 0.025, 0, -0.095, 0.058, 0.019, 10);
+  appendBox(arPoly, 0, -0.055, 0.042, 0.030, 0.088, 0.038, 0.6);
+  // Textured Vertical Foregrip with locking collar
+  appendBox(arMetal, 0, -0.004, -0.25, 0.032, 0.014, 0.044, 0.5);
+  appendCylinder(arPoly, 0, -0.048, -0.25, 0.016, 0.014, 0.084, 14, 'y');
+  // 30-Round Polymer PMAG with grip ribs & floorplate
+  appendBox(arPoly, 0, -0.078, -0.065, 0.026, 0.125, 0.056, 0.6);
+  appendBox(arPoly, 0, -0.145, -0.076, 0.028, 0.042, 0.058, 0.6);
+  appendBox(arFdePolymer, 0, -0.168, -0.078, 0.032, 0.010, 0.064, 0.5); // Magazine bumper plate
+  for (let yRib = -0.045; yRib >= -0.125; yRib -= 0.022) {
+    appendBox(arPoly, 0, yRib, -0.065, 0.030, 0.006, 0.058, 0.5); // PMAG horizontal ribs
+  }
 
   const arNode = b.addNode('AR7_Carbine', [
     b.addMeshPrimitive('AR7_Metal', arMetal.positions, arMetal.normals, arMetal.uvs, arMetal.indices, matGunmetal),
+    b.addMeshPrimitive('AR7_Steel', arSteel.positions, arSteel.normals, arSteel.uvs, arSteel.indices, matDarkSteel),
     b.addMeshPrimitive('AR7_Polymer', arPoly.positions, arPoly.normals, arPoly.uvs, arPoly.indices, matPolymer),
+    b.addMeshPrimitive('AR7_FDE', arFdePolymer.positions, arFdePolymer.normals, arFdePolymer.uvs, arFdePolymer.indices, matFdePolymer),
+    b.addMeshPrimitive('AR7_Brass', arBrass.positions, arBrass.normals, arBrass.uvs, arBrass.indices, matBrass),
     b.addMeshPrimitive('AR7_Lens', arLens.positions, arLens.normals, arLens.uvs, arLens.indices, matGlass),
     b.addMeshPrimitive('AR7_Reticle', arRet.positions, arRet.normals, arRet.uvs, arRet.indices, matReticle),
+    b.addMeshPrimitive('AR7_Laser', arLaser.positions, arLaser.normals, arLaser.uvs, arLaser.indices, matLaserGreen),
   ]);
 
   // --- Weapon 2: SR-9 Bolt-Action Sniper Rifle ---
   const srMetal = makeGeometryCollector();
+  const srSteel = makeGeometryCollector();
   const srPoly = makeGeometryCollector();
+  const srFdePolymer = makeGeometryCollector();
   const srLens = makeGeometryCollector();
+  const srBrass = makeGeometryCollector();
 
-  appendBox(srMetal, 0, 0.02, -0.06, 0.044, 0.058, 0.34, 2); // Chassis receiver
-  appendCylinder(srMetal, 0, 0.032, -0.48, 0.013, 0.016, 0.56, 16, 'z'); // Long fluted barrel
-  appendBox(srMetal, 0, 0.032, -0.78, 0.028, 0.026, 0.065, 1); // Muzzle brake
-  // Telescopic Scope
-  appendCylinder(srMetal, 0, 0.092, -0.06, 0.018, 0.018, 0.26, 16, 'z');
-  appendCylinder(srMetal, 0, 0.092, -0.21, 0.028, 0.020, 0.08, 16, 'z'); // Front objective bell
-  appendCylinder(srMetal, 0, 0.092, 0.09, 0.022, 0.024, 0.06, 16, 'z'); // Rear eyepiece
-  appendCylinder(srLens, 0, 0.092, 0.121, 0.020, 0.020, 0.004, 16, 'z');
-  // Folding Bipod
-  appendCylinder(srMetal, -0.035, -0.045, -0.34, 0.007, 0.006, 0.14, 10, 'y');
-  appendCylinder(srMetal, 0.035, -0.045, -0.34, 0.007, 0.006, 0.14, 10, 'y');
-  // Precision Stock & Mag
-  appendBox(srPoly, 0, 0.01, 0.22, 0.038, 0.065, 0.24, 1);
-  appendBox(srPoly, 0, 0.048, 0.20, 0.042, 0.028, 0.12, 1); // Cheek rest
-  appendBox(srPoly, 0, -0.052, 0.05, 0.032, 0.095, 0.044, 1);
-  appendBox(srMetal, 0, -0.048, -0.07, 0.030, 0.085, 0.078, 1); // .338 Box Magazine
+  // CNC Machined Tactical Chassis & Ventilated Forend
+  appendBox(srMetal, 0, 0.022, -0.08, 0.044, 0.052, 0.38, 0.8); // Main chassis block
+  appendBox(srMetal, 0, 0.016, -0.34, 0.040, 0.036, 0.22, 0.8); // Forend chassis extension
+  for (let z = -0.41; z <= -0.26; z += 0.045) {
+    appendBox(srSteel, 0, 0.020, z, 0.044, 0.014, 0.022, 0.5); // Forend keymod/ventilation slots
+  }
+  // Bolt Handle & Spherical Tactical Bolt Knob (Right side)
+  appendCylinder(srSteel, 0.012, 0.032, -0.02, 0.010, 0.010, 0.14, 12, 'z'); // Fluted bolt body
+  appendBeam(srSteel, 0.018, 0.032, 0.025, 0.052, 0.014, 0.035, 0.005, 8);   // Swept bolt handle
+  appendCylinder(srPoly, 0.054, 0.012, 0.036, 0.011, 0.009, 0.018, 10, 'x'); // Oversized tactical bolt knob
+  // Trigger Guard & Match Trigger
+  appendBox(srPoly, 0, -0.024, 0.005, 0.018, 0.006, 0.052, 0.5);
+  appendBeam(srBrass, 0, -0.006, 0.012, 0, -0.020, 0.006, 0.0035, 6); // Gold match trigger
+
+  // Long Free-Floated Heavy Barrel & 2-Chamber Tanker Muzzle Brake
+  appendCylinder(srSteel, 0, 0.034, -0.48, 0.012, 0.016, 0.58, 16, 'z');
+  appendBox(srSteel, 0, 0.034, -0.79, 0.032, 0.026, 0.072, 0.5); // Muzzle brake body
+  appendBox(srPoly, 0, 0.034, -0.775, 0.035, 0.014, 0.016, 0.5); // Brake baffle port 1
+  appendBox(srPoly, 0, 0.034, -0.802, 0.035, 0.014, 0.016, 0.5); // Brake baffle port 2
+
+  // 8x50mm Precision Telescopic Scope + Dual Cantilever Scope Rings + Elevation/Windage Turrets
+  appendBox(srMetal, 0, 0.068, -0.12, 0.034, 0.036, 0.024, 0.5); // Front scope ring mount
+  appendBox(srMetal, 0, 0.068, 0.02, 0.034, 0.036, 0.024, 0.5);  // Rear scope ring mount
+  appendCylinder(srMetal, 0, 0.092, -0.05, 0.016, 0.016, 0.26, 16, 'z'); // Scope main tube
+  appendCylinder(srMetal, 0, 0.092, -0.21, 0.028, 0.017, 0.09, 16, 'z'); // 50mm Front objective bell
+  appendCylinder(srMetal, 0, 0.092, -0.265, 0.029, 0.028, 0.035, 16, 'z'); // Sunshade hood
+  appendCylinder(srMetal, 0, 0.092, 0.095, 0.021, 0.023, 0.065, 16, 'z'); // Rear ocular bell
+  // Target Turrets (Top Elevation, Right Windage, Left Parallax) + Brass zero-stop ring
+  appendCylinder(srPoly, 0, 0.116, -0.05, 0.013, 0.013, 0.022, 12, 'y');
+  appendCylinder(srBrass, 0, 0.106, -0.05, 0.014, 0.014, 0.004, 12, 'y');
+  appendCylinder(srPoly, 0.024, 0.092, -0.05, 0.012, 0.012, 0.018, 12, 'x');
+  appendCylinder(srPoly, -0.024, 0.092, -0.05, 0.011, 0.011, 0.016, 12, 'x');
+  appendCylinder(srLens, 0, 0.092, 0.129, 0.019, 0.019, 0.004, 16, 'z');
+  appendCylinder(srLens, 0, 0.092, -0.281, 0.026, 0.026, 0.004, 16, 'z');
+
+  // Folding Spring Bipod with Notched Legs & Rubber Feet
+  appendBox(srMetal, 0, -0.006, -0.41, 0.048, 0.018, 0.036, 0.5); // Bipod swivel block
+  for (const bx of [-0.036, 0.036]) {
+    appendBeam(srSteel, bx * 0.6, -0.01, -0.41, bx * 1.25, -0.12, -0.43, 0.0065, 8);
+    appendCylinder(srPoly, bx * 1.25, -0.125, -0.43, 0.011, 0.013, 0.018, 10, 'y'); // Bipod foot pad
+  }
+
+  // Precision Skeletonized Sniper Stock with Adjustable Cheek Riser Posts & .338 Lapua Box Mag
+  appendBox(srPoly, 0, 0.018, 0.19, 0.036, 0.028, 0.22, 0.6); // Upper stock beam
+  appendBox(srPoly, 0, -0.028, 0.20, 0.034, 0.022, 0.20, 0.6); // Lower stock hook beam
+  appendBox(srPoly, 0, -0.005, 0.295, 0.042, 0.115, 0.032, 0.6); // Adjustable recoil pad
+  appendCylinder(srSteel, 0, 0.038, 0.16, 0.005, 0.005, 0.03, 8, 'y'); // Cheek riser post 1
+  appendCylinder(srSteel, 0, 0.038, 0.23, 0.005, 0.005, 0.03, 8, 'y'); // Cheek riser post 2
+  appendBox(srFdePolymer, 0, 0.052, 0.195, 0.042, 0.022, 0.125, 0.5); // Molded Cheek Rest
+  appendBeam(srPoly, 0, -0.01, 0.045, 0, -0.095, 0.068, 0.019, 10);    // Vertical precision grip
+  appendBox(srSteel, 0, -0.052, -0.075, 0.030, 0.092, 0.086, 0.6);     // .338 Box Magazine
+  appendBox(srPoly, 0, -0.098, -0.075, 0.034, 0.012, 0.090, 0.5);      // Mag baseplate
 
   const srNode = b.addNode('SR9_Sniper', [
     b.addMeshPrimitive('SR9_Metal', srMetal.positions, srMetal.normals, srMetal.uvs, srMetal.indices, matGunmetal),
+    b.addMeshPrimitive('SR9_Steel', srSteel.positions, srSteel.normals, srSteel.uvs, srSteel.indices, matDarkSteel),
     b.addMeshPrimitive('SR9_Polymer', srPoly.positions, srPoly.normals, srPoly.uvs, srPoly.indices, matPolymer),
+    b.addMeshPrimitive('SR9_FDE', srFdePolymer.positions, srFdePolymer.normals, srFdePolymer.uvs, srFdePolymer.indices, matFdePolymer),
+    b.addMeshPrimitive('SR9_Brass', srBrass.positions, srBrass.normals, srBrass.uvs, srBrass.indices, matBrass),
     b.addMeshPrimitive('SR9_Lens', srLens.positions, srLens.normals, srLens.uvs, srLens.indices, matGlass),
   ]);
 
   // --- Weapon 3: RL-7 Anti-Armor Rocket Launcher ---
   const rlBody = makeGeometryCollector();
   const rlMetal = makeGeometryCollector();
+  const rlPoly = makeGeometryCollector();
   const rlWarhead = makeGeometryCollector();
+  const rlLens = makeGeometryCollector();
 
-  appendCylinder(rlBody, 0, 0.04, -0.08, 0.058, 0.058, 0.78, 20, 'z'); // Launch tube
-  appendCylinder(rlMetal, 0, 0.04, -0.49, 0.072, 0.062, 0.08, 20, 'z'); // Front collar
-  appendCylinder(rlMetal, 0, 0.04, 0.34, 0.062, 0.082, 0.10, 20, 'z'); // Rear exhaust venture cone
-  appendBox(rlMetal, -0.065, 0.07, -0.14, 0.032, 0.048, 0.09, 1); // Side optical sight
-  appendBox(rlMetal, 0, -0.045, -0.05, 0.034, 0.095, 0.045, 1); // Firing grip
-  appendBox(rlMetal, 0, -0.045, -0.26, 0.032, 0.088, 0.042, 1); // Front grip
-  appendCylinder(rlWarhead, 0, 0.04, -0.55, 0.015, 0.052, 0.12, 16, 'z'); // Protruding HEAT warhead
+  appendCylinder(rlBody, 0, 0.04, -0.08, 0.056, 0.056, 0.78, 20, 'z'); // Fiberglass Olive Launch Tube
+  // Structural Reinforcement Clamp Bands & Ribbing along Launch Tube
+  for (const bz of [-0.36, -0.18, 0.02, 0.18]) {
+    appendCylinder(rlMetal, 0, 0.04, bz, 0.060, 0.060, 0.024, 20, 'z');
+  }
+  appendCylinder(rlPoly, 0, 0.04, -0.49, 0.074, 0.064, 0.075, 20, 'z'); // Front heavy rubber bumper collar
+  appendCylinder(rlMetal, 0, 0.04, 0.34, 0.058, 0.084, 0.11, 20, 'z');  // Rear Venturi exhaust nozzle
+  appendCylinder(rlPoly, 0, 0.04, 0.40, 0.086, 0.082, 0.028, 20, 'z');  // Rear bumper ring
+  // Top Carrying Handle & Foam Shoulder Rest
+  appendBeam(rlMetal, 0, 0.106, -0.16, 0, 0.106, 0.04, 0.008, 8);
+  appendBox(rlMetal, 0, 0.095, -0.16, 0.016, 0.024, 0.02, 0.5);
+  appendBox(rlMetal, 0, 0.095, 0.04, 0.016, 0.024, 0.02, 0.5);
+  appendBox(rlPoly, 0, 0.012, 0.12, 0.122, 0.068, 0.18, 0.5); // Padded shoulder rest cradle
+  // Side Optical Sight Assembly & Lens
+  appendBox(rlMetal, -0.066, 0.068, -0.14, 0.028, 0.022, 0.08, 0.5);
+  appendCylinder(rlMetal, -0.075, 0.086, -0.14, 0.016, 0.016, 0.095, 14, 'z');
+  appendCylinder(rlLens, -0.075, 0.086, -0.189, 0.014, 0.014, 0.004, 14, 'z');
+  // Dual Firing & Foregrips with Trigger Guard
+  appendBeam(rlPoly, 0, -0.01, -0.04, 0, -0.095, -0.02, 0.018, 10);
+  appendBox(rlMetal, 0, -0.035, -0.065, 0.018, 0.006, 0.048, 0.5);
+  appendBeam(rlPoly, 0, -0.01, -0.26, 0, -0.092, -0.25, 0.017, 10);
+  // Protruding Tandem HEAT Warhead Cone + Piezo Nose Fuse
+  appendCylinder(rlWarhead, 0, 0.04, -0.55, 0.018, 0.052, 0.11, 16, 'z');
+  appendCylinder(rlMetal, 0, 0.04, -0.62, 0.008, 0.014, 0.045, 12, 'z');
 
   const rlNode = b.addNode('RL7_Launcher', [
     b.addMeshPrimitive('RL7_Tube', rlBody.positions, rlBody.normals, rlBody.uvs, rlBody.indices, matOlive),
     b.addMeshPrimitive('RL7_Hardware', rlMetal.positions, rlMetal.normals, rlMetal.uvs, rlMetal.indices, matGunmetal),
+    b.addMeshPrimitive('RL7_Polymer', rlPoly.positions, rlPoly.normals, rlPoly.uvs, rlPoly.indices, matPolymer),
     b.addMeshPrimitive('RL7_Warhead', rlWarhead.positions, rlWarhead.normals, rlWarhead.uvs, rlWarhead.indices, matBrass),
+    b.addMeshPrimitive('RL7_Lens', rlLens.positions, rlLens.normals, rlLens.uvs, rlLens.indices, matGlass),
   ]);
 
   b.RootNodes.push(arNode, srNode, rlNode);
@@ -1136,6 +1289,40 @@ function buildPortEnvironmentGlb() {
     appendBox(gDarkSteel, wx, 0.65, wz, 1.31, 0.12, 1.31, 0.5);
   }
 
+  // 11. Snaking Heavy Rubber Dock Cables & Faded Quay Lane Striping (matching CAM_LANE Concept Art!)
+  const cablePaths = [
+    [[-12.0, 20.0], [-10.2, 17.5], [-8.8, 14.5], [-9.2, 11.5], [-11.8, 6.0], [-12.0, 2.0]],
+    [[11.5, 21.0], [10.4, 17.0], [11.2, 12.0], [11.5, 4.0], [12.1, -4.5], [11.9, -5.5]],
+    [[-7.5, -13.5], [-5.8, -11.0], [-4.8, -6.5], [-4.8, 9.5]],
+  ];
+  for (const pathPts of cablePaths) {
+    for (let i = 0; i < pathPts.length - 1; i++) {
+      const [x1, z1] = pathPts[i];
+      const [x2, z2] = pathPts[i + 1];
+      appendBeam(gRubber, x1, 0.028, z1, x2, 0.028, z2, 0.032, 6);
+      appendBeam(gDarkSteel, x1 + 0.12, 0.022, z1, x2 + 0.12, 0.022, z2, 0.022, 5);
+    }
+  }
+  // Faded Yellow Safety Lane Dashes along West Crane Rail & Warehouse Loading Zone
+  for (let z = -22; z <= 24; z += 4.5) {
+    appendBox(gHazard, -3.1, 0.012, z, 0.16, 0.015, 2.1, 0.5);
+    appendBox(gHazard, 9.8, 0.012, z, 0.16, 0.015, 2.1, 0.5);
+  }
+
+  // 12. Distant Harbor Breakwater, Opposite Port Cranes & Illuminated Channel Buoys (North/West Horizon)
+  appendBox(gDarkSteel, -15, 1.2, -56, 110, 2.8, 3.5, 0.2); // Distant North Breakwater Wall
+  for (const dcx of [-42, -18, 8]) {
+    appendBox(gDarkSteel, dcx, 12.0, -56, 0.9, 22.0, 2.5, 0.2);
+    appendBox(gDarkSteel, dcx - 4, 21.5, -56, 22.0, 0.9, 0.9, 0.2);
+    appendBox(gLamps, dcx, 21.0, -55.2, 1.2, 0.4, 0.4, 1); // Distant crane beacon light
+  }
+  // Harbor Channel Navigation Buoys floating in West/North Sea Basin
+  for (const [bx, bz] of [[-28, 30], [-46, 8], [-48, -22], [-22, -46]]) {
+    appendCylinder(gExplosive, bx, -1.0, bz, 0.65, 0.85, 1.2, 10, 'y');
+    appendCylinder(gDarkSteel, bx, 0.1, bz, 0.18, 0.45, 1.4, 8, 'y');
+    appendBox(gLamps, bx, 0.95, bz, 0.32, 0.32, 0.32, 1);
+  }
+
   const rootNode = b.addNode('NightPort_Environment', [
     b.addMeshPrimitive('Dock_Concrete', gConcrete.positions, gConcrete.normals, gConcrete.uvs, gConcrete.indices, matConcrete),
     b.addMeshPrimitive('Dock_Puddles', gPuddles.positions, gPuddles.normals, gPuddles.uvs, gPuddles.indices, matPuddle),
@@ -1303,34 +1490,44 @@ function buildTacticalSoldierGlb() {
     gltf.nodes[parentBoneIdx].children.push(nodeIdx);
   }
 
-  // 1) Sleek Rounded Ballistic Head & Helmet + Visor attached to Head bone (node 0)
+  // 1) Sleek Rounded Ballistic Head & FAST Helmet + Dual-Tube NVG + Visor attached to Head bone (node 0)
   const gBalaclavaHead = makeGeometryCollector();
-  appendCylinder(gBalaclavaHead, 0, 0.08, 0.0, 0.082, 0.072, 0.16, 14, 'y'); // Balaclava head/neck
+  appendCylinder(gBalaclavaHead, 0, 0.085, 0.0, 0.084, 0.072, 0.17, 14, 'y'); // Balaclava head/neck
   addRigidAttachmentNode(0, 'Tactical_Balaclava_Head_Rigid', gBalaclavaHead, matBalaclavaBoots);
 
   const gHelmet = makeGeometryCollector();
-  appendCylinder(gHelmet, 0, 0.135, -0.005, 0.095, 0.105, 0.11, 16, 'y'); // Rounded Helmet Dome
-  appendCylinder(gHelmet, 0, 0.195, -0.005, 0.055, 0.095, 0.035, 16, 'y'); // Top crown
-  appendBox(gHelmet, 0, 0.15, 0.098, 0.038, 0.032, 0.022, 1); // NVG Shroud Mount
+  appendCylinder(gHelmet, 0, 0.14, -0.006, 0.102, 0.108, 0.105, 16, 'y'); // Rounded FAST Helmet Shell
+  appendCylinder(gHelmet, 0, 0.198, -0.006, 0.064, 0.102, 0.036, 16, 'y'); // Top crown dome
+  appendBox(gHelmet, -0.102, 0.135, -0.01, 0.014, 0.026, 0.11, 1);        // Left ARC Accessory Rail & Comms Headset
+  appendBox(gHelmet, 0.102, 0.135, -0.01, 0.014, 0.026, 0.11, 1);         // Right ARC Accessory Rail & Comms Headset
+  appendBox(gHelmet, 0, 0.155, 0.098, 0.042, 0.036, 0.024, 1);            // Wilcox NVG Shroud Mount
+  // Dual-Tube Night Vision Goggles (GPNVG / PVS-31) mounted on helmet front
+  appendCylinder(gHelmet, -0.028, 0.145, 0.135, 0.016, 0.018, 0.065, 10, 'z');
+  appendCylinder(gHelmet, 0.028, 0.145, 0.135, 0.016, 0.018, 0.065, 10, 'z');
   addRigidAttachmentNode(0, 'Tactical_Helmet_Rigid', gHelmet, matHelmet);
 
   const gVisor = makeGeometryCollector();
-  appendBox(gVisor, 0, 0.095, 0.082, 0.135, 0.036, 0.03, 1); // Tactical Amber Visor Goggles
+  appendBox(gVisor, 0, 0.098, 0.084, 0.128, 0.034, 0.028, 1); // Tactical Amber Ballistic Goggles
+  appendCylinder(gVisor, -0.028, 0.145, 0.168, 0.014, 0.014, 0.004, 10, 'z'); // NVG Glowing Objective Lens L
+  appendCylinder(gVisor, 0.028, 0.145, 0.168, 0.014, 0.014, 0.004, 10, 'z');  // NVG Glowing Objective Lens R
   addRigidAttachmentNode(0, 'Tactical_Visor_Rigid', gVisor, matVisorGlow);
 
-  // 2) Rigid Plate Carrier Chest Pouches attached to spine_03 (node 50)
+  // 2) Rigid Plate Carrier Chest Pouches & Radio Antenna attached to spine_03 (node 50)
   const gVest = makeGeometryCollector();
-  appendBox(gVest, -0.06, 0.02, 0.145, 0.048, 0.095, 0.032, 1); // Mag pouch 1
-  appendBox(gVest, 0.0, 0.02, 0.145, 0.048, 0.095, 0.032, 1);  // Mag pouch 2
-  appendBox(gVest, 0.06, 0.02, 0.145, 0.048, 0.095, 0.032, 1); // Mag pouch 3
+  appendBox(gVest, -0.065, 0.02, 0.148, 0.048, 0.098, 0.036, 1); // Mag pouch 1
+  appendBox(gVest, 0.0, 0.02, 0.152, 0.048, 0.098, 0.036, 1);    // Mag pouch 2
+  appendBox(gVest, 0.065, 0.02, 0.148, 0.048, 0.098, 0.036, 1);  // Mag pouch 3
+  appendBox(gVest, -0.095, 0.11, 0.125, 0.036, 0.075, 0.032, 1); // Shoulder Tactical Radio (PRC-152)
+  appendCylinder(gVest, -0.105, 0.24, 0.125, 0.004, 0.005, 0.22, 6, 'y'); // Whip antenna
   addRigidAttachmentNode(50, 'Tactical_PlateCarrier_Rigid', gVest, matPlateCarrier);
 
-  // 3) Rigid AR-7 Carbine attached to hand_r bone (node 46) per character-skin section 3
+  // 3) Rigid Detailed AR-7 Carbine attached to hand_r bone (node 46) per character-skin section 3
   const gRifle = makeGeometryCollector();
-  appendBox(gRifle, 0, 0.06, 0.04, 0.034, 0.055, 0.38, 1); // Receiver & Handguard
-  appendCylinder(gRifle, 0, 0.07, 0.30, 0.009, 0.009, 0.22, 10, 'z'); // Barrel
-  appendBox(gRifle, 0, 0.105, 0.02, 0.032, 0.036, 0.055, 1); // Holo sight
-  appendBox(gRifle, 0, -0.01, 0.05, 0.022, 0.10, 0.042, 1); // 30-rd Mag
+  appendBox(gRifle, 0, 0.058, 0.05, 0.034, 0.052, 0.42, 1); // Receiver & M-LOK Handguard
+  appendCylinder(gRifle, 0, 0.068, 0.34, 0.010, 0.011, 0.24, 10, 'z'); // Barrel & Flash Hider
+  appendBox(gRifle, 0, 0.102, 0.03, 0.034, 0.038, 0.058, 1); // EOTech Holo Sight
+  appendBox(gRifle, 0, -0.015, 0.06, 0.024, 0.11, 0.046, 1); // Curved 30-rd Mag
+  appendBox(gRifle, 0, 0.048, -0.18, 0.032, 0.085, 0.12, 1); // Buttstock
   addRigidAttachmentNode(46, 'Soldier_AR7_Rifle_Rigid', gRifle, matRifle);
 
   const finalBin = Buffer.concat(binChunks);

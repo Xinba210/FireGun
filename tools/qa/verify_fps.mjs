@@ -194,6 +194,7 @@ async function main() {
       window.__fpsApi.setAds(false);
       window.__fpsApi.equipWeapon(2);
       window.__fpsApi.setPlayerPose(5.8, 5.34, 8.5, 0.55, -0.35);
+      window.__fpsApi.detonateAt(-0.5, 0.4, 1.5, 0.08);
     });
     await page.waitForTimeout(120);
     await page.screenshot({ path: path.join(EVIDENCE_DIR, 'view_04_overhead_catwalk_rl7.png') });
@@ -224,7 +225,7 @@ async function main() {
     await page.screenshot({ path: path.join(EVIDENCE_DIR, 'view_07_warehouse_reload.png') });
 
     await page.evaluate(() => {
-      window.__fpsApi.equipWeapon(1);
+      window.__fpsApi.equipWeapon(0);
       window.__fpsApi.toggleLoadout(true);
     });
     await page.waitForTimeout(120);
@@ -259,10 +260,10 @@ async function main() {
         browser,
         path.join(EVIDENCE_DIR, 'cam_hero_before.png'),
         path.join(EVIDENCE_DIR, 'cam_hero_render.png'),
-        'OPTIMIZATION CYCLE A/B — Before (277k Tris / No EnvMap) vs After (PMREM IBL + 111k Tris)',
+        'OPTIMIZATION CYCLE A/B — Before (277k Tris / No EnvMap) vs v0.3.0 (PMREM IBL + Halos + Dock Details + 181k Tris)',
         path.join(EVIDENCE_DIR, 'ab_optimization_before_after.png'),
         '[BEFORE] CYCLE 1 ENGINE RENDER (277,664 TRIS)',
-        '[AFTER] CYCLE 2 OPTIMIZED RENDER (PMREM IBL + 55% TRI REDUCTION)'
+        '[AFTER] CYCLE 4 (v0.3.0) OPTIMIZED RENDER (PMREM IBL + HALOS + 181K TRIS)'
       );
     }
 

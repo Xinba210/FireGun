@@ -132,3 +132,33 @@ func _on_soldier_eliminated(_enemy_name: String, _is_headshot: bool) -> void:
 func _update_objective_ui() -> void:
 	if hud_objective_label:
 		hud_objective_label.text = "目標：肅清碼頭武裝守軍並奪還港務主控終端 (%d / %d)" % [enemies_eliminated, enemies_total]
+
+func spawn_explosion_effect(world_pos: Vector3) -> void:
+	var blast_light := OmniLight3D.new()
+	blast_light.position = world_pos + Vector3(0, 1.8, 0)
+	blast_light.light_color = Color(1.0, 0.48, 0.15)
+	blast_light.light_energy = 14.0
+	blast_light.omni_range = 28.0
+	add_child(blast_light)
+
+	var shrapnel := GPUParticles3D.new()
+	shrapnel.position = world_pos + Vector3(0, 0.8, 0)
+	shrapnel.amount = 32
+	shrapnel.lifetime = 1.2
+	shrapnel.one_shot = true
+	shrapnel.explosiveness = 0.95
+	var sp_mat := ParticleProcessMaterial.new()
+	sp_mat.direction = Vector3(0, 1, 0)
+	sp_mat.spread = 75.0
+	sp_mat.initial_velocity_min = 6.0
+	sp_mat.initial_velocity_max = 14.0
+	sp_mat.gravity = Vector3(0, -14.5, 0)
+	shrapnel.process_material = sp_mat
+	add_child(shrapnel)
+	shrapnel.emitting = true
+
+	var tween := create_tween()
+	tween.tween_property(blast_light, "light_energy", 0.0, 1.1)
+	tween.tween_callback(blast_light.queue_free)
+	get_tree().create_timer(1.5).timeout.connect(shrapnel.queue_free)
+

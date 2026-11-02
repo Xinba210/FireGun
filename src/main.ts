@@ -117,23 +117,53 @@ interface ExplosiveBarrel {
   id: string;
   position: THREE.Vector3;
   mesh: THREE.Mesh;
+  wreckGroup: THREE.Group;
   hp: number;
   exploded: boolean;
+}
+
+interface ExplosionDebris {
+  mesh: THREE.Mesh;
+  vel: THREE.Vector3;
+  rotSpeed: THREE.Vector3;
 }
 
 interface ActiveExplosion {
   group: THREE.Group;
   core: THREE.Mesh;
+  innerCore: THREE.Mesh;
   plume: THREE.Mesh;
+  secondaryPlume: THREE.Mesh;
   shockwave: THREE.Mesh;
+  blastLight: THREE.PointLight;
+  debris: ExplosionDebris[];
   age: number;
   duration: number;
 }
 
 interface ActiveRocket {
-  mesh: THREE.Mesh;
+  mesh: THREE.Group;
   velocity: THREE.Vector3;
   age: number;
+  smokeTimer: number;
+}
+
+interface ActiveShell {
+  mesh: THREE.Mesh;
+  vel: THREE.Vector3;
+  rotVel: THREE.Vector3;
+  age: number;
+}
+
+interface ActiveTracer {
+  line: THREE.Line;
+  age: number;
+}
+
+interface ActiveSmokePuff {
+  mesh: THREE.Mesh;
+  age: number;
+  maxAge: number;
 }
 
 const urlParams = new URLSearchParams(window.location.search);
@@ -364,6 +394,27 @@ function buildAtmosphereAndLights() {
     [19.0, 8.0, -8.0, 34],    // Warehouse Interior Light
   ];
 
+  // Radial Atmospheric Halo Texture for Sodium Floodlights & Buoys
+  const haloCanvas = document.createElement('canvas');
+  haloCanvas.width = 64;
+  haloCanvas.height = 64;
+  const hCtx = haloCanvas.getContext('2d')!;
+  const grad = hCtx.createRadialGradient(32, 32, 1, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255, 225, 165, 0.95)');
+  grad.addColorStop(0.28, 'rgba(255, 165, 70, 0.45)');
+  grad.addColorStop(0.65, 'rgba(255, 130, 40, 0.12)');
+  grad.addColorStop(1, 'rgba(255, 110, 20, 0.0)');
+  hCtx.fillStyle = grad;
+  hCtx.fillRect(0, 0, 64, 64);
+  const haloTex = new THREE.CanvasTexture(haloCanvas);
+  const haloMat = new THREE.SpriteMaterial({
+    map: haloTex,
+    color: 0xffb858,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+
   for (const [lx, ly, lz, range] of sodiumPositions) {
     const pt = new THREE.PointLight(0xffae4c, 45, range, 1.45);
     pt.position.set(lx, ly, lz);
@@ -372,6 +423,11 @@ function buildAtmosphereAndLights() {
     const cone = new THREE.Mesh(coneGeo, coneMat);
     cone.position.set(lx, ly - 5.5, lz);
     scene.add(cone);
+
+    const halo = new THREE.Sprite(haloMat);
+    halo.position.set(lx, ly - 0.1, lz);
+    halo.scale.set(5.2, 5.2, 1);
+    scene.add(halo);
   }
 }
 
@@ -533,18 +589,24 @@ muzzleFlashMesh.rotation.x = -Math.PI / 2;
 muzzleFlashMesh.position.set(0, 0.03, -0.64);
 weaponMount.add(muzzleFlashMesh);
 
+const muzzleLight = new THREE.PointLight(0xff9928, 0, 14, 1.5);
+muzzleLight.position.set(0, 0.05, -0.68);
+weaponMount.add(muzzleLight);
+
 const weaponModels: Record<string, THREE.Object3D> = {};
 let activeWeaponIdx = 0;
 
-// Loadout 3D Showcase Turntable Group + Dedicated Inspection Lights
+// Loadout 3D Showcase Turntable Group + Dedicated 3-Point Studio Inspection Lights
 const loadoutShowcaseGroup = new THREE.Group();
 loadoutShowcaseGroup.visible = false;
 const loadoutWeaponHolder = new THREE.Group();
-const loadoutKeyLight = new THREE.PointLight(0xffffff, 8.5, 4.0, 1.2);
-loadoutKeyLight.position.set(0.3, 0.45, 0.65);
-const loadoutRimLight = new THREE.PointLight(0xffb84d, 6.0, 4.0, 1.2);
-loadoutRimLight.position.set(-0.45, -0.25, -0.45);
-loadoutShowcaseGroup.add(loadoutWeaponHolder, loadoutKeyLight, loadoutRimLight);
+const loadoutKeyLight = new THREE.PointLight(0xffffff, 12.0, 5.0, 1.1);
+loadoutKeyLight.position.set(0.45, 0.55, 0.75);
+const loadoutRimLight = new THREE.PointLight(0xffb84d, 9.0, 5.0, 1.1);
+loadoutRimLight.position.set(-0.55, 0.25, -0.55);
+const loadoutFillLight = new THREE.PointLight(0x8ab8ff, 6.5, 4.5, 1.2);
+loadoutFillLight.position.set(0.0, -0.45, 0.55);
+loadoutShowcaseGroup.add(loadoutWeaponHolder, loadoutKeyLight, loadoutRimLight, loadoutFillLight);
 camera.add(loadoutShowcaseGroup);
 
 // ---------------------------------------------------------------------------
@@ -554,6 +616,9 @@ const colliders: THREE.Box3[] = [];
 const explosiveBarrels: ExplosiveBarrel[] = [];
 const activeExplosions: ActiveExplosion[] = [];
 const activeRockets: ActiveRocket[] = [];
+const activeShells: ActiveShell[] = [];
+const activeTracers: ActiveTracer[] = [];
+const activeSmokePuffs: ActiveSmokePuff[] = [];
 const enemies: EnemyActor[] = [];
 
 let soldierTemplateGltf: { scene: THREE.Group; animations: THREE.AnimationClip[] } | null = null;
@@ -596,16 +661,58 @@ function spawnExplosiveBarrels() {
   ];
   const geo = new THREE.CylinderGeometry(0.32, 0.32, 0.98, 16);
   const mat = new THREE.MeshStandardMaterial({ color: 0xc81e18, roughness: 0.36, metalness: 0.62 });
+  const wreckMat = new THREE.MeshStandardMaterial({ color: 0x181615, roughness: 0.88, metalness: 0.35 });
+  const emberMat = new THREE.MeshBasicMaterial({ color: 0xff5511 });
+  const scorchMat = new THREE.MeshBasicMaterial({
+    color: 0x070708,
+    transparent: true,
+    opacity: 0.78,
+    depthWrite: false,
+  });
+
   coords.forEach(([x, z], i) => {
+    // Invisible hit-detection cylinder overlapping the GLB barrel
     const mesh = new THREE.Mesh(geo, mat.clone());
     mesh.position.set(x, 0.49, z);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+    mesh.visible = false;
     scene.add(mesh);
+
+    // Pre-built Crumpled & Charred Barrel Wreck + Ground Scorch Crater (shown after detonation!)
+    const wreckGroup = new THREE.Group();
+    wreckGroup.position.set(x, 0.0, z);
+    wreckGroup.visible = false;
+
+    const scorch = new THREE.Mesh(new THREE.CircleGeometry(2.6, 20), scorchMat);
+    scorch.rotation.x = -Math.PI / 2;
+    scorch.position.y = 0.018;
+    wreckGroup.add(scorch);
+
+    const crumpledShell = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.34, 0.68, 10), wreckMat);
+    crumpledShell.position.set(0.12, 0.24, -0.08);
+    crumpledShell.rotation.set(1.15, i * 0.8, 0.45);
+    crumpledShell.scale.set(1.15, 0.85, 0.72);
+    wreckGroup.add(crumpledShell);
+
+    for (let k = 0; k < 5; k++) {
+      const shard = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.05, 0.32), wreckMat);
+      const ang = (k / 5) * Math.PI * 2 + i;
+      shard.position.set(Math.cos(ang) * 0.85, 0.04, Math.sin(ang) * 0.85);
+      shard.rotation.set(0.2, ang, 0.35);
+      wreckGroup.add(shard);
+    }
+
+    const emberCore = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), emberMat);
+    emberCore.position.set(0.08, 0.12, -0.05);
+    emberCore.scale.set(1.4, 0.4, 1.4);
+    wreckGroup.add(emberCore);
+
+    scene.add(wreckGroup);
+
     explosiveBarrels.push({
       id: `barrel_${i}`,
       position: mesh.position.clone(),
       mesh,
+      wreckGroup,
       hp: 40,
       exploded: false,
     });
@@ -635,6 +742,30 @@ async function loadAllAssets() {
     loadGlbAsset('assets/models/weapons_pack.glb'),
     loadGlbAsset('assets/models/soldier_tactical_animated.glb'),
   ]);
+
+  const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  const applyRepeatAndAnisotropy = (root: THREE.Object3D) => {
+    root.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const m = obj as THREE.Mesh;
+        const mats = Array.isArray(m.material) ? m.material : [m.material];
+        for (const mat of mats) {
+          const std = mat as THREE.MeshStandardMaterial;
+          if (!std) continue;
+          for (const tex of [std.map, std.normalMap, std.roughnessMap, std.metalnessMap, std.aoMap]) {
+            if (tex) {
+              tex.wrapS = THREE.RepeatWrapping;
+              tex.wrapT = THREE.RepeatWrapping;
+              tex.anisotropy = maxAniso;
+              tex.needsUpdate = true;
+            }
+          }
+        }
+      }
+    });
+  };
+  applyRepeatAndAnisotropy(portGltf.scene);
+  applyRepeatAndAnisotropy(wepGltf.scene);
 
   // 1. Add Night Port Environment & Enhance Wet Puddle Specular Reflections
   portGltf.scene.traverse((obj) => {
@@ -779,6 +910,7 @@ const player = {
   fireTimer: 0,
   recoilOffsetZ: 0,
   recoilPitch: 0,
+  cameraShake: 0,
   bobPhase: 0,
   stepTimer: 0,
   shotsFired: 0,
@@ -921,31 +1053,145 @@ function startReload() {
 function triggerExplosionAt(pos: THREE.Vector3, radius = 7.5, maxDamage = 165) {
   audioSys.play3D('assets/audio/explosion.wav', pos, player.pos, 10, 80, 1.0);
 
+  // Apply distance-attenuated Camera Trauma Shake
+  const distToPlayer = pos.distanceTo(camera.position);
+  if (distToPlayer < 48) {
+    player.cameraShake = Math.min(1.0, player.cameraShake + Math.max(0.18, 1.0 - distToPlayer / 48) * 0.85);
+  }
+
+  // Reveal permanent ground scorch decal & crumpled wreck if near an explosive barrel
+  for (const b of explosiveBarrels) {
+    if (b.position.distanceTo(pos) < 3.5) {
+      b.exploded = true;
+      b.wreckGroup.visible = true;
+    }
+  }
+
   const group = new THREE.Group();
   group.position.copy(pos);
 
+  // White-Hot Inner Flash Core (renderOrder 12 so it blazes brightly over smoke)
+  const innerCore = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(0.92, 2),
+    new THREE.MeshBasicMaterial({
+      color: 0xfff8e0,
+      transparent: true,
+      opacity: 1.0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
+  );
+  innerCore.position.y = 1.05;
+  innerCore.renderOrder = 12;
+
+  // Fiery Orange-Red Outer Fireball
   const core = new THREE.Mesh(
-    new THREE.SphereGeometry(1.1, 16, 14),
-    new THREE.MeshBasicMaterial({ color: 0xff9922, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending })
+    new THREE.DodecahedronGeometry(1.42, 2),
+    new THREE.MeshBasicMaterial({
+      color: 0xff5a12,
+      transparent: true,
+      opacity: 0.96,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
   );
-  core.position.y = 1.1;
+  core.position.y = 1.25;
+  core.renderOrder = 11;
 
+  // Primary Billowing Dark Smoke Crown (rises above the fireball)
   const plume = new THREE.Mesh(
-    new THREE.SphereGeometry(1.6, 14, 12),
-    new THREE.MeshStandardMaterial({ color: 0x2b2623, roughness: 0.95, transparent: true, opacity: 0.82 })
+    new THREE.DodecahedronGeometry(0.95, 2),
+    new THREE.MeshStandardMaterial({
+      color: 0x161412,
+      emissive: 0x441504,
+      emissiveIntensity: 0.65,
+      roughness: 0.95,
+      transparent: true,
+      opacity: 0.72,
+      depthWrite: false,
+    })
   );
-  plume.position.y = 1.9;
+  plume.position.set(-0.35, 2.35, -0.25);
+  plume.renderOrder = 9;
 
+  // Secondary Rolling Flame & Ember Lobe
+  const secondaryPlume = new THREE.Mesh(
+    new THREE.DodecahedronGeometry(1.12, 2),
+    new THREE.MeshBasicMaterial({
+      color: 0xff8822,
+      transparent: true,
+      opacity: 0.90,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
+  );
+  secondaryPlume.position.set(0.52, 1.55, 0.28);
+  secondaryPlume.renderOrder = 11;
+
+  // Expanding Supersonic Ground Shockwave Ring
   const shockwave = new THREE.Mesh(
-    new THREE.RingGeometry(0.5, 1.2, 24),
-    new THREE.MeshBasicMaterial({ color: 0xffaa44, side: THREE.DoubleSide, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending })
+    new THREE.RingGeometry(0.65, 1.55, 32),
+    new THREE.MeshBasicMaterial({
+      color: 0xffb844,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.95,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
   );
   shockwave.rotation.x = -Math.PI / 2;
-  shockwave.position.y = 0.15;
+  shockwave.position.y = 0.22;
+  shockwave.renderOrder = 10;
 
-  group.add(core, plume, shockwave);
+  // High-Intensity Dynamic Blast PointLight (illuminates surrounding containers & puddles!)
+  const blastLight = new THREE.PointLight(0xff7722, 110, 36, 1.3);
+  blastLight.position.set(0, 2.4, 0);
+
+  // 28 Ballistic Glowing Shrapnel Sparks & Flaming Debris Streaks
+  const debris: ExplosionDebris[] = [];
+  const sparkGeo = new THREE.BoxGeometry(0.16, 0.10, 0.36);
+  for (let i = 0; i < 28; i++) {
+    const isGlowing = i % 3 !== 0;
+    const dMat = new THREE.MeshBasicMaterial({
+      color: isGlowing ? 0xffcc44 : 0xff4411,
+      transparent: true,
+      opacity: 1.0,
+      blending: isGlowing ? THREE.AdditiveBlending : THREE.NormalBlending,
+      depthWrite: false,
+    });
+    const dMesh = new THREE.Mesh(sparkGeo, dMat);
+    const theta = (i / 28) * Math.PI * 2 + (i % 3) * 0.2;
+    const speed = 6.5 + (i % 7) * 2.1;
+    const vy = 5.5 + (i % 5) * 2.4;
+    dMesh.position.set(Math.cos(theta) * 0.55, 0.8 + (i % 4) * 0.3, Math.sin(theta) * 0.55);
+    dMesh.lookAt(
+      dMesh.position.x + Math.cos(theta) * speed,
+      dMesh.position.y + vy,
+      dMesh.position.z + Math.sin(theta) * speed
+    );
+    group.add(dMesh);
+    debris.push({
+      mesh: dMesh,
+      vel: new THREE.Vector3(Math.cos(theta) * speed, vy, Math.sin(theta) * speed),
+      rotSpeed: new THREE.Vector3(6 + i, 8 - i * 0.5, 5 + i * 0.3),
+    });
+  }
+
+  group.add(innerCore, core, plume, secondaryPlume, shockwave, blastLight);
   scene.add(group);
-  activeExplosions.push({ group, core, plume, shockwave, age: 0, duration: 1.35 });
+  activeExplosions.push({
+    group,
+    core,
+    innerCore,
+    plume,
+    secondaryPlume,
+    shockwave,
+    blastLight,
+    debris,
+    age: 0,
+    duration: 1.55,
+  });
 
   // Damage enemies within blast radius
   let blastKills = 0;
@@ -1000,6 +1246,51 @@ function damageEnemy(enemy: EnemyActor, amount: number, isHeadshot: boolean, wea
 }
 
 const raycaster = new THREE.Raycaster();
+const shellGeo = new THREE.CylinderGeometry(0.0055, 0.006, 0.028, 8);
+const shellMat = new THREE.MeshStandardMaterial({ color: 0xd8a838, roughness: 0.22, metalness: 0.92 });
+
+function spawnEjectedShellAndTracer(camDir: THREE.Vector3, targetPoint: THREE.Vector3) {
+  // 1. Eject Rotating Brass Shell Casing to the Right
+  const right = new THREE.Vector3().crossVectors(camDir, new THREE.Vector3(0, 1, 0)).normalize();
+  const up = new THREE.Vector3(0, 1, 0);
+  const ejectPos = camera.position
+    .clone()
+    .addScaledVector(camDir, 0.42)
+    .addScaledVector(right, 0.18)
+    .addScaledVector(up, -0.12);
+
+  const shellMesh = new THREE.Mesh(shellGeo, shellMat);
+  shellMesh.position.copy(ejectPos);
+  shellMesh.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
+  scene.add(shellMesh);
+  activeShells.push({
+    mesh: shellMesh,
+    vel: right
+      .clone()
+      .multiplyScalar(2.4 + Math.random() * 0.8)
+      .addScaledVector(up, 1.8 + Math.random() * 0.6)
+      .addScaledVector(camDir, -0.5),
+    rotVel: new THREE.Vector3(18, 24, 15),
+    age: 0,
+  });
+
+  // 2. High-Velocity Ballistic Tracer Streak from Muzzle to Target
+  const muzzleWorld = camera.position
+    .clone()
+    .addScaledVector(camDir, 0.75)
+    .addScaledVector(right, player.ads ? 0.0 : 0.16)
+    .addScaledVector(up, -0.11);
+  const tracerGeo = new THREE.BufferGeometry().setFromPoints([muzzleWorld, targetPoint]);
+  const tracerMat = new THREE.LineBasicMaterial({
+    color: 0xffd266,
+    transparent: true,
+    opacity: 0.88,
+    blending: THREE.AdditiveBlending,
+  });
+  const line = new THREE.Line(tracerGeo, tracerMat);
+  scene.add(line);
+  activeTracers.push({ line, age: 0 });
+}
 
 function fireCurrentWeapon() {
   const w = WEAPONS[activeWeaponIdx];
@@ -1016,6 +1307,7 @@ function fireCurrentWeapon() {
   player.recoilPitch = w.recoilPitch;
   muzzleFlashMesh.material.opacity = 0.95;
   muzzleFlashMesh.rotation.z = Math.random() * Math.PI * 2;
+  muzzleLight.intensity = 18.0;
   audioSys.play2D(w.audioShot, 0.85);
   updateWeaponHud();
 
@@ -1023,17 +1315,30 @@ function fireCurrentWeapon() {
   camera.getWorldDirection(camDir);
 
   if (w.fireMode === 'ROCKET') {
-    const rocketMesh = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.04, 0.04, 0.45, 10),
-      new THREE.MeshBasicMaterial({ color: 0xffaa33 })
+    const rocketGroup = new THREE.Group();
+    const bodyMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.032, 0.042, 0.48, 12),
+      new THREE.MeshStandardMaterial({ color: 0x3a4230, roughness: 0.45, metalness: 0.65 })
     );
-    rocketMesh.rotation.x = Math.PI / 2;
-    rocketMesh.position.copy(camera.position).addScaledVector(camDir, 0.9);
-    scene.add(rocketMesh);
+    bodyMesh.rotation.x = Math.PI / 2;
+    const plumeMesh = new THREE.Mesh(
+      new THREE.ConeGeometry(0.09, 0.38, 10),
+      new THREE.MeshBasicMaterial({ color: 0xff9922, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending })
+    );
+    plumeMesh.rotation.x = -Math.PI / 2;
+    plumeMesh.position.z = -0.35;
+    const rocketLight = new THREE.PointLight(0xff7718, 22, 14, 1.5);
+    rocketLight.position.z = -0.35;
+    rocketGroup.add(bodyMesh, plumeMesh, rocketLight);
+
+    rocketGroup.position.copy(camera.position).addScaledVector(camDir, 0.95);
+    rocketGroup.lookAt(rocketGroup.position.clone().add(camDir));
+    scene.add(rocketGroup);
     activeRockets.push({
-      mesh: rocketMesh,
+      mesh: rocketGroup,
       velocity: camDir.clone().multiplyScalar(38),
       age: 0,
+      smokeTimer: 0,
     });
     if (w.mag === 0 && w.reserve > 0) setTimeout(() => startReload(), 350);
     return;
@@ -1047,11 +1352,12 @@ function fireCurrentWeapon() {
     if (barrel.exploded) continue;
     const hits = raycaster.intersectObject(barrel.mesh, false);
     if (hits.length > 0 && hits[0].distance < 95) {
+      spawnEjectedShellAndTracer(camDir, hits[0].point);
       barrel.hp -= w.damage;
       audioSys.play3D('assets/audio/impact_metal.wav', hits[0].point, player.pos);
       if (barrel.hp <= 0) {
         barrel.exploded = true;
-        barrel.mesh.visible = false;
+        barrel.wreckGroup.visible = true;
         triggerExplosionAt(barrel.position, 8.0, 175);
       }
       return;
@@ -1096,12 +1402,15 @@ function fireCurrentWeapon() {
   }
 
   if (bestEnemy) {
+    const hitPt = bestEnemy.root.position.clone().add(new THREE.Vector3(0, bestHeadshot ? 1.62 : 1.05, 0));
+    spawnEjectedShellAndTracer(camDir, hitPt);
     player.shotsHit++;
     const dmg = bestHeadshot ? w.damage * w.headshotMult : w.damage;
     damageEnemy(bestEnemy, dmg, bestHeadshot, w.name);
   } else {
-    // Environment surface impact audio
-    const envTarget = camera.position.clone().addScaledVector(camDir, 18);
+    // Environment surface impact audio & tracer
+    const envTarget = camera.position.clone().addScaledVector(camDir, 22);
+    spawnEjectedShellAndTracer(camDir, envTarget);
     if (envTarget.y <= 0.15) {
       audioSys.play3D('assets/audio/impact_water.wav', envTarget, player.pos);
     } else {
@@ -1150,11 +1459,11 @@ function updateLoadoutModal(idx: number) {
   if (weaponModels[w.id]) {
     const preview = weaponModels[w.id].clone(true);
     preview.visible = true;
-    preview.scale.setScalar(1.75);
-    preview.rotation.set(0.06, Math.PI * 0.48, 0);
+    preview.scale.setScalar(1.45);
+    preview.rotation.set(0.08, Math.PI * 0.46, 0.04);
     loadoutWeaponHolder.add(preview);
   }
-  loadoutShowcaseGroup.position.set(0.18, 0.02, -0.95);
+  loadoutShowcaseGroup.position.set(0.24, -0.02, -0.98);
 }
 
 function toggleLoadoutModal(force?: boolean) {
@@ -1551,11 +1860,13 @@ function stepSimulation(dt: number, elapsedSec: number) {
     const eyeHeight = player.crouching ? 1.15 : 1.72;
     const bobY = Math.sin(player.bobPhase) * (player.ads ? 0.006 : 0.025);
     const bobX = Math.cos(player.bobPhase * 0.5) * (player.ads ? 0.004 : 0.018);
+    const shakeX = player.cameraShake > 0.005 ? Math.sin(t * 58) * player.cameraShake * 0.14 : 0;
+    const shakeY = player.cameraShake > 0.005 ? Math.cos(t * 67) * player.cameraShake * 0.14 : 0;
 
-    camera.position.set(player.pos.x + bobX, player.pos.y + eyeHeight + bobY, player.pos.z);
+    camera.position.set(player.pos.x + bobX + shakeX, player.pos.y + eyeHeight + bobY + shakeY, player.pos.z);
     camera.rotation.order = 'YXZ';
     camera.rotation.y = player.yaw;
-    camera.rotation.x = player.pitch + player.recoilPitch;
+    camera.rotation.x = player.pitch + player.recoilPitch + shakeY * 0.35;
 
     // Smooth ADS FOV & Viewmodel Position
     const w = WEAPONS[activeWeaponIdx];
@@ -1619,23 +1930,76 @@ function stepSimulation(dt: number, elapsedSec: number) {
     }
   }
 
-  // Decay weapon recoil & muzzle flash
+  // Decay weapon recoil, camera shake & muzzle flash
   player.fireTimer = Math.max(0, player.fireTimer - dt);
   player.recoilOffsetZ *= Math.pow(0.08, dt);
   player.recoilPitch *= Math.pow(0.08, dt);
+  player.cameraShake = Math.max(0, player.cameraShake - dt * 2.1);
   if (muzzleFlashMesh.material.opacity > 0) {
     muzzleFlashMesh.material.opacity = Math.max(0, muzzleFlashMesh.material.opacity - dt * 16);
+  }
+  if (muzzleLight.intensity > 0) {
+    muzzleLight.intensity = Math.max(0, muzzleLight.intensity - dt * 220);
   }
   if (player.multiKillTimer > 0) {
     player.multiKillTimer -= dt;
     if (player.multiKillTimer <= 0) player.multiKillCount = 0;
   }
 
-  // 3. Active Rockets Update
+  // Update Ejected Brass Shell Casings & Ballistic Tracers
+  for (let i = activeShells.length - 1; i >= 0; i--) {
+    const sh = activeShells[i];
+    sh.age += dt;
+    if (sh.age > 0.75) {
+      scene.remove(sh.mesh);
+      activeShells.splice(i, 1);
+      continue;
+    }
+    sh.vel.y -= 13.5 * dt;
+    sh.mesh.position.addScaledVector(sh.vel, dt);
+    sh.mesh.rotation.x += sh.rotVel.x * dt;
+    sh.mesh.rotation.y += sh.rotVel.y * dt;
+    sh.mesh.rotation.z += sh.rotVel.z * dt;
+    if (sh.mesh.position.y < 0.02) {
+      sh.mesh.position.y = 0.02;
+      sh.vel.y = Math.abs(sh.vel.y) * 0.45;
+      sh.vel.x *= 0.6;
+      sh.vel.z *= 0.6;
+    }
+  }
+
+  for (let i = activeTracers.length - 1; i >= 0; i--) {
+    const tr = activeTracers[i];
+    tr.age += dt;
+    if (tr.age > 0.085) {
+      scene.remove(tr.line);
+      tr.line.geometry.dispose();
+      activeTracers.splice(i, 1);
+      continue;
+    }
+    (tr.line.material as THREE.LineBasicMaterial).opacity = Math.max(0, 0.88 * (1 - tr.age / 0.085));
+  }
+
+  // 3. Active Rockets & Exhaust Smoke Trail Update
+  const smokeGeo = new THREE.SphereGeometry(0.18, 8, 6);
   for (let i = activeRockets.length - 1; i >= 0; i--) {
     const r = activeRockets[i];
     r.age += dt;
+    r.smokeTimer += dt;
     r.mesh.position.addScaledVector(r.velocity, dt);
+    if (r.smokeTimer >= 0.022) {
+      r.smokeTimer = 0;
+      const puffMat = new THREE.MeshBasicMaterial({
+        color: 0x64686e,
+        transparent: true,
+        opacity: 0.52,
+        depthWrite: false,
+      });
+      const puff = new THREE.Mesh(smokeGeo, puffMat);
+      puff.position.copy(r.mesh.position);
+      scene.add(puff);
+      activeSmokePuffs.push({ mesh: puff, age: 0, maxAge: 0.55 });
+    }
     const hitGround = r.mesh.position.y <= 0.25;
     const hitEnemy = enemies.some(
       (e) => e.state !== 'DEAD' && e.root.position.distanceTo(r.mesh.position) < 1.8
@@ -1647,7 +2011,21 @@ function stepSimulation(dt: number, elapsedSec: number) {
     }
   }
 
-  // 4. Active Explosions Update (4-Stage Fireball -> Plume -> Shockwave)
+  for (let i = activeSmokePuffs.length - 1; i >= 0; i--) {
+    const sp = activeSmokePuffs[i];
+    sp.age += dt;
+    const p = sp.age / sp.maxAge;
+    if (p >= 1) {
+      scene.remove(sp.mesh);
+      activeSmokePuffs.splice(i, 1);
+      continue;
+    }
+    sp.mesh.scale.setScalar(1 + p * 3.6);
+    sp.mesh.position.y += dt * 0.9;
+    (sp.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.52 * (1 - p));
+  }
+
+  // 4. Active Explosions Update (Multi-Stage Fireball + Blast Light + Ballistic Shrapnel -> Plume -> Shockwave)
   for (let i = activeExplosions.length - 1; i >= 0; i--) {
     const ex = activeExplosions[i];
     ex.age += dt;
@@ -1657,13 +2035,33 @@ function stepSimulation(dt: number, elapsedSec: number) {
       activeExplosions.splice(i, 1);
       continue;
     }
-    ex.core.scale.setScalar(1 + p * 3.8);
-    (ex.core.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 1 - p * 1.4);
-    ex.plume.scale.setScalar(1 + p * 4.5);
-    ex.plume.position.y = 1.6 + p * 4.2;
-    (ex.plume.material as THREE.MeshStandardMaterial).opacity = Math.max(0, 0.85 * (1 - p));
-    ex.shockwave.scale.setScalar(1 + p * 7.5);
-    (ex.shockwave.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.9 * (1 - p * 1.3));
+    ex.innerCore.scale.setScalar(1 + p * 2.2);
+    (ex.innerCore.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 1 - p * 2.0);
+    ex.core.scale.setScalar(1 + p * 2.6);
+    (ex.core.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.96 * (1 - p * 1.35));
+    ex.plume.scale.setScalar(1 + p * 2.4);
+    ex.plume.position.y = 2.35 + p * 3.6;
+    (ex.plume.material as THREE.MeshStandardMaterial).opacity = Math.max(0, 0.72 * (1 - p));
+    ex.secondaryPlume.scale.setScalar(1 + p * 2.5);
+    ex.secondaryPlume.position.y = 1.55 + p * 2.8;
+    (ex.secondaryPlume.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.90 * (1 - p * 1.3));
+    ex.shockwave.scale.setScalar(1 + p * 5.2);
+    (ex.shockwave.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.95 * (1 - p * 1.35));
+    ex.blastLight.intensity = Math.max(0, 110 * Math.pow(1 - p, 2.0));
+
+    for (const d of ex.debris) {
+      d.vel.y -= 14.5 * dt;
+      d.mesh.position.addScaledVector(d.vel, dt);
+      d.mesh.rotation.x += d.rotSpeed.x * dt;
+      d.mesh.rotation.y += d.rotSpeed.y * dt;
+      if (d.mesh.position.y < 0.08) {
+        d.mesh.position.y = 0.08;
+        d.vel.y = Math.abs(d.vel.y) * 0.42;
+        d.vel.x *= 0.65;
+        d.vel.z *= 0.65;
+      }
+      (d.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 1 - p * 1.1);
+    }
   }
 
   // 5. Update Enemy Tactical Soldiers & CC0 Skeletal Animations
@@ -1805,6 +2203,11 @@ window.addEventListener('resize', () => {
     player.fireTimer = 0;
     fireCurrentWeapon();
     stepSimulation(0.016, 1.5);
+    renderer.render(scene, camera);
+  },
+  detonateAt: (x: number, y: number, z: number, advanceSec = 0.18) => {
+    triggerExplosionAt(new THREE.Vector3(x, y, z), 8.5, 190);
+    stepSimulation(advanceSec, 1.5);
     renderer.render(scene, camera);
   },
   reload: () => {
