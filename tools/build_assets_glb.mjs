@@ -608,6 +608,25 @@ function appendCatenaryChain(geom, x1, y1, z1, x2, y2, z2, sag = 0.28, segs = 8,
   }
 }
 
+function appendOrganicPuddleDisc(geom, cx, cy, cz, rx, rz, seed = 1, segs = 14) {
+  const cIdx = geom.positions.length / 3;
+  geom.positions.push(cx, cy, cz);
+  geom.normals.push(0, 1, 0);
+  geom.uvs.push(0.5, 0.5);
+  for (let i = 0; i <= segs; i++) {
+    const a = (i / segs) * Math.PI * 2;
+    const wobble = 1.0 + 0.16 * Math.sin(a * 3.0 + seed * 1.7) + 0.09 * Math.cos(a * 5.0 - seed * 2.3);
+    const px = cx + Math.cos(a) * rx * wobble;
+    const pz = cz + Math.sin(a) * rz * wobble;
+    geom.positions.push(px, cy, pz);
+    geom.normals.push(0, 1, 0);
+    geom.uvs.push(0.5 + Math.cos(a) * 0.5, 0.5 + Math.sin(a) * 0.5);
+  }
+  for (let i = 0; i < segs; i++) {
+    geom.indices.push(cIdx, cIdx + 1 + i + 1, cIdx + 1 + i);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 3. Build Weapons Pack GLB (public/assets/models/weapons_pack.glb)
 //    High-Detail Tactical Weapons matching AGY weapon_carbine_sheet.jpg:
@@ -710,9 +729,12 @@ function buildWeaponsPackGlb() {
   appendBox(arLens, 0, 0.092, -0.03, 0.034, 0.030, 0.003, 0.5);      // Anti-reflective glass window
   appendBox(arRet, 0, 0.092, -0.033, 0.004, 0.004, 0.002, 0.5);      // Glowing Holo Red Dot
 
-  // Top-Mounted PEQ-15 Tactical Laser Module at Front of Handguard
+  // Top-Mounted PEQ-15 Tactical Laser Module & Flip-Up Backup Iron Sights (MBUS)
   appendBox(arPoly, 0, 0.070, -0.32, 0.042, 0.018, 0.068, 0.5);
   appendCylinder(arLaser, 0.012, 0.070, -0.356, 0.004, 0.004, 0.004, 10, 'z'); // Green laser emitter lens
+  appendBox(arPoly, 0, 0.068, -0.375, 0.028, 0.016, 0.022, 0.5); // Folded Front MBUS Sight
+  appendBox(arPoly, 0, 0.068, 0.052, 0.030, 0.016, 0.026, 0.5);  // Folded Rear MBUS Sight
+  appendCylinder(arSteel, -0.024, 0.026, 0.088, 0.008, 0.008, 0.006, 10, 'x'); // QD Sling Swivel Socket
 
   // Skeletonized CTR Tactical Buttstock, Buffer Tube, Ergonomic Pistol Grip, Vertical Foregrip & Ribbed PMAG
   appendCylinder(arMetal, 0, 0.028, 0.16, 0.016, 0.016, 0.18, 12, 'z'); // Mil-spec buffer tube
@@ -766,8 +788,11 @@ function buildWeaponsPackGlb() {
   appendBox(srPoly, 0, -0.024, 0.005, 0.018, 0.006, 0.052, 0.5);
   appendBeam(srBrass, 0, -0.006, 0.012, 0, -0.020, 0.006, 0.0035, 6); // Gold match trigger
 
-  // Long Free-Floated Heavy Barrel & 2-Chamber Tanker Muzzle Brake
+  // Long Free-Floated Heavy Fluted Barrel & 2-Chamber Tanker Muzzle Brake
   appendCylinder(srSteel, 0, 0.034, -0.48, 0.012, 0.016, 0.58, 16, 'z');
+  for (const fx of [-0.013, 0.013]) {
+    appendBox(srMetal, fx, 0.034, -0.52, 0.003, 0.006, 0.36, 0.5); // Barrel longitudinal fluting ribs
+  }
   appendBox(srSteel, 0, 0.034, -0.79, 0.032, 0.026, 0.072, 0.5); // Muzzle brake body
   appendBox(srPoly, 0, 0.034, -0.775, 0.035, 0.014, 0.016, 0.5); // Brake baffle port 1
   appendBox(srPoly, 0, 0.034, -0.802, 0.035, 0.014, 0.016, 0.5); // Brake baffle port 2
@@ -884,7 +909,11 @@ function buildPortEnvironmentGlb() {
   const matFireGlow = b.addSolidPbrMaterial('MI_Fire_Embers', [1.0, 0.42, 0.08, 1], 0.2, 0.0, [3.5, 1.1, 0.18]);
   const matHazard = b.addSolidPbrMaterial('MI_Hazard_Yellow', [0.78, 0.54, 0.08, 1], 0.48, 0.28);
   const matWood = b.addPbrTextureMaterial('MI_Wood_Crate', TEX_SETS.wood_crate);
-  const matExplosive = b.addSolidPbrMaterial('MI_Explosive_Red', [0.68, 0.10, 0.08, 1], 0.36, 0.65);
+  const matExplosive = b.addPbrTextureMaterial('MI_Explosive_Red', TEX_SETS.rusted_steel, {
+    baseColorFactor: [1.35, 0.24, 0.18, 1],
+    roughnessFactor: 0.72,
+    metallicFactor: 0.65,
+  });
   const matOliveVehicle = b.addPbrTextureMaterial('MI_Tactical_Vehicle_OD', TEX_SETS.tactical_camo);
   const matRubber = b.addSolidPbrMaterial('MI_Tire_Rubber', [0.06, 0.07, 0.08, 1], 0.84, 0.08);
 
@@ -942,22 +971,27 @@ function buildPortEnvironmentGlb() {
   appendBox(gDarkSteel, -11.5, 0.03, 0, 0.22, 0.07, 78, 0.5);
   appendBox(gDarkSteel, -3.5, 0.03, 0, 0.22, 0.07, 78, 0.5);
 
-  // Reflective Wet Puddle Patches across dock lanes (Organic multi-layered shapes)
+  // Reflective Wet Puddle Patches across dock lanes (Organic multi-layered irregular polygons!)
   const puddles = [
-    [-6.5, 22, 6.2, 8.8], [-3.2, 25.0, 5.2, 5.5], [-5.2, 8, 5.4, 11.0],
-    [-7.5, -12, 5.6, 10.5], [2.5, 16, 6.4, 8.2], [8.5, -4, 5.8, 9.0],
-    [14.2, 18.5, 5.8, 7.2], [16.5, 9.5, 6.0, 8.0],
+    [-6.5, 22.0, 2.9, 4.2], [-3.2, 25.0, 2.4, 2.7], [-5.2, 8.2, 2.5, 4.8],
+    [-7.5, -12.0, 2.6, 4.6], [2.5, 16.0, 3.0, 3.8], [8.5, -4.0, 2.7, 4.2],
+    [14.2, 18.5, 2.7, 3.4], [16.5, 9.5, 2.8, 3.8],
   ];
-  for (const [px, pz, sx, sz] of puddles) {
-    appendBox(gPuddles, px, 0.015, pz, sx, 0.01, sz, 0.3);
-  }
+  puddles.forEach(([px, pz, rx, rz], idx) => {
+    appendOrganicPuddleDisc(gPuddles, px, 0.014, pz, rx, rz, idx + 1, 16);
+    appendOrganicPuddleDisc(gPuddles, px + 0.6, 0.015, pz - 0.8, rx * 0.65, rz * 0.68, idx + 9, 14);
+  });
 
   // 2. Moored Cargo Ship ("MV ATLANTIC MARINER") along West Quay (x = -33)
   appendBox(gShipRed, -33, -0.2, -8, 15.5, 2.8, 66, 0.12); // Lower waterline hull
   appendBox(gSteel, -33, 3.8, -8, 16.0, 5.6, 68, 0.14); // Main rusted hull
-  // Hull structural rib strakes & bulwark rail
+  // Hull structural rib strakes, bulwark rail, draft marks & raised hull nameplate
   appendBox(gDarkSteel, -24.9, 6.65, -8, 0.35, 0.45, 68, 0.25);
   appendBox(gDarkSteel, -24.95, 2.2, -8, 0.25, 0.3, 66, 0.25);
+  appendBox(gShipBridge, -26.6, 5.8, 26.5, 0.12, 0.55, 4.2, 0.5); // Raised white hull nameplate plaque
+  for (let dy = 0.2; dy <= 2.2; dy += 0.45) {
+    appendBox(gShipBridge, -25.15, dy, 23.5, 0.12, 0.14, 0.55, 0.5); // Hull draft waterline scale marks
+  }
   // Raked Bow Forecastle + Tapered Prow + Mast & Bow Floodlight
   appendBox(gSteel, -33, 5.4, 28.5, 12.6, 6.4, 10, 0.15);
   appendBox(gSteel, -33, 5.8, 34.5, 7.8, 6.6, 6.5, 0.15);
@@ -1274,12 +1308,14 @@ function buildPortEnvironmentGlb() {
   // Tipped steel barrel beside foreground fire barrel (-2.4, 25.2) matching CAM_HERO Concept Art!
   appendCylinder(gSteel, -2.35, 0.32, 25.2, 0.31, 0.31, 0.94, 14, 'x');
 
-  // Explosive Red Fuel Drums (with steel reinforcing ribs)
-  const redDrums = [[-6.8, 12.0], [2.2, 6.5], [-4.5, -11.0], [17.5, -6.5], [17.5, -15.0]];
-  for (const [dx, dz] of redDrums) {
-    appendCylinder(gExplosive, dx, 0.48, dz, 0.31, 0.31, 0.96, 14, 'y');
-    appendCylinder(gHazard, dx, 0.48, dz, 0.316, 0.316, 0.16, 14, 'y');
+  // Palletized Industrial Fuel Drum Clusters (Static Decorative Clusters matching CAM_LANE Concept Art!)
+  // Note: Interactive destructible red barrels are spawned dynamically in src/main.ts so they vanish cleanly when detonated!
+  for (const [dx, dz] of [[-7.8, 10.8], [-7.2, 10.3], [14.6, 12.2]]) {
+    appendCylinder(gExplosive, dx, 0.56, dz, 0.29, 0.29, 0.92, 14, 'y');
+    appendCylinder(gDarkSteel, dx, 0.38, dz, 0.302, 0.302, 0.04, 14, 'y');
+    appendCylinder(gDarkSteel, dx, 0.74, dz, 0.302, 0.302, 0.04, 14, 'y');
   }
+  appendBox(gWood, -7.5, 0.06, 10.55, 1.45, 0.12, 1.45, 0.5); // Pallet under west lane drum cluster
   // Wooden Tactical Crates with Dark Steel Corner Framing (eliminating plain beige cube look!)
   const woodCrates = [[-4.8, 13.0], [-5.2, 11.2], [3.8, 7.5], [16.5, -10.0], [21.0, -12.5]];
   for (const [wx, wz] of woodCrates) {
@@ -1376,27 +1412,88 @@ function buildTacticalSoldierGlb() {
     return bvIdx;
   }
 
-  // Create Tactical Military PBR Materials matching AGY soldier_tactical_sheet.jpg (Dark Night-Ops Camo)
+  // Embed PBR Texture Sets (tactical_camo & gunmetal_pbr) with REPEAT Sampler into Soldier GLB
+  gltf.samplers = [{ magFilter: 9729, minFilter: 9987, wrapS: 10497, wrapT: 10497 }];
+  gltf.images = gltf.images || [];
+  gltf.textures = gltf.textures || [];
+
+  function addEmbeddedPngTexture(pngBuf, name) {
+    const bvIdx = appendBinChunk(pngBuf);
+    const imgIdx = gltf.images.length;
+    gltf.images.push({ name, bufferView: bvIdx, mimeType: 'image/png' });
+    const texIdx = gltf.textures.length;
+    gltf.textures.push({ source: imgIdx, sampler: 0 });
+    return texIdx;
+  }
+
+  const camoAlbedoTex = addEmbeddedPngTexture(TEX_SETS.tactical_camo.albedoPng, 'Soldier_Camo_Albedo');
+  const camoNormalTex = addEmbeddedPngTexture(TEX_SETS.tactical_camo.normalPng, 'Soldier_Camo_Normal');
+  const camoOrmTex = addEmbeddedPngTexture(TEX_SETS.tactical_camo.ormPng, 'Soldier_Camo_ORM');
+  const gunAlbedoTex = addEmbeddedPngTexture(TEX_SETS.gunmetal_pbr.albedoPng, 'Soldier_Gunmetal_Albedo');
+  const gunNormalTex = addEmbeddedPngTexture(TEX_SETS.gunmetal_pbr.normalPng, 'Soldier_Gunmetal_Normal');
+  const gunOrmTex = addEmbeddedPngTexture(TEX_SETS.gunmetal_pbr.ormPng, 'Soldier_Gunmetal_ORM');
+
+  // Create Tactical Military PBR Materials matching AGY soldier_tactical_sheet.jpg + Rigforge CC0 Hands/Forearms
   gltf.materials = gltf.materials || [];
   const matCamoUniform = gltf.materials.length;
   gltf.materials.push({
     name: 'MI_Tactical_Camo_Uniform',
-    pbrMetallicRoughness: { baseColorFactor: [0.06, 0.08, 0.06, 1.0], roughnessFactor: 0.78, metallicFactor: 0.12 },
+    pbrMetallicRoughness: {
+      baseColorFactor: [0.85, 0.92, 0.82, 1.0],
+      baseColorTexture: { index: camoAlbedoTex },
+      metallicRoughnessTexture: { index: camoOrmTex },
+      roughnessFactor: 0.92,
+      metallicFactor: 0.15,
+    },
+    normalTexture: { index: camoNormalTex, scale: 0.85 },
+    occlusionTexture: { index: camoOrmTex, strength: 0.8 },
   });
   const matPlateCarrier = gltf.materials.length;
   gltf.materials.push({
     name: 'MI_Tactical_PlateCarrier_OD',
-    pbrMetallicRoughness: { baseColorFactor: [0.09, 0.11, 0.07, 1.0], roughnessFactor: 0.65, metallicFactor: 0.22 },
+    pbrMetallicRoughness: {
+      baseColorFactor: [0.68, 0.74, 0.62, 1.0],
+      baseColorTexture: { index: camoAlbedoTex },
+      metallicRoughnessTexture: { index: camoOrmTex },
+      roughnessFactor: 0.85,
+      metallicFactor: 0.28,
+    },
+    normalTexture: { index: camoNormalTex, scale: 0.95 },
+    occlusionTexture: { index: camoOrmTex, strength: 0.85 },
+  });
+  const matSkinHands = gltf.materials.length;
+  gltf.materials.push({
+    name: 'MI_CC0_Skin_Hands_Forearms',
+    pbrMetallicRoughness: {
+      baseColorFactor: [0.76, 0.56, 0.44, 1.0],
+      roughnessFactor: 0.62,
+      metallicFactor: 0.06,
+    },
+    normalTexture: { index: gunNormalTex, scale: 0.18 },
   });
   const matBalaclavaBoots = gltf.materials.length;
   gltf.materials.push({
     name: 'MI_Tactical_Balaclava_Boots',
-    pbrMetallicRoughness: { baseColorFactor: [0.04, 0.04, 0.05, 1.0], roughnessFactor: 0.62, metallicFactor: 0.25 },
+    pbrMetallicRoughness: {
+      baseColorFactor: [0.22, 0.24, 0.26, 1.0],
+      baseColorTexture: { index: gunAlbedoTex },
+      metallicRoughnessTexture: { index: gunOrmTex },
+      roughnessFactor: 0.78,
+      metallicFactor: 0.35,
+    },
+    normalTexture: { index: gunNormalTex, scale: 0.45 },
   });
   const matHelmet = gltf.materials.length;
   gltf.materials.push({
     name: 'MI_Ballistic_Helmet_OD',
-    pbrMetallicRoughness: { baseColorFactor: [0.07, 0.09, 0.06, 1.0], roughnessFactor: 0.48, metallicFactor: 0.35 },
+    pbrMetallicRoughness: {
+      baseColorFactor: [0.58, 0.66, 0.52, 1.0],
+      baseColorTexture: { index: camoAlbedoTex },
+      metallicRoughnessTexture: { index: camoOrmTex },
+      roughnessFactor: 0.58,
+      metallicFactor: 0.42,
+    },
+    normalTexture: { index: camoNormalTex, scale: 0.55 },
   });
   const matVisorGlow = gltf.materials.length;
   gltf.materials.push({
@@ -1407,18 +1504,28 @@ function buildTacticalSoldierGlb() {
   const matRifle = gltf.materials.length;
   gltf.materials.push({
     name: 'MI_Soldier_Rifle_Gunmetal',
-    pbrMetallicRoughness: { baseColorFactor: [0.06, 0.07, 0.08, 1.0], roughnessFactor: 0.30, metallicFactor: 0.85 },
+    pbrMetallicRoughness: {
+      baseColorFactor: [0.45, 0.48, 0.54, 1.0],
+      baseColorTexture: { index: gunAlbedoTex },
+      metallicRoughnessTexture: { index: gunOrmTex },
+      roughnessFactor: 0.52,
+      metallicFactor: 0.88,
+    },
+    normalTexture: { index: gunNormalTex, scale: 0.35 },
   });
 
   // Graft modular skinned meshes (Male_Ranger_Body, Arms, Legs, Feet_Boots) onto the 65-bone skin
+  // Note: Male_Ranger_Arms has 2 primitives: prim 0 = rolled sleeves/bracers (Camo), prim 1 = forearms & 5-finger hands (CC0 Skin)!
+  // We split Arms into its own dedicated SkinnedMesh node ('Soldier_CC0_Arms') so First-Person view can show ONLY the CC0 arms + wristwatch while Third-Person shows the full body!
   const modularParts = [
-    { file: 'assets/source_cc0/qofficial/modular/Male_Ranger_Body.gltf', mat: matPlateCarrier },
-    { file: 'assets/source_cc0/qofficial/modular/Male_Ranger_Arms.gltf', mat: matCamoUniform },
-    { file: 'assets/source_cc0/qofficial/modular/Male_Ranger_Legs.gltf', mat: matCamoUniform },
-    { file: 'assets/source_cc0/qofficial/modular/Male_Ranger_Feet_Boots.gltf', mat: matBalaclavaBoots },
+    { file: 'assets/source_cc0/qofficial/modular/Male_Ranger_Body.gltf', mats: [matPlateCarrier, matCamoUniform], isArms: false },
+    { file: 'assets/source_cc0/qofficial/modular/Male_Ranger_Arms.gltf', mats: [matCamoUniform, matSkinHands], isArms: true },
+    { file: 'assets/source_cc0/qofficial/modular/Male_Ranger_Legs.gltf', mats: [matCamoUniform, matCamoUniform], isArms: false },
+    { file: 'assets/source_cc0/qofficial/modular/Male_Ranger_Feet_Boots.gltf', mats: [matBalaclavaBoots, matCamoUniform], isArms: false },
   ];
 
-  const graftedPrims = [];
+  const graftedBodyPrims = [];
+  const graftedArmsPrims = [];
   for (const part of modularParts) {
     const partDir = path.dirname(part.file);
     const partJson = JSON.parse(fs.readFileSync(part.file, 'utf8'));
@@ -1436,26 +1543,46 @@ function buildTacticalSoldierGlb() {
     }
 
     for (const m of partJson.meshes) {
-      for (const p of m.primitives) {
+      m.primitives.forEach((p, pIdx) => {
         const newAttrs = {};
         for (const [k, v] of Object.entries(p.attributes)) {
           if (k.startsWith('COLOR_')) continue; // Strip vertex color overrides
           newAttrs[k] = cloneAccessor(v);
         }
-        graftedPrims.push({
+        const primObj = {
           attributes: newAttrs,
           indices: cloneAccessor(p.indices),
-          material: part.mat,
-        });
-      }
+          material: part.mats[pIdx] ?? part.mats[0],
+        };
+        if (part.isArms) {
+          graftedArmsPrims.push(primObj);
+        } else {
+          graftedBodyPrims.push(primObj);
+        }
+      });
     }
   }
 
-  // Replace the orange/white UAL1 mannequin primitives with the grafted tactical outfit primitives
-  // (reduces triangle count by >55% and eliminates mannequin vertex color artifacts!)
+  // Replace the orange/white UAL1 mannequin primitives with the grafted tactical body/legs primitives
   if (gltf.meshes && gltf.meshes[0]) {
-    gltf.meshes[0].primitives = graftedPrims;
+    gltf.meshes[0].name = 'Soldier_Body_Legs_Mesh';
+    gltf.meshes[0].primitives = graftedBodyPrims;
+    gltf.nodes[65].name = 'Soldier_Body_Legs';
   }
+  // Add dedicated SkinnedMesh node for CC0 Arms & 5-Finger Hands ('Soldier_CC0_Arms') attached to Armature (node 66)
+  const armsMeshIdx = gltf.meshes.length;
+  gltf.meshes.push({
+    name: 'Soldier_CC0_Arms_Mesh',
+    primitives: graftedArmsPrims,
+  });
+  const armsNodeIdx = gltf.nodes.length;
+  gltf.nodes.push({
+    name: 'Soldier_CC0_Arms',
+    mesh: armsMeshIdx,
+    skin: 0,
+  });
+  gltf.nodes[66].children = gltf.nodes[66].children || [];
+  gltf.nodes[66].children.push(armsNodeIdx);
 
   // Helper to add a rigid 3D mesh node attached directly as a child of a bone node (100% rigid, 0 deformation!)
   function addRigidAttachmentNode(parentBoneIdx, name, geom, matIdx) {
@@ -1512,14 +1639,39 @@ function buildTacticalSoldierGlb() {
   appendCylinder(gVisor, 0.028, 0.145, 0.168, 0.014, 0.014, 0.004, 10, 'z');  // NVG Glowing Objective Lens R
   addRigidAttachmentNode(0, 'Tactical_Visor_Rigid', gVisor, matVisorGlow);
 
-  // 2) Rigid Plate Carrier Chest Pouches & Radio Antenna attached to spine_03 (node 50)
+  // 2) Rigid Plate Carrier Chest Pouches, Back Assault Pack & Radio Antenna attached to spine_03 (node 50)
   const gVest = makeGeometryCollector();
   appendBox(gVest, -0.065, 0.02, 0.148, 0.048, 0.098, 0.036, 1); // Mag pouch 1
   appendBox(gVest, 0.0, 0.02, 0.152, 0.048, 0.098, 0.036, 1);    // Mag pouch 2
   appendBox(gVest, 0.065, 0.02, 0.148, 0.048, 0.098, 0.036, 1);  // Mag pouch 3
   appendBox(gVest, -0.095, 0.11, 0.125, 0.036, 0.075, 0.032, 1); // Shoulder Tactical Radio (PRC-152)
   appendCylinder(gVest, -0.105, 0.24, 0.125, 0.004, 0.005, 0.22, 6, 'y'); // Whip antenna
+  appendBox(gVest, 0.0, 0.05, -0.155, 0.21, 0.26, 0.095, 1);     // Rear MOLLE Tactical Assault Pack (matching soldier_tactical_sheet.jpg!)
+  appendBox(gVest, 0.0, -0.06, -0.145, 0.16, 0.085, 0.075, 1);   // Lower waist utility pack
   addRigidAttachmentNode(50, 'Tactical_PlateCarrier_Rigid', gVest, matPlateCarrier);
+
+  // 2b) Rigid Drop-Leg Tactical Holster on thigh_r (node 62) & Tactical Knee Pads on calf_l (node 56) / calf_r (node 61)
+  const gHolster = makeGeometryCollector();
+  appendBox(gHolster, -0.092, -0.14, 0.02, 0.045, 0.135, 0.078, 1); // Kydex Drop-Leg Pistol Holster
+  appendBox(gHolster, -0.096, -0.06, 0.02, 0.028, 0.065, 0.042, 1); // Pistol grip protruding from holster
+  addRigidAttachmentNode(62, 'Tactical_Holster_Rigid', gHolster, matBalaclavaBoots);
+
+  const gKneeL = makeGeometryCollector();
+  appendBox(gKneeL, 0.0, 0.34, 0.068, 0.088, 0.105, 0.038, 1); // Molded hard-shell knee cap L
+  addRigidAttachmentNode(56, 'Tactical_KneePad_L_Rigid', gKneeL, matHelmet);
+
+  const gKneeR = makeGeometryCollector();
+  appendBox(gKneeR, 0.0, 0.34, 0.068, 0.088, 0.105, 0.038, 1); // Molded hard-shell knee cap R
+  addRigidAttachmentNode(61, 'Tactical_KneePad_R_Rigid', gKneeR, matHelmet);
+
+  // 4) Left Wrist Tactical Digital Watch attached to lowerarm_l (node 23) for First-Person CC0 View!
+  const gWatch = makeGeometryCollector();
+  appendBox(gWatch, 0.0, 0.21, 0.0, 0.056, 0.022, 0.056, 1); // Watch strap around wrist
+  appendBox(gWatch, 0.0, 0.21, 0.030, 0.034, 0.032, 0.012, 1); // Watch bezel
+  addRigidAttachmentNode(23, 'Tactical_WristWatch_Rigid', gWatch, matBalaclavaBoots);
+  const gWatchScreen = makeGeometryCollector();
+  appendBox(gWatchScreen, 0.0, 0.21, 0.037, 0.024, 0.022, 0.004, 1); // Glowing watch face
+  addRigidAttachmentNode(23, 'Tactical_WatchScreen_Rigid', gWatchScreen, matVisorGlow);
 
   // 3) Rigid Detailed AR-7 Carbine attached to hand_r bone (node 46) per character-skin section 3
   const gRifle = makeGeometryCollector();

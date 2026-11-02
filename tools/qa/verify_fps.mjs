@@ -224,7 +224,18 @@ async function main() {
     await page.waitForTimeout(120);
     await page.screenshot({ path: path.join(EVIDENCE_DIR, 'view_07_warehouse_reload.png') });
 
+    // Capture 10th Viewport: Third-Person Over-the-Shoulder Tactical Mode (CC0 65-Bone Operator)
     await page.evaluate(() => {
+      window.__fpsApi.equipWeapon(0);
+      window.__fpsApi.setThirdPerson(true);
+      window.__fpsApi.setPlayerPose(-6.2, 0.0, 21.5, 0.0, -0.02);
+      window.__fpsApi.fire();
+    });
+    await page.waitForTimeout(120);
+    await page.screenshot({ path: path.join(EVIDENCE_DIR, 'view_10_third_person_tps.png') });
+
+    await page.evaluate(() => {
+      window.__fpsApi.setThirdPerson(false);
       window.__fpsApi.equipWeapon(0);
       window.__fpsApi.toggleLoadout(true);
     });
@@ -260,10 +271,10 @@ async function main() {
         browser,
         path.join(EVIDENCE_DIR, 'cam_hero_before.png'),
         path.join(EVIDENCE_DIR, 'cam_hero_render.png'),
-        'OPTIMIZATION CYCLE A/B — Before (277k Tris / No EnvMap) vs v0.3.0 (PMREM IBL + Halos + Dock Details + 181k Tris)',
+        'OPTIMIZATION CYCLE A/B — Before (277k Tris / No EnvMap) vs v0.4.0 (CC0 FPS/TPS + Puddle Ripples + Chain Blast + 181k Tris)',
         path.join(EVIDENCE_DIR, 'ab_optimization_before_after.png'),
         '[BEFORE] CYCLE 1 ENGINE RENDER (277,664 TRIS)',
-        '[AFTER] CYCLE 4 (v0.3.0) OPTIMIZED RENDER (PMREM IBL + HALOS + 181K TRIS)'
+        '[AFTER] CYCLE 5 (v0.4.0) OPTIMIZED RENDER (CC0 FPS/TPS + RIPPLES + 181K TRIS)'
       );
     }
 
@@ -360,7 +371,21 @@ async function main() {
       window.__fpsApi.setPlayerPose(-6.5, 0.0, 18.5, 0.02, -0.08);
       window.__fpsApi.fire();
     });
-    await vidPage.waitForTimeout(900);
+    await vidPage.waitForTimeout(700);
+
+    // 5. Toggle Third-Person Over-the-Shoulder Mode ([P]), jog forward & fire AR-7
+    await vidPage.evaluate(() => {
+      window.__fpsApi.equipWeapon(0);
+      window.__fpsApi.setThirdPerson(true);
+    });
+    await vidPage.keyboard.down('KeyW');
+    for (let step = 0; step < 5; step++) {
+      await vidPage.waitForTimeout(160);
+      if (step >= 2) await vidPage.evaluate(() => window.__fpsApi.fire());
+    }
+    await vidPage.keyboard.up('KeyW');
+    await vidPage.evaluate(() => window.__fpsApi.setThirdPerson(false));
+    await vidPage.waitForTimeout(250);
 
     const mp4Data = await vidPage.evaluate(() => window.__stopCanvasMp4());
     const perfDuringVideoCapture = await vidPage.evaluate(() => window.__fpsApi.getPerf());

@@ -1,42 +1,42 @@
 {
-  "timestamp": "2026-11-02T16:27:12.109Z",
+  "timestamp": "2026-11-02T17:38:00.435Z",
   "version": "0.1.0",
   "branch": "feat/v0.1.0-night-port-vertical-slice",
   "status": "PASS",
   "viewport": "1376x768 (screenshots) / 1280x720 (video)",
   "videoRecorderMime": "video/mp4;codecs=avc1",
   "performance": {
-    "avgFps": 41,
-    "p95FrameTimeMs": 60.7,
-    "drawCalls": 154,
-    "triangles": 181440,
-    "geometries": 72,
-    "textures": 96,
+    "avgFps": 28.1,
+    "p95FrameTimeMs": 47,
+    "drawCalls": 231,
+    "triangles": 189484,
+    "geometries": 78,
+    "textures": 107,
     "gpuRenderer": "ANGLE (AMD, AMD Radeon(TM) 610M (0x0000164E) Direct3D11 vs_5_0 ps_5_0, D3D11)",
     "isSoftwareRenderer": false
   },
   "performanceDuringDualVideoEncode": {
-    "avgFps": 18.1,
-    "p95FrameTimeMs": 145.6,
-    "drawCalls": 189,
-    "triangles": 182988,
-    "geometries": 104,
-    "textures": 102,
+    "avgFps": 15,
+    "p95FrameTimeMs": 140.4,
+    "drawCalls": 253,
+    "triangles": 190266,
+    "geometries": 131,
+    "textures": 120,
     "gpuRenderer": "ANGLE (AMD, AMD Radeon(TM) 610M (0x0000164E) Direct3D11 vs_5_0 ps_5_0, D3D11)",
     "isSoftwareRenderer": false
   },
   "gameplayState": {
     "playerPos": [
-      -6.5,
+      -6.581505366055347,
       0,
-      18.5
+      14.425275080830088
     ],
     "yaw": 0.02,
     "pitch": -0.08,
     "hp": 100,
-    "armor": 126,
-    "activeWeapon": "RL-7 ロケット",
-    "mag": 0,
+    "armor": 122,
+    "activeWeapon": "AR-7 カービン",
+    "mag": 24,
     "enemiesAlive": 6,
     "enemiesTotal": 8,
     "kills": 2
@@ -61,6 +61,7 @@
     "view_06_sniper_scope_ads.png",
     "view_07_warehouse_reload.png",
     "view_08_loadout_3d_inspect.png",
-    "view_09_mission_complete.png"
+    "view_09_mission_complete.png",
+    "view_10_third_person_tps.png"
   ]
 }

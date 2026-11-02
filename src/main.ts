@@ -166,6 +166,13 @@ interface ActiveSmokePuff {
   maxAge: number;
 }
 
+interface PuddleRipple {
+  mesh: THREE.Mesh;
+  phase: number;
+  speed: number;
+  maxScale: number;
+}
+
 const urlParams = new URLSearchParams(window.location.search);
 const captureMode = urlParams.has('capture');
 const initialCamParam = urlParams.get('cam');
@@ -550,33 +557,49 @@ function setupFireBarrels() {
   scene.add(rainLines);
 }
 
+const puddleRipples: PuddleRipple[] = [];
+function setupPuddleRainRipples() {
+  const rippleCenters: [number, number][] = [
+    [-6.5, 22.0], [-5.8, 20.5], [-7.2, 23.4], [-3.2, 25.0], [-2.6, 24.2],
+    [-5.2, 8.2], [-4.6, 10.1], [-5.8, 6.4], [-7.5, -12.0], [-6.9, -10.2],
+    [2.5, 16.0], [3.2, 14.8], [1.8, 17.2], [8.5, -4.0], [14.2, 18.5], [16.5, 9.5],
+  ];
+  const rGeo = new THREE.RingGeometry(0.18, 0.23, 20);
+  rippleCenters.forEach(([rx, rz], i) => {
+    const rMat = new THREE.MeshBasicMaterial({
+      color: 0x9ec8f0,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.45,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const rMesh = new THREE.Mesh(rGeo, rMat);
+    rMesh.rotation.x = -Math.PI / 2;
+    rMesh.position.set(rx + ((i % 3) - 1) * 0.35, 0.021, rz + ((i % 2) - 0.5) * 0.4);
+    scene.add(rMesh);
+    puddleRipples.push({
+      mesh: rMesh,
+      phase: (i * 0.29) % 1.0,
+      speed: 0.75 + (i % 4) * 0.15,
+      maxScale: 2.2 + (i % 3) * 0.5,
+    });
+  });
+}
+
 buildAtmosphereAndLights();
 setupFireBarrels();
+setupPuddleRainRipples();
 
 // ---------------------------------------------------------------------------
-// First-Person Viewmodel Rig (Arms + Weapons from weapons_pack.glb)
+// First-Person Viewmodel Rig (CC0 65-Bone Skinned Arms + Weapons from weapons_pack.glb)
 // ---------------------------------------------------------------------------
 const fpRig = new THREE.Group();
 fpRig.position.set(0.22, -0.24, -0.38);
 camera.add(fpRig);
 
-// Camo Tactical Forearms & Gloves
-const sleeveMat = new THREE.MeshStandardMaterial({ color: 0x3f4734, roughness: 0.78, metalness: 0.05 });
-const gloveMat = new THREE.MeshStandardMaterial({ color: 0x181b1e, roughness: 0.55, metalness: 0.18 });
-const armL = new THREE.Mesh(new THREE.BoxGeometry(0.068, 0.068, 0.34), sleeveMat);
-armL.position.set(-0.11, -0.06, 0.08);
-armL.rotation.set(0.18, 0.38, -0.15);
-const gloveL = new THREE.Mesh(new THREE.BoxGeometry(0.062, 0.062, 0.085), gloveMat);
-gloveL.position.set(0, 0, -0.18);
-armL.add(gloveL);
-
-const armR = new THREE.Mesh(new THREE.BoxGeometry(0.072, 0.072, 0.34), sleeveMat);
-armR.position.set(0.03, -0.08, 0.18);
-armR.rotation.set(0.12, -0.08, 0.05);
-const gloveR = new THREE.Mesh(new THREE.BoxGeometry(0.065, 0.065, 0.085), gloveMat);
-gloveR.position.set(0, 0, -0.18);
-armR.add(gloveR);
-fpRig.add(armL, armR);
+const fpArmsHolder = new THREE.Group();
+fpRig.add(fpArmsHolder);
 
 const weaponMount = new THREE.Group();
 fpRig.add(weaponMount);
@@ -596,17 +619,29 @@ weaponMount.add(muzzleLight);
 const weaponModels: Record<string, THREE.Object3D> = {};
 let activeWeaponIdx = 0;
 
-// Loadout 3D Showcase Turntable Group + Dedicated 3-Point Studio Inspection Lights
+// Player Third-Person (TPS) Full-Body CC0 65-Bone Actor (Toggled via [P] key!)
+let playerTpsRoot: THREE.Group | null = null;
+let playerTpsMixer: THREE.AnimationMixer | null = null;
+const playerTpsActions: Record<string, THREE.AnimationAction> = {};
+let playerTpsActiveClip = '';
+const playerTpsWeapons: Record<string, THREE.Object3D> = {};
+
+// Loadout 3D Showcase Turntable Group + Dedicated Studio Backdrop & 3-Point Lights
 const loadoutShowcaseGroup = new THREE.Group();
 loadoutShowcaseGroup.visible = false;
 const loadoutWeaponHolder = new THREE.Group();
-const loadoutKeyLight = new THREE.PointLight(0xffffff, 12.0, 5.0, 1.1);
+const loadoutBackdrop = new THREE.Mesh(
+  new THREE.PlaneGeometry(3.8, 2.4),
+  new THREE.MeshBasicMaterial({ color: 0x080d14, transparent: true, opacity: 0.92, depthWrite: false })
+);
+loadoutBackdrop.position.set(-0.24, 0.02, -0.42);
+const loadoutKeyLight = new THREE.PointLight(0xffffff, 15.0, 5.5, 1.05);
 loadoutKeyLight.position.set(0.45, 0.55, 0.75);
-const loadoutRimLight = new THREE.PointLight(0xffb84d, 9.0, 5.0, 1.1);
-loadoutRimLight.position.set(-0.55, 0.25, -0.55);
-const loadoutFillLight = new THREE.PointLight(0x8ab8ff, 6.5, 4.5, 1.2);
-loadoutFillLight.position.set(0.0, -0.45, 0.55);
-loadoutShowcaseGroup.add(loadoutWeaponHolder, loadoutKeyLight, loadoutRimLight, loadoutFillLight);
+const loadoutRimLight = new THREE.PointLight(0xffb84d, 11.5, 5.5, 1.05);
+loadoutRimLight.position.set(-0.55, 0.35, -0.45);
+const loadoutFillLight = new THREE.PointLight(0x8ab8ff, 8.5, 4.8, 1.1);
+loadoutFillLight.position.set(0.0, -0.45, 0.65);
+loadoutShowcaseGroup.add(loadoutBackdrop, loadoutWeaponHolder, loadoutKeyLight, loadoutRimLight, loadoutFillLight);
 camera.add(loadoutShowcaseGroup);
 
 // ---------------------------------------------------------------------------
@@ -657,27 +692,39 @@ registerStaticColliders();
 
 function spawnExplosiveBarrels() {
   const coords: [number, number][] = [
-    [-6.8, 12.0], [2.2, 6.5], [-4.5, -11.0], [17.5, -6.5], [17.5, -15.0],
+    [-6.8, 12.0], [-6.1, 11.4], [2.2, 6.5], [-4.5, -11.0], [17.5, -6.5], [17.5, -15.0],
   ];
-  const geo = new THREE.CylinderGeometry(0.32, 0.32, 0.98, 16);
-  const mat = new THREE.MeshStandardMaterial({ color: 0xc81e18, roughness: 0.36, metalness: 0.62 });
+  const geo = new THREE.CylinderGeometry(0.31, 0.31, 0.96, 16);
+  const ribGeo = new THREE.CylinderGeometry(0.322, 0.322, 0.045, 16);
+  const bandGeo = new THREE.CylinderGeometry(0.316, 0.316, 0.18, 16);
+  const mat = new THREE.MeshStandardMaterial({ color: 0x9e1c16, roughness: 0.52, metalness: 0.58 });
+  const ribMat = new THREE.MeshStandardMaterial({ color: 0x1e2226, roughness: 0.65, metalness: 0.75 });
+  const bandMat = new THREE.MeshStandardMaterial({ color: 0xd49b1a, roughness: 0.48, metalness: 0.32 });
   const wreckMat = new THREE.MeshStandardMaterial({ color: 0x181615, roughness: 0.88, metalness: 0.35 });
   const emberMat = new THREE.MeshBasicMaterial({ color: 0xff5511 });
   const scorchMat = new THREE.MeshBasicMaterial({
     color: 0x070708,
     transparent: true,
-    opacity: 0.78,
+    opacity: 0.82,
     depthWrite: false,
   });
 
   coords.forEach(([x, z], i) => {
-    // Invisible hit-detection cylinder overlapping the GLB barrel
+    // Visible, Detailed Destructible Explosive Barrel (vanishes cleanly upon detonation!)
     const mesh = new THREE.Mesh(geo, mat.clone());
-    mesh.position.set(x, 0.49, z);
-    mesh.visible = false;
+    mesh.position.set(x, 0.48, z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+
+    const ribTop = new THREE.Mesh(ribGeo, ribMat);
+    ribTop.position.y = 0.22;
+    const ribBot = new THREE.Mesh(ribGeo, ribMat);
+    ribBot.position.y = -0.22;
+    const hazBand = new THREE.Mesh(bandGeo, bandMat);
+    mesh.add(ribTop, ribBot, hazBand);
     scene.add(mesh);
 
-    // Pre-built Crumpled & Charred Barrel Wreck + Ground Scorch Crater (shown after detonation!)
+    // Pre-built Crumpled & Charred Barrel Wreck + Ground Scorch Crater + Persistent Wreck Flame
     const wreckGroup = new THREE.Group();
     wreckGroup.position.set(x, 0.0, z);
     wreckGroup.visible = false;
@@ -701,10 +748,18 @@ function spawnExplosiveBarrels() {
       wreckGroup.add(shard);
     }
 
-    const emberCore = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), emberMat);
-    emberCore.position.set(0.08, 0.12, -0.05);
-    emberCore.scale.set(1.4, 0.4, 1.4);
+    const emberCore = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), emberMat);
+    emberCore.position.set(0.08, 0.14, -0.05);
+    emberCore.scale.set(1.5, 0.55, 1.5);
     wreckGroup.add(emberCore);
+
+    if (fireShaderMats.length > 0) {
+      const residualFlame = new THREE.Mesh(new THREE.PlaneGeometry(0.65, 0.85, 4, 6), fireShaderMats[i % fireShaderMats.length]);
+      residualFlame.position.set(0.08, 0.48, -0.05);
+      const residualFlame2 = residualFlame.clone();
+      residualFlame2.rotation.y = Math.PI / 2;
+      wreckGroup.add(residualFlame, residualFlame2);
+    }
 
     scene.add(wreckGroup);
 
@@ -766,6 +821,7 @@ async function loadAllAssets() {
   };
   applyRepeatAndAnisotropy(portGltf.scene);
   applyRepeatAndAnisotropy(wepGltf.scene);
+  applyRepeatAndAnisotropy(soldierGltf.scene);
 
   // 1. Add Night Port Environment & Enhance Wet Puddle Specular Reflections
   portGltf.scene.traverse((obj) => {
@@ -799,11 +855,121 @@ async function loadAllAssets() {
       weaponMount.add(clone);
     }
   }
-  equipWeapon(0);
 
-  // 3. Spawn 8 CC0 Skinned & Animated Tactical Enemy Soldiers
+  // 3. Spawn 8 CC0 Skinned & Animated Tactical Enemy Soldiers + Setup Player CC0 Arms & Third-Person Rig
   soldierTemplateGltf = { scene: soldierGltf.scene, animations: soldierGltf.animations };
+  setupPlayerCc0ArmsAndThirdPerson();
+  equipWeapon(0);
   spawnEnemySquad();
+}
+
+function playPlayerTpsClip(clipName: string, loop = true) {
+  if (!playerTpsMixer || playerTpsActiveClip === clipName) return;
+  const next = playerTpsActions[clipName] || playerTpsActions['Idle_Loop'];
+  if (!next) return;
+  const prev = playerTpsActions[playerTpsActiveClip];
+  if (prev && prev !== next) {
+    prev.fadeOut(0.16);
+  }
+  next.reset();
+  next.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
+  next.clampWhenFinished = !loop;
+  next.fadeIn(0.16).play();
+  playerTpsActiveClip = clipName;
+}
+
+function setupPlayerCc0ArmsAndThirdPerson() {
+  if (!soldierTemplateGltf) return;
+
+  // A) First-Person CC0 65-Bone Skinned Arms & 5-Finger Hands ('Soldier_CC0_Arms' + WristWatch)
+  fpArmsHolder.clear();
+  const fpArmsClone = SkeletonUtils.clone(soldierTemplateGltf.scene) as THREE.Group;
+  fpArmsClone.traverse((obj) => {
+    if ((obj as THREE.Mesh).isMesh) {
+      const isArmsOrWatch =
+        obj.name.includes('Soldier_CC0_Arms') ||
+        obj.name.includes('WristWatch') ||
+        obj.name.includes('WatchScreen') ||
+        obj.parent?.name === 'Soldier_CC0_Arms' ||
+        obj.parent?.name?.includes('WristWatch') ||
+        obj.parent?.name?.includes('WatchScreen');
+      obj.visible = Boolean(isArmsOrWatch);
+      obj.frustumCulled = false;
+      obj.castShadow = false;
+      obj.receiveShadow = true;
+    }
+  });
+
+  // Apply CC0 aiming pose & tune left/right arm bones so the 5-finger CC0 hands & forearm wristwatch are prominently visible on the weapon
+  const fpMixer = new THREE.AnimationMixer(fpArmsClone);
+  const aimClip = soldierTemplateGltf.animations.find((a) => a.name === 'Pistol_Aim_Neutral');
+  if (aimClip) {
+    const act = fpMixer.clipAction(aimClip);
+    act.play();
+    fpMixer.update(0.25);
+  }
+  fpArmsClone.rotation.y = Math.PI; // Face -Z along camera sightline
+  const upperL = fpArmsClone.getObjectByName('upperarm_l');
+  const lowerL = fpArmsClone.getObjectByName('lowerarm_l');
+  const handL = fpArmsClone.getObjectByName('hand_l');
+  const handR = fpArmsClone.getObjectByName('hand_r');
+  if (upperL) upperL.rotation.x += 0.34;
+  if (lowerL) {
+    lowerL.rotation.x += 0.22;
+    lowerL.rotation.z -= 0.14;
+  }
+  if (handL) handL.rotation.y += 0.28;
+
+  fpArmsHolder.add(fpArmsClone);
+  fpArmsClone.updateMatrixWorld(true);
+  if (handR) {
+    const handPos = new THREE.Vector3();
+    handR.getWorldPosition(handPos);
+    fpArmsHolder.worldToLocal(handPos);
+    // Lock right CC0 hand onto the receiver/pistol grip below the top rail so 5-finger hands wrap cleanly around the foregrip
+    fpArmsClone.position.set(0.012 - handPos.x, -0.025 - handPos.y, -0.045 - handPos.z);
+  } else {
+    fpArmsClone.position.set(0.0, -1.39, 0.28);
+  }
+  weaponMount.add(fpArmsHolder);
+
+  // B) Third-Person Full-Body CC0 65-Bone Player Operator (Toggled via [P] key!)
+  if (playerTpsRoot) scene.remove(playerTpsRoot);
+  playerTpsRoot = SkeletonUtils.clone(soldierTemplateGltf.scene) as THREE.Group;
+  playerTpsRoot.visible = false;
+  playerTpsRoot.traverse((obj) => {
+    if ((obj as THREE.Mesh).isMesh) {
+      obj.castShadow = true;
+      obj.receiveShadow = true;
+      obj.frustumCulled = false;
+    }
+  });
+
+  // Attach swap-ready 3D weapons (AR-7, SR-9, RL-7) onto playerTpsRoot's hand_r bone
+  const tpsHandR = playerTpsRoot.getObjectByName('hand_r');
+  const builtInRifle = playerTpsRoot.getObjectByName('Soldier_AR7_Rifle_Rigid');
+  if (builtInRifle) builtInRifle.visible = false;
+  if (tpsHandR) {
+    for (const w of WEAPONS) {
+      if (weaponModels[w.id]) {
+        const wClone = weaponModels[w.id].clone(true);
+        wClone.scale.setScalar(0.88);
+        wClone.rotation.set(0, Math.PI, 0);
+        wClone.position.set(0, 0.05, 0.06);
+        wClone.visible = false;
+        tpsHandR.add(wClone);
+        playerTpsWeapons[w.id] = wClone;
+      }
+    }
+  }
+
+  playerTpsMixer = new THREE.AnimationMixer(playerTpsRoot);
+  for (const clip of soldierTemplateGltf.animations) {
+    playerTpsActions[clip.name] = playerTpsMixer.clipAction(clip);
+  }
+  playPlayerTpsClip('Pistol_Aim_Neutral', true);
+  playerTpsMixer.update(0.2);
+  scene.add(playerTpsRoot);
 }
 
 function playEnemyClip(enemy: EnemyActor, clipName: string, loop = true) {
@@ -922,6 +1088,7 @@ const player = {
   damageTaken: 0,
   startTime: performance.now(),
   fixedCameraKey: initialCamParam || null,
+  thirdPerson: false,
 };
 
 const keys: Record<string, boolean> = {};
@@ -955,10 +1122,21 @@ function equipWeapon(idx: number) {
   document.getElementById('reload-box')?.classList.add('hidden');
   WEAPONS.forEach((w, i) => {
     if (weaponModels[w.id]) weaponModels[w.id].visible = i === idx;
+    if (playerTpsWeapons[w.id]) playerTpsWeapons[w.id].visible = i === idx;
     document.getElementById(`slot-${i + 1}`)?.classList.toggle('active', i === idx);
   });
   updateWeaponHud();
   updateLoadoutModal(idx);
+}
+
+function setThirdPersonMode(enabled?: boolean) {
+  player.thirdPerson = enabled !== undefined ? enabled : !player.thirdPerson;
+  const inModal = loadoutOpen || missionModalOpen;
+  fpRig.visible = !player.thirdPerson && !inModal && !player.fixedCameraKey;
+  if (playerTpsRoot) {
+    playerTpsRoot.visible = (player.thirdPerson || Boolean(player.fixedCameraKey)) && !inModal;
+  }
+  updateStatusHud();
 }
 
 function updateWeaponHud() {
@@ -991,11 +1169,13 @@ function updateStatusHud() {
   if (arVal) arVal.textContent = String(Math.max(0, Math.round(player.armor)));
   if (arBar) arBar.style.width = `${Math.max(0, (player.armor / player.maxArmor) * 100)}%`;
   if (stanceEl) {
-    stanceEl.textContent = player.crouching
+    const viewPrefix = player.thirdPerson ? '[TPS] ' : '[FPS] ';
+    const stanceLabel = player.crouching
       ? 'CROUCH // 戰術蹲姿 (精準提升)'
       : player.sprinting
       ? 'SPRINT // 戰術衝刺'
       : 'STAND // 站立警戒';
+    stanceEl.textContent = viewPrefix + stanceLabel;
   }
 }
 
@@ -1059,11 +1239,20 @@ function triggerExplosionAt(pos: THREE.Vector3, radius = 7.5, maxDamage = 165) {
     player.cameraShake = Math.min(1.0, player.cameraShake + Math.max(0.18, 1.0 - distToPlayer / 48) * 0.85);
   }
 
-  // Reveal permanent ground scorch decal & crumpled wreck if near an explosive barrel
+  // Reveal permanent ground scorch decal & crumpled wreck if near an explosive barrel, and trigger chain-reaction detonation!
   for (const b of explosiveBarrels) {
-    if (b.position.distanceTo(pos) < 3.5) {
+    const dBarrel = b.position.distanceTo(pos);
+    if (dBarrel < 2.2) {
       b.exploded = true;
+      b.mesh.visible = false;
       b.wreckGroup.visible = true;
+    } else if (!b.exploded && dBarrel < radius * 0.92) {
+      b.exploded = true;
+      setTimeout(() => {
+        b.mesh.visible = false;
+        b.wreckGroup.visible = true;
+        triggerExplosionAt(b.position.clone(), 8.0, 175);
+      }, 150);
     }
   }
 
@@ -1193,12 +1382,18 @@ function triggerExplosionAt(pos: THREE.Vector3, radius = 7.5, maxDamage = 165) {
     duration: 1.55,
   });
 
-  // Damage enemies within blast radius
+  // Damage & knock back enemies within blast radius
   let blastKills = 0;
   for (const e of enemies) {
     if (e.state === 'DEAD') continue;
     const d = e.root.position.distanceTo(pos);
     if (d <= radius) {
+      const pushDir = e.root.position.clone().sub(pos);
+      pushDir.y = 0;
+      if (pushDir.lengthSq() > 0.01) {
+        pushDir.normalize().multiplyScalar((1 - d / radius) * 1.45);
+        e.root.position.add(pushDir);
+      }
       const dmg = maxDamage * (1 - d / (radius * 1.15));
       damageEnemy(e, dmg, false, 'RL-7 ロケット');
       if ((e.state as string) === 'DEAD') blastKills++;
@@ -1215,6 +1410,26 @@ function damageEnemy(enemy: EnemyActor, amount: number, isHeadshot: boolean, wea
   if (enemy.state === 'DEAD') return;
   enemy.hp -= amount;
   triggerHitmarker();
+
+  // Spawn 3D ballistic blood mist & armor spark burst at impact point
+  const hitPos = enemy.root.position.clone().add(new THREE.Vector3(0, isHeadshot ? 1.62 : 1.08, 0));
+  const impactGeo = new THREE.SphereGeometry(isHeadshot ? 0.055 : 0.042, 6, 6);
+  for (let i = 0; i < (isHeadshot ? 9 : 6); i++) {
+    const isSpark = i % 2 === 0;
+    const pMat = new THREE.MeshBasicMaterial({
+      color: isSpark ? (isHeadshot ? 0xffdd55 : 0xffaa33) : 0xaa1118,
+      transparent: true,
+      opacity: 0.92,
+      blending: isSpark ? THREE.AdditiveBlending : THREE.NormalBlending,
+      depthWrite: false,
+    });
+    const pMesh = new THREE.Mesh(impactGeo, pMat);
+    const ang = (i / 8) * Math.PI * 2;
+    pMesh.position.copy(hitPos).add(new THREE.Vector3(Math.cos(ang) * 0.14, (i % 3) * 0.06, Math.sin(ang) * 0.14));
+    scene.add(pMesh);
+    activeSmokePuffs.push({ mesh: pMesh, age: 0, maxAge: 0.28 });
+  }
+
   if (enemy.hp <= 0) {
     enemy.hp = 0;
     enemy.state = 'DEAD';
@@ -1357,6 +1572,7 @@ function fireCurrentWeapon() {
       audioSys.play3D('assets/audio/impact_metal.wav', hits[0].point, player.pos);
       if (barrel.hp <= 0) {
         barrel.exploded = true;
+        barrel.mesh.visible = false;
         barrel.wreckGroup.visible = true;
         triggerExplosionAt(barrel.position, 8.0, 175);
       }
@@ -1470,7 +1686,8 @@ function toggleLoadoutModal(force?: boolean) {
   loadoutOpen = force !== undefined ? force : !loadoutOpen;
   document.getElementById('loadout-modal')?.classList.toggle('hidden', !loadoutOpen);
   document.getElementById('hud')?.classList.toggle('hidden', loadoutOpen || missionModalOpen);
-  fpRig.visible = !loadoutOpen && !missionModalOpen && !player.fixedCameraKey;
+  fpRig.visible = !player.thirdPerson && !loadoutOpen && !missionModalOpen && !player.fixedCameraKey;
+  if (playerTpsRoot) playerTpsRoot.visible = player.thirdPerson && !loadoutOpen && !missionModalOpen;
   loadoutShowcaseGroup.visible = loadoutOpen;
   if (loadoutOpen) {
     updateLoadoutModal(activeWeaponIdx);
@@ -1483,6 +1700,7 @@ function openMissionCompleteModal() {
   document.getElementById('mission-modal')?.classList.remove('hidden');
   document.getElementById('hud')?.classList.add('hidden');
   fpRig.visible = false;
+  if (playerTpsRoot) playerTpsRoot.visible = false;
   if (document.pointerLockElement) document.exitPointerLock();
 
   const elapsedSec = Math.max(12, Math.round((performance.now() - player.startTime) / 1000));
@@ -1511,6 +1729,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Digit2') equipWeapon(1);
   if (e.code === 'Digit3') equipWeapon(2);
   if (e.code === 'KeyR') startReload();
+  if (e.code === 'KeyP') setThirdPersonMode();
   if (e.code === 'KeyC') {
     player.crouching = !player.crouching;
     updateStatusHud();
@@ -1524,7 +1743,8 @@ window.addEventListener('keydown', (e) => {
       missionModalOpen = false;
       document.getElementById('mission-modal')?.classList.add('hidden');
       document.getElementById('hud')?.classList.remove('hidden');
-      fpRig.visible = !player.fixedCameraKey;
+      fpRig.visible = !player.thirdPerson && !player.fixedCameraKey;
+      if (playerTpsRoot) playerTpsRoot.visible = player.thirdPerson;
     } else {
       openMissionCompleteModal();
     }
@@ -1789,12 +2009,19 @@ function stepSimulation(dt: number, elapsedSec: number) {
   if (rainLines && !captureMode) {
     rainLines.position.y = -((t * 18) % 4.0);
   }
+  for (let i = 0; i < puddleRipples.length; i++) {
+    const pr = puddleRipples[i];
+    pr.phase = captureMode ? (i * 0.21) % 1.0 : (pr.phase + dt * pr.speed) % 1.0;
+    const p = pr.phase;
+    pr.mesh.scale.setScalar(0.35 + p * 2.15);
+    (pr.mesh.material as THREE.MeshBasicMaterial).opacity = Math.sin(p * Math.PI) * 0.42;
+  }
 
   if (loadoutOpen) {
     loadoutWeaponHolder.rotation.y += dt * 0.45;
   }
 
-  // 2. Player Movement & First-Person Camera (when not in fixed reference camera)
+  // 2. Player Movement, First-Person CC0 Arms & Third-Person Over-the-Shoulder Camera
   if (!player.fixedCameraKey && !loadoutOpen && !missionModalOpen) {
     player.sprinting = Boolean(keys['ShiftLeft'] || keys['ShiftRight']) && !player.crouching && !player.ads;
     const speed = player.crouching ? 2.8 : player.sprinting ? 6.4 : 4.3;
@@ -1807,7 +2034,8 @@ function stepSimulation(dt: number, elapsedSec: number) {
     if (keys['KeyD'] || keys['ArrowRight']) move.add(right);
     if (keys['KeyA'] || keys['ArrowLeft']) move.sub(right);
 
-    if (move.lengthSq() > 0) {
+    const isMoving = move.lengthSq() > 0;
+    if (isMoving) {
       move.normalize().multiplyScalar(speed * dt);
       const nextPos = player.pos.clone().add(move);
       nextPos.x = Math.max(-28, Math.min(24.5, nextPos.x));
@@ -1857,16 +2085,53 @@ function stepSimulation(dt: number, elapsedSec: number) {
       player.pos.y = groundY;
     }
 
+    // Update Third-Person CC0 65-Bone Player Operator Pose & Locomotion Animation
+    if (playerTpsRoot) {
+      playerTpsRoot.position.set(player.pos.x, player.pos.y, player.pos.z);
+      playerTpsRoot.rotation.y = Math.PI + player.yaw;
+      if (!player.grounded) {
+        playPlayerTpsClip('Jump_Loop', true);
+      } else if (isMoving) {
+        if (player.crouching) {
+          playPlayerTpsClip('Crouch_Fwd_Loop', true);
+        } else if (player.sprinting) {
+          playPlayerTpsClip('Sprint_Loop', true);
+        } else {
+          playPlayerTpsClip('Jog_Fwd_Loop', true);
+        }
+      } else {
+        playPlayerTpsClip(player.crouching ? 'Crouch_Idle_Loop' : 'Pistol_Aim_Neutral', true);
+      }
+      if (playerTpsMixer) {
+        playerTpsMixer.update(dt);
+      }
+    }
+
     const eyeHeight = player.crouching ? 1.15 : 1.72;
     const bobY = Math.sin(player.bobPhase) * (player.ads ? 0.006 : 0.025);
     const bobX = Math.cos(player.bobPhase * 0.5) * (player.ads ? 0.004 : 0.018);
     const shakeX = player.cameraShake > 0.005 ? Math.sin(t * 58) * player.cameraShake * 0.14 : 0;
     const shakeY = player.cameraShake > 0.005 ? Math.cos(t * 67) * player.cameraShake * 0.14 : 0;
 
-    camera.position.set(player.pos.x + bobX + shakeX, player.pos.y + eyeHeight + bobY + shakeY, player.pos.z);
-    camera.rotation.order = 'YXZ';
-    camera.rotation.y = player.yaw;
-    camera.rotation.x = player.pitch + player.recoilPitch + shakeY * 0.35;
+    if (player.thirdPerson) {
+      // Over-the-Shoulder Third-Person Tactical Camera
+      const camBack = player.ads ? 1.38 : 2.38;
+      const camRight = player.ads ? 0.44 : 0.56;
+      const camUp = eyeHeight + (player.crouching ? 0.22 : 0.18);
+      camera.position.set(
+        player.pos.x + right.x * camRight - fwd.x * camBack + shakeX,
+        player.pos.y + camUp + bobY * 0.5 + shakeY,
+        player.pos.z + right.z * camRight - fwd.z * camBack
+      );
+      camera.rotation.order = 'YXZ';
+      camera.rotation.y = player.yaw;
+      camera.rotation.x = player.pitch + player.recoilPitch + shakeY * 0.35 - 0.04;
+    } else {
+      camera.position.set(player.pos.x + bobX + shakeX, player.pos.y + eyeHeight + bobY + shakeY, player.pos.z);
+      camera.rotation.order = 'YXZ';
+      camera.rotation.y = player.yaw;
+      camera.rotation.x = player.pitch + player.recoilPitch + shakeY * 0.35;
+    }
 
     // Smooth ADS FOV & Viewmodel Position
     const w = WEAPONS[activeWeaponIdx];
@@ -2118,6 +2383,26 @@ function stepSimulation(dt: number, elapsedSec: number) {
           e.fireCooldown = 1.45 + Math.random() * 0.8;
           (e.muzzleFlash.material as THREE.MeshBasicMaterial).opacity = 0.95;
           audioSys.play3D('assets/audio/ar7_shot.wav', e.root.position, player.pos, 5, 45, 0.55);
+
+          // Spawn visible orange-red enemy outgoing tracer streak
+          const enemyMuzzle = new THREE.Vector3();
+          e.muzzleFlash.getWorldPosition(enemyMuzzle);
+          const tracerEnd = new THREE.Vector3(
+            player.pos.x + (Math.random() - 0.5) * 0.65,
+            player.pos.y + 1.25 + (Math.random() - 0.5) * 0.35,
+            player.pos.z + (Math.random() - 0.5) * 0.65
+          );
+          const eTracerGeo = new THREE.BufferGeometry().setFromPoints([enemyMuzzle, tracerEnd]);
+          const eTracerMat = new THREE.LineBasicMaterial({
+            color: 0xff5522,
+            transparent: true,
+            opacity: 0.9,
+            blending: THREE.AdditiveBlending,
+          });
+          const eLine = new THREE.Line(eTracerGeo, eTracerMat);
+          scene.add(eLine);
+          activeTracers.push({ line: eLine, age: 0 });
+
           // Inflict slight damage to player if in line of sight
           if (dist < 26 && !player.fixedCameraKey) {
             const dmg = 4;
@@ -2182,12 +2467,18 @@ window.addEventListener('resize', () => {
   },
   setPlayerPose: (x: number, y: number, z: number, yaw: number, pitch = 0) => {
     player.fixedCameraKey = null;
-    fpRig.visible = !loadoutOpen && !missionModalOpen;
+    fpRig.visible = !player.thirdPerson && !loadoutOpen && !missionModalOpen;
+    if (playerTpsRoot) playerTpsRoot.visible = player.thirdPerson && !loadoutOpen && !missionModalOpen;
     document.getElementById('hud')?.classList.remove('hidden');
     player.pos.set(x, y, z);
     player.yaw = yaw;
     player.pitch = pitch;
     stepSimulation(0.016, 1.5);
+    renderer.render(scene, camera);
+  },
+  setThirdPerson: (tp: boolean) => {
+    setThirdPersonMode(tp);
+    stepSimulation(0.04, 1.5);
     renderer.render(scene, camera);
   },
   equipWeapon: (idx: number) => {
