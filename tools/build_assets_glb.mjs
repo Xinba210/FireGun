@@ -608,18 +608,19 @@ function appendCatenaryChain(geom, x1, y1, z1, x2, y2, z2, sag = 0.28, segs = 8,
   }
 }
 
-function appendOrganicPuddleDisc(geom, cx, cy, cz, rx, rz, seed = 1, segs = 14) {
+function appendOrganicPuddleDisc(geom, cx, cy, cz, rx, rz, seed = 1, segs = 28) {
   const cIdx = geom.positions.length / 3;
   geom.positions.push(cx, cy, cz);
   geom.normals.push(0, 1, 0);
   geom.uvs.push(0.5, 0.5);
   for (let i = 0; i <= segs; i++) {
     const a = (i / segs) * Math.PI * 2;
-    const wobble = 1.0 + 0.16 * Math.sin(a * 3.0 + seed * 1.7) + 0.09 * Math.cos(a * 5.0 - seed * 2.3);
+    const wobble = 1.0 + 0.14 * Math.sin(a * 3.0 + seed * 1.7) + 0.08 * Math.cos(a * 5.0 - seed * 2.3);
     const px = cx + Math.cos(a) * rx * wobble;
     const pz = cz + Math.sin(a) * rz * wobble;
     geom.positions.push(px, cy, pz);
     geom.normals.push(0, 1, 0);
+    // Keep normalized radial coordinates in [0..1] so the puddle shader can compute exact edge distance r = length(uv - 0.5) * 2.0!
     geom.uvs.push(0.5 + Math.cos(a) * 0.5, 0.5 + Math.sin(a) * 0.5);
   }
   for (let i = 0; i < segs; i++) {
@@ -971,15 +972,14 @@ function buildPortEnvironmentGlb() {
   appendBox(gDarkSteel, -11.5, 0.03, 0, 0.22, 0.07, 78, 0.5);
   appendBox(gDarkSteel, -3.5, 0.03, 0, 0.22, 0.07, 78, 0.5);
 
-  // Reflective Wet Puddle Patches across dock lanes (Organic multi-layered irregular polygons!)
+  // Reflective Wet Puddle Patches across dock lanes (Organic irregular polygons with radial UVs for feathering!)
   const puddles = [
-    [-6.5, 22.0, 2.9, 4.2], [-3.2, 25.0, 2.4, 2.7], [-5.2, 8.2, 2.5, 4.8],
-    [-7.5, -12.0, 2.6, 4.6], [2.5, 16.0, 3.0, 3.8], [8.5, -4.0, 2.7, 4.2],
-    [14.2, 18.5, 2.7, 3.4], [16.5, 9.5, 2.8, 3.8],
+    [-6.5, 22.0, 3.1, 4.5], [-3.2, 25.0, 2.5, 2.9], [-5.2, 8.2, 2.7, 5.1],
+    [-7.5, -12.0, 2.8, 4.8], [2.5, 16.0, 3.2, 4.0], [8.5, -4.0, 2.9, 4.4],
+    [14.2, 18.5, 2.9, 3.6], [16.5, 9.5, 3.0, 4.0],
   ];
   puddles.forEach(([px, pz, rx, rz], idx) => {
-    appendOrganicPuddleDisc(gPuddles, px, 0.014, pz, rx, rz, idx + 1, 16);
-    appendOrganicPuddleDisc(gPuddles, px + 0.6, 0.015, pz - 0.8, rx * 0.65, rz * 0.68, idx + 9, 14);
+    appendOrganicPuddleDisc(gPuddles, px, 0.014, pz, rx, rz, idx + 1, 28);
   });
 
   // 2. Moored Cargo Ship ("MV ATLANTIC MARINER") along West Quay (x = -33)
@@ -1310,12 +1310,12 @@ function buildPortEnvironmentGlb() {
 
   // Palletized Industrial Fuel Drum Clusters (Static Decorative Clusters matching CAM_LANE Concept Art!)
   // Note: Interactive destructible red barrels are spawned dynamically in src/main.ts so they vanish cleanly when detonated!
-  for (const [dx, dz] of [[-7.8, 10.8], [-7.2, 10.3], [14.6, 12.2]]) {
+  for (const [dx, dz] of [[14.6, 12.2]]) {
     appendCylinder(gExplosive, dx, 0.56, dz, 0.29, 0.29, 0.92, 14, 'y');
     appendCylinder(gDarkSteel, dx, 0.38, dz, 0.302, 0.302, 0.04, 14, 'y');
     appendCylinder(gDarkSteel, dx, 0.74, dz, 0.302, 0.302, 0.04, 14, 'y');
   }
-  appendBox(gWood, -7.5, 0.06, 10.55, 1.45, 0.12, 1.45, 0.5); // Pallet under west lane drum cluster
+  appendBox(gWood, -6.45, 0.06, 11.7, 1.55, 0.12, 1.45, 0.5); // Pallet under west lane destructible drum cluster (-6.8,12.0 & -6.1,11.4)
   // Wooden Tactical Crates with Dark Steel Corner Framing (eliminating plain beige cube look!)
   const woodCrates = [[-4.8, 13.0], [-5.2, 11.2], [3.8, 7.5], [16.5, -10.0], [21.0, -12.5]];
   for (const [wx, wz] of woodCrates) {
@@ -1588,6 +1588,7 @@ function buildTacticalSoldierGlb() {
   function addRigidAttachmentNode(parentBoneIdx, name, geom, matIdx) {
     const posArr = new Float32Array(geom.positions);
     const normArr = new Float32Array(geom.normals);
+    const uvArr = new Float32Array(geom.uvs && geom.uvs.length === (posArr.length / 3) * 2 ? geom.uvs : (posArr.length / 3) * 2);
     const idxArr = new Uint32Array(geom.indices);
     const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
     for (let i = 0; i < posArr.length; i += 3) {
@@ -1598,18 +1599,21 @@ function buildTacticalSoldierGlb() {
     }
     const posBv = appendBinChunk(Buffer.from(posArr.buffer), 34962);
     const normBv = appendBinChunk(Buffer.from(normArr.buffer), 34962);
+    const uvBv = appendBinChunk(Buffer.from(uvArr.buffer), 34962);
     const idxBv = appendBinChunk(Buffer.from(idxArr.buffer), 34963);
     const posAcc = gltf.accessors.length;
     gltf.accessors.push({ bufferView: posBv, componentType: 5126, count: posArr.length / 3, type: 'VEC3', min, max });
     const normAcc = gltf.accessors.length;
     gltf.accessors.push({ bufferView: normBv, componentType: 5126, count: normArr.length / 3, type: 'VEC3' });
+    const uvAcc = gltf.accessors.length;
+    gltf.accessors.push({ bufferView: uvBv, componentType: 5126, count: uvArr.length / 2, type: 'VEC2' });
     const idxAcc = gltf.accessors.length;
     gltf.accessors.push({ bufferView: idxBv, componentType: 5125, count: idxArr.length, type: 'SCALAR' });
 
     const meshIdx = gltf.meshes.length;
     gltf.meshes.push({
       name: `${name}_Mesh`,
-      primitives: [{ attributes: { POSITION: posAcc, NORMAL: normAcc }, indices: idxAcc, material: matIdx }],
+      primitives: [{ attributes: { POSITION: posAcc, NORMAL: normAcc, TEXCOORD_0: uvAcc }, indices: idxAcc, material: matIdx }],
     });
     const nodeIdx = gltf.nodes.length;
     gltf.nodes.push({ name, mesh: meshIdx, translation: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] });
@@ -1673,14 +1677,17 @@ function buildTacticalSoldierGlb() {
   appendBox(gWatchScreen, 0.0, 0.21, 0.037, 0.024, 0.022, 0.004, 1); // Glowing watch face
   addRigidAttachmentNode(23, 'Tactical_WatchScreen_Rigid', gWatchScreen, matVisorGlow);
 
-  // 3) Rigid Detailed AR-7 Carbine attached to hand_r bone (node 46) per character-skin section 3
+  // 3) Rigid Detailed AR-7 Carbine attached to spine_03 (node 50) shoulder pocket so it ALWAYS points horizontally forward (+Z in character frame), never straight up in the air!
+  //    In runtime, both hands (hand_r on pistol grip, hand_l on foregrip) are locked onto this rifle via Rigforge 2-Bone IK!
   const gRifle = makeGeometryCollector();
-  appendBox(gRifle, 0, 0.058, 0.05, 0.034, 0.052, 0.42, 1); // Receiver & M-LOK Handguard
-  appendCylinder(gRifle, 0, 0.068, 0.34, 0.010, 0.011, 0.24, 10, 'z'); // Barrel & Flash Hider
-  appendBox(gRifle, 0, 0.102, 0.03, 0.034, 0.038, 0.058, 1); // EOTech Holo Sight
-  appendBox(gRifle, 0, -0.015, 0.06, 0.024, 0.11, 0.046, 1); // Curved 30-rd Mag
-  appendBox(gRifle, 0, 0.048, -0.18, 0.032, 0.085, 0.12, 1); // Buttstock
-  addRigidAttachmentNode(46, 'Soldier_AR7_Rifle_Rigid', gRifle, matRifle);
+  appendBox(gRifle, -0.10, 0.02, 0.28, 0.036, 0.050, 0.44, 1); // Receiver & M-LOK Handguard extending forward (+Z)
+  appendCylinder(gRifle, -0.10, 0.032, 0.58, 0.010, 0.011, 0.28, 10, 'z'); // Barrel & Flash Hider pointing horizontally forward (+Z)
+  appendBox(gRifle, -0.10, 0.066, 0.22, 0.034, 0.038, 0.062, 1); // EOTech Holo Sight
+  appendBox(gRifle, -0.10, -0.055, 0.26, 0.024, 0.11, 0.048, 1); // Curved 30-rd Mag
+  appendBox(gRifle, -0.10, -0.038, 0.36, 0.020, 0.075, 0.024, 1); // Vertical Foregrip (for Left Hand IK target!)
+  appendBox(gRifle, -0.10, -0.042, 0.13, 0.026, 0.082, 0.032, 1); // Pistol Grip (for Right Hand IK target!)
+  appendBox(gRifle, -0.10, 0.012, 0.03, 0.034, 0.088, 0.13, 1);  // Buttstock tucked into right shoulder pocket
+  addRigidAttachmentNode(50, 'Soldier_AR7_Rifle_Rigid', gRifle, matRifle);
 
   const finalBin = Buffer.concat(binChunks);
   gltf.buffers[0].byteLength = finalBin.length;

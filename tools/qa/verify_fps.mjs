@@ -194,7 +194,7 @@ async function main() {
       window.__fpsApi.setAds(false);
       window.__fpsApi.equipWeapon(2);
       window.__fpsApi.setPlayerPose(5.8, 5.34, 8.5, 0.55, -0.35);
-      window.__fpsApi.detonateAt(-0.5, 0.4, 1.5, 0.08);
+      window.__fpsApi.detonateAt(2.2, 0.4, 6.5, 0.08);
     });
     await page.waitForTimeout(120);
     await page.screenshot({ path: path.join(EVIDENCE_DIR, 'view_04_overhead_catwalk_rl7.png') });
@@ -271,10 +271,10 @@ async function main() {
         browser,
         path.join(EVIDENCE_DIR, 'cam_hero_before.png'),
         path.join(EVIDENCE_DIR, 'cam_hero_render.png'),
-        'OPTIMIZATION CYCLE A/B — Before (277k Tris / No EnvMap) vs v0.4.0 (CC0 FPS/TPS + Puddle Ripples + Chain Blast + 181k Tris)',
+        'OPTIMIZATION CYCLE A/B — Before (277k Tris / No EnvMap) vs v0.5.0 (Rigforge 2-Hand IK + Three.js Water & Planar Puddles)',
         path.join(EVIDENCE_DIR, 'ab_optimization_before_after.png'),
         '[BEFORE] CYCLE 1 ENGINE RENDER (277,664 TRIS)',
-        '[AFTER] CYCLE 5 (v0.4.0) OPTIMIZED RENDER (CC0 FPS/TPS + RIPPLES + 181K TRIS)'
+        '[AFTER] CYCLE 6 (v0.5.0) OPTIMIZED RENDER (RIGFORGE 2-HAND IK + PLANAR PUDDLE WATER)'
       );
     }
 

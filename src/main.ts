@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { Water } from 'three/examples/jsm/objects/Water.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import blueprint from '../blueprints/night_port.json';
 
@@ -166,13 +167,6 @@ interface ActiveSmokePuff {
   maxAge: number;
 }
 
-interface PuddleRipple {
-  mesh: THREE.Mesh;
-  phase: number;
-  speed: number;
-  maxScale: number;
-}
-
 const urlParams = new URLSearchParams(window.location.search);
 const captureMode = urlParams.has('capture');
 const initialCamParam = urlParams.get('cam');
@@ -186,9 +180,10 @@ const renderer = new THREE.WebGLRenderer({
   preserveDrawingBuffer: true,
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.autoUpdate = false;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.42;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -336,7 +331,7 @@ function buildAtmosphereAndLights() {
   const moonLight = new THREE.DirectionalLight(0x9ec2ec, 2.35);
   moonLight.position.set(-28, 42, 24);
   moonLight.castShadow = true;
-  moonLight.shadow.mapSize.set(2048, 2048);
+  moonLight.shadow.mapSize.set(1024, 1024);
   moonLight.shadow.camera.near = 2;
   moonLight.shadow.camera.far = 115;
   const d = 44;
@@ -557,39 +552,250 @@ function setupFireBarrels() {
   scene.add(rainLines);
 }
 
-const puddleRipples: PuddleRipple[] = [];
-function setupPuddleRainRipples() {
-  const rippleCenters: [number, number][] = [
-    [-6.5, 22.0], [-5.8, 20.5], [-7.2, 23.4], [-3.2, 25.0], [-2.6, 24.2],
-    [-5.2, 8.2], [-4.6, 10.1], [-5.8, 6.4], [-7.5, -12.0], [-6.9, -10.2],
-    [2.5, 16.0], [3.2, 14.8], [1.8, 17.2], [8.5, -4.0], [14.2, 18.5], [16.5, 9.5],
-  ];
-  const rGeo = new THREE.RingGeometry(0.18, 0.23, 20);
-  rippleCenters.forEach(([rx, rz], i) => {
-    const rMat = new THREE.MeshBasicMaterial({
-      color: 0x9ec8f0,
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: 0.45,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    });
-    const rMesh = new THREE.Mesh(rGeo, rMat);
-    rMesh.rotation.x = -Math.PI / 2;
-    rMesh.position.set(rx + ((i % 3) - 1) * 0.35, 0.021, rz + ((i % 2) - 0.5) * 0.4);
-    scene.add(rMesh);
-    puddleRipples.push({
-      mesh: rMesh,
-      phase: (i * 0.29) % 1.0,
-      speed: 0.75 + (i % 4) * 0.15,
-      maxScale: 2.2 + (i % 3) * 0.5,
-    });
+// ---------------------------------------------------------------------------
+// Realistic Water & Planar Reflective Wet Puddles (Three.js Water.js + Fresnel Rain Ripple Shader)
+// ---------------------------------------------------------------------------
+let harborSeaWater: Water | null = null;
+let puddleShaderMat: THREE.ShaderMaterial | null = null;
+const groundReflectionRT = new THREE.WebGLRenderTarget(384, 384, {
+  minFilter: THREE.LinearFilter,
+  magFilter: THREE.LinearFilter,
+  format: THREE.RGBAFormat,
+});
+const groundMirrorCamera = new THREE.PerspectiveCamera();
+const groundTexMatrix = new THREE.Matrix4();
+const puddleMeshes: THREE.Mesh[] = [];
+let reflectionFrameTick = 0;
+
+function createProceduralWaterNormalsTexture(size = 256): THREE.DataTexture {
+  const data = new Uint8Array(size * size * 4);
+  const heights = new Float32Array(size * size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const u = (x / size) * Math.PI * 2;
+      const v = (y / size) * Math.PI * 2;
+      const h =
+        Math.sin(u * 2.0 + v * 1.0) * 0.35 +
+        Math.cos(u * 3.0 - v * 4.0) * 0.25 +
+        Math.sin(u * 7.0 + v * 5.0) * 0.18 +
+        Math.cos(u * 11.0 - v * 9.0) * 0.12 +
+        Math.sin(u * 16.0 + v * 13.0) * 0.08;
+      heights[y * size + x] = h;
+    }
+  }
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const hL = heights[y * size + ((x - 1 + size) % size)];
+      const hR = heights[y * size + ((x + 1) % size)];
+      const hD = heights[((y - 1 + size) % size) * size + x];
+      const hU = heights[((y + 1) % size) * size + x];
+      const dx = (hL - hR) * 2.4;
+      const dy = (hD - hU) * 2.4;
+      const dz = 1.0;
+      const len = Math.hypot(dx, dy, dz) || 1.0;
+      const idx = (y * size + x) * 4;
+      data[idx] = Math.round(((dx / len) * 0.5 + 0.5) * 255);
+      data[idx + 1] = Math.round(((dy / len) * 0.5 + 0.5) * 255);
+      data[idx + 2] = Math.round(((dz / len) * 0.5 + 0.5) * 255);
+      data[idx + 3] = 255;
+    }
+  }
+  const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+const sharedWaterNormals = createProceduralWaterNormalsTexture(256);
+
+function setupHarborWaterAndPuddles() {
+  // 1. Official Three.js Water.js for West & North Harbor Sea Basin
+  const seaGeo = new THREE.PlaneGeometry(76, 130);
+  harborSeaWater = new Water(seaGeo, {
+    textureWidth: 256,
+    textureHeight: 256,
+    waterNormals: sharedWaterNormals,
+    sunDirection: new THREE.Vector3(-0.45, 0.78, -0.35).normalize(),
+    sunColor: 0xffaa44,
+    waterColor: 0x05101c,
+    distortionScale: 3.4,
+    fog: scene.fog !== undefined,
   });
+  harborSeaWater.rotation.x = -Math.PI / 2;
+  harborSeaWater.position.set(-44, -1.32, 0);
+  scene.add(harborSeaWater);
+
+  // 2. Shared Real-Time Planar Reflection + Analytical Raindrop Wave Normal Shader for Wet Dock Puddles
+  puddleShaderMat = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    uniforms: {
+      tReflection: { value: groundReflectionRT.texture },
+      tNormalMap: { value: sharedWaterNormals },
+      uTextureMatrix: { value: groundTexMatrix },
+      uTime: { value: 1.5 },
+      uCameraPos: { value: new THREE.Vector3() },
+    },
+    vertexShader: `
+      uniform mat4 uTextureMatrix;
+      varying vec4 vMirrorCoord;
+      varying vec3 vWorldPos;
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+        vWorldPos = worldPosition.xyz;
+        vMirrorCoord = uTextureMatrix * worldPosition;
+        gl_Position = projectionMatrix * viewMatrix * worldPosition;
+      }
+    `,
+    fragmentShader: `
+      uniform sampler2D tReflection;
+      uniform sampler2D tNormalMap;
+      uniform float uTime;
+      uniform vec3 uCameraPos;
+      varying vec4 vMirrorCoord;
+      varying vec3 vWorldPos;
+      varying vec2 vUv;
+
+      // Analytical expanding raindrop concentric wave gradient (perturb normal, never draw grey rings!)
+      vec2 rainRippleGrad(vec2 p, vec2 center, float phase) {
+        vec2 d = p - center;
+        float r = length(d) + 1e-4;
+        float waveRadius = phase * 1.45;
+        float band = exp(-18.0 * (r - waveRadius) * (r - waveRadius));
+        float env = (1.0 - phase) * exp(-1.6 * r);
+        float slope = cos(r * 38.0 - phase * 26.0) * band * env;
+        return (d / r) * slope;
+      }
+
+      void main() {
+        // 1. Soft organic edge feathering using normalized radial puddle UV
+        vec2 centeredUv = (vUv - vec2(0.5)) * 2.0;
+        float radialDist = length(centeredUv);
+        // Subtle organic boundary modulation
+        float angle = atan(centeredUv.y, centeredUv.x);
+        float edgeMod = 0.06 * sin(angle * 5.0 + vWorldPos.x) + 0.04 * cos(angle * 3.0 - vWorldPos.z);
+        float puddleMask = 1.0 - smoothstep(0.62, 0.96, radialDist + edgeMod);
+        if (puddleMask <= 0.01) discard;
+
+        // 2. Dual-layer scrolling capillary wind waves + analytical raindrop ripples
+        vec2 wUv1 = vWorldPos.xz * 0.32 + vec2(uTime * 0.025, uTime * 0.018);
+        vec2 wUv2 = vWorldPos.xz * 0.48 - vec2(uTime * 0.021, -uTime * 0.028);
+        vec3 n1 = texture2D(tNormalMap, wUv1).rgb * 2.0 - 1.0;
+        vec3 n2 = texture2D(tNormalMap, wUv2).rgb * 2.0 - 1.0;
+        vec2 waveGrad = (n1.xy + n2.xy) * 0.028;
+
+        // Add 4tiled procedural raindrop impact wave trains across every 2.5m x 2.5m cell
+        vec2 cell = floor(vWorldPos.xz / 2.4);
+        vec2 localPos = fract(vWorldPos.xz / 2.4) * 2.4;
+        for (int i = 0; i < 3; i++) {
+          float fi = float(i);
+          float seed = fract(sin(dot(cell + vec2(fi * 13.7, fi * 7.3), vec2(12.9898, 78.233))) * 43758.5453);
+          vec2 dropCenter = vec2(0.45 + fract(seed * 3.7) * 1.5, 0.45 + fract(seed * 9.1) * 1.5);
+          float phase = fract(uTime * (0.65 + 0.25 * seed) + seed);
+          waveGrad += rainRippleGrad(localPos, dropCenter, phase) * 0.055;
+        }
+
+        vec3 N = normalize(vec3(waveGrad.x, 1.0, waveGrad.y));
+        vec3 V = normalize(uCameraPos - vWorldPos);
+        float cosTheta = max(dot(N, V), 0.0);
+
+        // 3. Schlick Fresnel Law for water film (R0 = 0.04, strong grazing mirror reflection)
+        float fresnel = 0.12 + 0.88 * pow(1.0 - cosTheta, 4.2);
+
+        // 4. Sample real-time planar mirror reflection with wave normal distortion
+        vec2 projUv = vMirrorCoord.xy / max(0.001, vMirrorCoord.w);
+        vec2 reflUv = clamp(projUv + waveGrad * 0.42, 0.002, 0.998);
+        vec3 reflCol = texture2D(tReflection, reflUv).rgb;
+
+        // Enhance warm sodium/fire highlights reflected in the puddle
+        vec3 deepWaterTint = vec3(0.025, 0.038, 0.055);
+        vec3 finalCol = mix(deepWaterTint, reflCol * 1.18, fresnel);
+
+        gl_FragColor = vec4(finalCol, puddleMask * (0.58 + 0.38 * fresnel));
+      }
+    `,
+  });
+}
+
+function updateGroundPlanarReflection() {
+  if (!puddleShaderMat || puddleMeshes.length === 0) return;
+  const mirrorPos = new THREE.Vector3(0, 0.014, 0);
+  const normal = new THREE.Vector3(0, 1, 0);
+  const camWorldPos = new THREE.Vector3();
+  camera.getWorldPosition(camWorldPos);
+  if (camWorldPos.y <= 0.02) return;
+
+  puddleShaderMat.uniforms.uCameraPos.value.copy(camWorldPos);
+
+  const view = mirrorPos.clone().sub(camWorldPos).reflect(normal).negate().add(mirrorPos);
+  const rotMat = new THREE.Matrix4().extractRotation(camera.matrixWorld);
+  const lookAtPos = new THREE.Vector3(0, 0, -1).applyMatrix4(rotMat).add(camWorldPos);
+  const target = mirrorPos.clone().sub(lookAtPos).reflect(normal).negate().add(mirrorPos);
+
+  groundMirrorCamera.position.copy(view);
+  groundMirrorCamera.up.set(0, 1, 0).applyMatrix4(rotMat).reflect(normal);
+  groundMirrorCamera.lookAt(target);
+  groundMirrorCamera.far = camera.far;
+  groundMirrorCamera.updateMatrixWorld();
+  groundMirrorCamera.projectionMatrix.copy(camera.projectionMatrix);
+
+  groundTexMatrix.set(
+    0.5, 0.0, 0.0, 0.5,
+    0.0, 0.5, 0.0, 0.5,
+    0.0, 0.0, 0.5, 0.5,
+    0.0, 0.0, 0.0, 1.0
+  );
+  groundTexMatrix.multiply(groundMirrorCamera.projectionMatrix);
+  groundTexMatrix.multiply(groundMirrorCamera.matrixWorldInverse);
+
+  // Oblique near-plane clipping at y = 0.014 so underwater geometry never leaks into reflections
+  const mirrorPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, mirrorPos);
+  mirrorPlane.applyMatrix4(groundMirrorCamera.matrixWorldInverse);
+  const clipPlane = new THREE.Vector4(mirrorPlane.normal.x, mirrorPlane.normal.y, mirrorPlane.normal.z, mirrorPlane.constant);
+  const proj = groundMirrorCamera.projectionMatrix;
+  const q = new THREE.Vector4(
+    (Math.sign(clipPlane.x) + proj.elements[8]) / proj.elements[0],
+    (Math.sign(clipPlane.y) + proj.elements[9]) / proj.elements[5],
+    -1.0,
+    (1.0 + proj.elements[10]) / proj.elements[14]
+  );
+  clipPlane.multiplyScalar(2.0 / clipPlane.dot(q));
+  proj.elements[2] = clipPlane.x;
+  proj.elements[6] = clipPlane.y;
+  proj.elements[10] = clipPlane.z + 1.0;
+  proj.elements[14] = clipPlane.w;
+
+  // Hide puddles, sea & animated characters during reflection render pass so ground reflection stays < 1.5ms!
+  const prevFpVis = fpRig.visible;
+  fpRig.visible = false;
+  for (const pm of puddleMeshes) pm.visible = false;
+  if (harborSeaWater) harborSeaWater.visible = false;
+  const prevTpsVis = playerTpsRoot ? playerTpsRoot.visible : false;
+  if (playerTpsRoot) playerTpsRoot.visible = false;
+  for (const e of enemies) e.root.visible = false;
+
+  const prevRT = renderer.getRenderTarget();
+  const prevShadowAuto = renderer.shadowMap.autoUpdate;
+  renderer.shadowMap.autoUpdate = false;
+  renderer.setRenderTarget(groundReflectionRT);
+  renderer.clear();
+  renderer.render(scene, groundMirrorCamera);
+  renderer.setRenderTarget(prevRT);
+  renderer.shadowMap.autoUpdate = prevShadowAuto;
+
+  fpRig.visible = prevFpVis;
+  for (const pm of puddleMeshes) pm.visible = true;
+  if (harborSeaWater) harborSeaWater.visible = true;
+  if (playerTpsRoot) playerTpsRoot.visible = prevTpsVis;
+  for (const e of enemies) e.root.visible = true;
 }
 
 buildAtmosphereAndLights();
 setupFireBarrels();
-setupPuddleRainRipples();
+setupHarborWaterAndPuddles();
 
 // ---------------------------------------------------------------------------
 // First-Person Viewmodel Rig (CC0 65-Bone Skinned Arms + Weapons from weapons_pack.glb)
@@ -823,18 +1029,20 @@ async function loadAllAssets() {
   applyRepeatAndAnisotropy(wepGltf.scene);
   applyRepeatAndAnisotropy(soldierGltf.scene);
 
-  // 1. Add Night Port Environment & Enhance Wet Puddle Specular Reflections
+  // 1. Add Night Port Environment & Upgrade Sea + Wet Puddles to Real-Time Planar Reflection Shaders
+  puddleMeshes.length = 0;
   portGltf.scene.traverse((obj) => {
     if ((obj as THREE.Mesh).isMesh) {
       const m = obj as THREE.Mesh;
       m.castShadow = true;
       m.receiveShadow = true;
       const mat = m.material as THREE.MeshStandardMaterial;
-      if (mat && mat.name === 'MI_Water_Puddle') {
+      if (mat && mat.name === 'MI_Water_Puddle' && puddleShaderMat) {
         m.castShadow = false;
-        mat.roughness = 0.025;
-        mat.metalness = 0.92;
-        mat.envMapIntensity = 2.6;
+        m.material = puddleShaderMat;
+        puddleMeshes.push(m);
+      } else if (mat && mat.name === 'MI_Harbor_Sea') {
+        m.visible = false; // Replaced by official Three.js Water.js instance (`harborSeaWater`)
       }
     }
   });
@@ -861,6 +1069,192 @@ async function loadAllAssets() {
   setupPlayerCc0ArmsAndThirdPerson();
   equipWeapon(0);
   spawnEnemySquad();
+  renderer.shadowMap.needsUpdate = true;
+}
+
+// ---------------------------------------------------------------------------
+// Rigforge Analytic Two-Bone Arm IK & Horizontal Shoulder-Pocket Rifle Mount
+// ---------------------------------------------------------------------------
+let fpArmsRoot: THREE.Group | null = null;
+let fpArmsMixer: THREE.AnimationMixer | null = null;
+let playerTpsWeaponMount: THREE.Group | null = null;
+
+const _ikA = new THREE.Vector3();
+const _ikB = new THREE.Vector3();
+const _ikC = new THREE.Vector3();
+const _ikT = new THREE.Vector3();
+const _ikDir = new THREE.Vector3();
+const _ikPole = new THREE.Vector3();
+const _ikMid = new THREE.Vector3();
+const _ikQ = new THREE.Quaternion();
+const _ikParentW = new THREE.Quaternion();
+const _ikWorldQ = new THREE.Quaternion();
+const _ikHandW = new THREE.Quaternion();
+
+function setBoneWorldQuaternion(bone: THREE.Object3D, worldQ: THREE.Quaternion) {
+  if (!bone.parent) return;
+  bone.parent.getWorldQuaternion(_ikParentW);
+  bone.quaternion.copy(_ikParentW.invert().multiply(worldQ));
+  bone.updateMatrixWorld(true);
+}
+
+// Ported directly from Rigforge `solveLeg` (`src/footLock.js`): analytic two-bone IK with elbow pole vector
+function solveTwoBoneIk(
+  upperArm: THREE.Object3D | undefined,
+  lowerArm: THREE.Object3D | undefined,
+  hand: THREE.Object3D | undefined,
+  targetWorld: THREE.Vector3,
+  poleWorldDir: THREE.Vector3
+) {
+  if (!upperArm || !lowerArm || !hand) return;
+  upperArm.getWorldPosition(_ikA);
+  lowerArm.getWorldPosition(_ikB);
+  hand.getWorldPosition(_ikC);
+  hand.getWorldQuaternion(_ikHandW);
+
+  const l1 = _ikB.distanceTo(_ikA);
+  const l2 = _ikC.distanceTo(_ikB);
+  if (l1 < 1e-4 || l2 < 1e-4) return;
+
+  _ikT.copy(targetWorld);
+  let d = _ikT.distanceTo(_ikA);
+  const maxReach = (l1 + l2) * 0.996;
+  const minReach = Math.abs(l1 - l2) * 1.02 + 1e-4;
+  d = Math.min(maxReach, Math.max(minReach, d));
+
+  _ikDir.subVectors(_ikT, _ikA).normalize();
+  _ikPole.copy(poleWorldDir);
+  _ikPole.addScaledVector(_ikDir, -_ikPole.dot(_ikDir));
+  if (_ikPole.lengthSq() < 1e-8) {
+    _ikPole.set(0, -1, 0).addScaledVector(_ikDir, -_ikDir.y);
+  }
+  _ikPole.normalize();
+
+  const cosA = Math.max(-1, Math.min(1, (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d)));
+  _ikMid
+    .copy(_ikA)
+    .addScaledVector(_ikDir, cosA * l1)
+    .addScaledVector(_ikPole, Math.sqrt(Math.max(0, 1 - cosA * cosA)) * l1);
+
+  upperArm.getWorldQuaternion(_ikWorldQ);
+  _ikQ.setFromUnitVectors(_ikB.clone().sub(_ikA).normalize(), _ikMid.clone().sub(_ikA).normalize());
+  setBoneWorldQuaternion(upperArm, _ikWorldQ.premultiply(_ikQ));
+
+  lowerArm.getWorldPosition(_ikB);
+  hand.getWorldPosition(_ikC);
+  lowerArm.getWorldQuaternion(_ikWorldQ);
+  const reachPt = _ikA.clone().addScaledVector(_ikDir, d);
+  _ikQ.setFromUnitVectors(_ikC.clone().sub(_ikB).normalize(), reachPt.sub(_ikB).normalize());
+  setBoneWorldQuaternion(lowerArm, _ikWorldQ.premultiply(_ikQ));
+  setBoneWorldQuaternion(hand, _ikHandW);
+}
+
+// Lock both CC0 65-bone arms onto the horizontal shoulder-mounted rifle (Right hand -> Pistol Grip, Left hand -> Vertical Foregrip)
+function poseCharacterTwoHandRifleIk(
+  charRoot: THREE.Object3D,
+  rifleHolder: THREE.Object3D | undefined,
+  aimPitch = 0,
+  recoilZ = 0,
+  reloadPct = 0
+) {
+  const spine3 = charRoot.getObjectByName('spine_03');
+  const upperR = charRoot.getObjectByName('upperarm_r');
+  const lowerR = charRoot.getObjectByName('lowerarm_r');
+  const handR = charRoot.getObjectByName('hand_r');
+  const upperL = charRoot.getObjectByName('upperarm_l');
+  const lowerL = charRoot.getObjectByName('lowerarm_l');
+  const handL = charRoot.getObjectByName('hand_l');
+  if (!spine3 || !upperR || !lowerR || !handR || !upperL || !lowerL || !handL) return;
+
+  charRoot.updateMatrixWorld(true);
+
+  // 1. Orient rifle horizontally in the right shoulder pocket (+Z is character forward in UAL1)
+  let gripWorld: THREE.Vector3;
+  let foregripWorld: THREE.Vector3;
+  let magWellWorld: THREE.Vector3;
+
+  if (rifleHolder) {
+    rifleHolder.position.set(-0.11, 0.04, 0.16 - recoilZ * 0.65);
+    rifleHolder.rotation.set(-aimPitch, 0, 0);
+    rifleHolder.updateMatrixWorld(true);
+    // Note: weaponModels face -Z in their own local frame, so inside rifleHolder we rotated weapon Clones by Math.PI around Y
+    gripWorld = rifleHolder.localToWorld(new THREE.Vector3(0.0, -0.055, -0.02));
+    foregripWorld = rifleHolder.localToWorld(new THREE.Vector3(0.01, -0.048, 0.25));
+    magWellWorld = rifleHolder.localToWorld(new THREE.Vector3(0.0, -0.11, 0.07));
+  } else {
+    // Built-in enemy rifle ('Soldier_AR7_Rifle_Rigid' attached to spine_03)
+    const builtIn = charRoot.getObjectByName('Soldier_AR7_Rifle_Rigid');
+    if (builtIn) {
+      builtIn.rotation.set(-aimPitch, 0, 0);
+      builtIn.updateMatrixWorld(true);
+    }
+    gripWorld = spine3.localToWorld(new THREE.Vector3(-0.10, -0.042, 0.13));
+    foregripWorld = spine3.localToWorld(new THREE.Vector3(-0.10, -0.038, 0.36));
+    magWellWorld = spine3.localToWorld(new THREE.Vector3(-0.10, -0.08, 0.25));
+  }
+
+  // Compute character world basis for natural elbow pole vectors (elbows down and slightly outward)
+  const charQuat = new THREE.Quaternion();
+  charRoot.getWorldQuaternion(charQuat);
+  const worldRight = new THREE.Vector3(-1, 0, 0).applyQuaternion(charQuat); // -X is right side on UAL1
+  const worldUp = new THREE.Vector3(0, 1, 0);
+  const worldFwd = new THREE.Vector3(0, 0, 1).applyQuaternion(charQuat);
+
+  const poleR = worldRight.clone().multiplyScalar(0.65).addScaledVector(worldUp, -0.85).addScaledVector(worldFwd, -0.2).normalize();
+  const poleL = worldRight.clone().multiplyScalar(-0.55).addScaledVector(worldUp, -0.90).addScaledVector(worldFwd, -0.15).normalize();
+
+  // If reloading, animate left hand moving from foregrip -> magazine well -> foregrip
+  const leftTarget = foregripWorld.clone();
+  if (reloadPct > 0.01) {
+    const magBlend = Math.sin(reloadPct * Math.PI);
+    leftTarget.lerp(magWellWorld, magBlend);
+  }
+
+  solveTwoBoneIk(upperR, lowerR, handR, gripWorld, poleR);
+  solveTwoBoneIk(upperL, lowerL, handL, leftTarget, poleL);
+
+  // Align hands cleanly with the rifle barrel/grip so wrists never twist unnaturally
+  const handGripQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(-aimPitch, 0, 0, 'YXZ'));
+  const worldHandR = charQuat.clone().multiply(handGripQuat).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0.15, 0, -1.25)));
+  const worldHandL = charQuat.clone().multiply(handGripQuat).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0.25, 0, 1.35)));
+  setBoneWorldQuaternion(handR, worldHandR);
+  setBoneWorldQuaternion(handL, worldHandL);
+}
+
+// Lock First-Person CC0 65-bone hands onto the active viewmodel weapon (Right hand -> Pistol Grip, Left hand -> Under-barrel Foregrip)
+function updateFirstPersonCc0HandsIk() {
+  if (!fpArmsRoot) return;
+  const upperR = fpArmsRoot.getObjectByName('upperarm_r');
+  const lowerR = fpArmsRoot.getObjectByName('lowerarm_r');
+  const handR = fpArmsRoot.getObjectByName('hand_r');
+  const upperL = fpArmsRoot.getObjectByName('upperarm_l');
+  const lowerL = fpArmsRoot.getObjectByName('lowerarm_l');
+  const handL = fpArmsRoot.getObjectByName('hand_l');
+  if (!upperR || !lowerR || !handR || !upperL || !lowerL || !handL) return;
+
+  weaponMount.updateMatrixWorld(true);
+  // Weapon in weaponMount has Receiver at (0, 0.02, -0.03), Pistol Grip at (0, -0.06, 0.04), Foregrip at (0, -0.05, -0.25)
+  const gripTargetWorld = weaponMount.localToWorld(new THREE.Vector3(0.015, -0.062, 0.038));
+  const foregripTargetWorld = weaponMount.localToWorld(new THREE.Vector3(-0.016, -0.052, -0.235));
+  const magTargetWorld = weaponMount.localToWorld(new THREE.Vector3(-0.01, -0.135, -0.065));
+
+  const leftTarget = foregripTargetWorld.clone();
+  if (player.reloading) {
+    const w = WEAPONS[activeWeaponIdx];
+    const pct = Math.min(1, player.reloadTimer / w.reloadTime);
+    leftTarget.lerp(magTargetWorld, Math.sin(pct * Math.PI));
+  }
+
+  const camRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+  const camUp = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+  const camFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+
+  // Elbows stay below the sightline (`-camUp`) so right and left CC0 forearms & wristwatch enter cleanly in frame!
+  const poleR = camRight.clone().multiplyScalar(0.55).addScaledVector(camUp, -0.95).addScaledVector(camFwd, -0.25).normalize();
+  const poleL = camRight.clone().multiplyScalar(-0.48).addScaledVector(camUp, -0.62).addScaledVector(camFwd, 0.12).normalize();
+
+  solveTwoBoneIk(upperR, lowerR, handR, gripTargetWorld, poleR);
+  solveTwoBoneIk(upperL, lowerL, handL, leftTarget, poleL);
 }
 
 function playPlayerTpsClip(clipName: string, loop = true) {
@@ -883,8 +1277,8 @@ function setupPlayerCc0ArmsAndThirdPerson() {
 
   // A) First-Person CC0 65-Bone Skinned Arms & 5-Finger Hands ('Soldier_CC0_Arms' + WristWatch)
   fpArmsHolder.clear();
-  const fpArmsClone = SkeletonUtils.clone(soldierTemplateGltf.scene) as THREE.Group;
-  fpArmsClone.traverse((obj) => {
+  fpArmsRoot = SkeletonUtils.clone(soldierTemplateGltf.scene) as THREE.Group;
+  fpArmsRoot.traverse((obj) => {
     if ((obj as THREE.Mesh).isMesh) {
       const isArmsOrWatch =
         obj.name.includes('Soldier_CC0_Arms') ||
@@ -900,38 +1294,21 @@ function setupPlayerCc0ArmsAndThirdPerson() {
     }
   });
 
-  // Apply CC0 aiming pose & tune left/right arm bones so the 5-finger CC0 hands & forearm wristwatch are prominently visible on the weapon
-  const fpMixer = new THREE.AnimationMixer(fpArmsClone);
-  const aimClip = soldierTemplateGltf.animations.find((a) => a.name === 'Pistol_Aim_Neutral');
-  if (aimClip) {
-    const act = fpMixer.clipAction(aimClip);
+  // Use UAL1 'Sword_Idle' / 'Punch_Jab' fist finger curl + position shoulders just behind the camera
+  fpArmsMixer = new THREE.AnimationMixer(fpArmsRoot);
+  const fistClip =
+    soldierTemplateGltf.animations.find((a) => a.name === 'Sword_Idle') ||
+    soldierTemplateGltf.animations.find((a) => a.name === 'Pistol_Aim_Neutral');
+  if (fistClip) {
+    const act = fpArmsMixer.clipAction(fistClip);
     act.play();
-    fpMixer.update(0.25);
+    fpArmsMixer.update(0.1);
   }
-  fpArmsClone.rotation.y = Math.PI; // Face -Z along camera sightline
-  const upperL = fpArmsClone.getObjectByName('upperarm_l');
-  const lowerL = fpArmsClone.getObjectByName('lowerarm_l');
-  const handL = fpArmsClone.getObjectByName('hand_l');
-  const handR = fpArmsClone.getObjectByName('hand_r');
-  if (upperL) upperL.rotation.x += 0.34;
-  if (lowerL) {
-    lowerL.rotation.x += 0.22;
-    lowerL.rotation.z -= 0.14;
-  }
-  if (handL) handL.rotation.y += 0.28;
-
-  fpArmsHolder.add(fpArmsClone);
-  fpArmsClone.updateMatrixWorld(true);
-  if (handR) {
-    const handPos = new THREE.Vector3();
-    handR.getWorldPosition(handPos);
-    fpArmsHolder.worldToLocal(handPos);
-    // Lock right CC0 hand onto the receiver/pistol grip below the top rail so 5-finger hands wrap cleanly around the foregrip
-    fpArmsClone.position.set(0.012 - handPos.x, -0.025 - handPos.y, -0.045 - handPos.z);
-  } else {
-    fpArmsClone.position.set(0.0, -1.39, 0.28);
-  }
+  fpArmsRoot.rotation.y = Math.PI; // Face -Z along camera sightline
+  fpArmsRoot.position.set(-0.08, -1.42, 0.22);
+  fpArmsHolder.add(fpArmsRoot);
   weaponMount.add(fpArmsHolder);
+  updateFirstPersonCc0HandsIk();
 
   // B) Third-Person Full-Body CC0 65-Bone Player Operator (Toggled via [P] key!)
   if (playerTpsRoot) scene.remove(playerTpsRoot);
@@ -945,19 +1322,24 @@ function setupPlayerCc0ArmsAndThirdPerson() {
     }
   });
 
-  // Attach swap-ready 3D weapons (AR-7, SR-9, RL-7) onto playerTpsRoot's hand_r bone
-  const tpsHandR = playerTpsRoot.getObjectByName('hand_r');
+  // Hide built-in enemy rifle and mount swap-ready 3D weapons (AR-7, SR-9, RL-7) horizontally in the right shoulder pocket (`spine_03`)
   const builtInRifle = playerTpsRoot.getObjectByName('Soldier_AR7_Rifle_Rigid');
   if (builtInRifle) builtInRifle.visible = false;
-  if (tpsHandR) {
+  const tpsSpine3 = playerTpsRoot.getObjectByName('spine_03');
+  playerTpsWeaponMount = new THREE.Group();
+  playerTpsWeaponMount.name = 'Player_TPS_Shoulder_Weapon_Mount';
+  playerTpsWeaponMount.position.set(-0.11, 0.04, 0.16);
+  if (tpsSpine3) {
+    tpsSpine3.add(playerTpsWeaponMount);
     for (const w of WEAPONS) {
       if (weaponModels[w.id]) {
         const wClone = weaponModels[w.id].clone(true);
-        wClone.scale.setScalar(0.88);
+        wClone.scale.setScalar(0.92);
+        // weaponModels face -Z; rotate 180 deg around Y so barrel points +Z (forward in character space!)
         wClone.rotation.set(0, Math.PI, 0);
-        wClone.position.set(0, 0.05, 0.06);
+        wClone.position.set(0, 0, 0);
         wClone.visible = false;
-        tpsHandR.add(wClone);
+        playerTpsWeaponMount.add(wClone);
         playerTpsWeapons[w.id] = wClone;
       }
     }
@@ -967,8 +1349,9 @@ function setupPlayerCc0ArmsAndThirdPerson() {
   for (const clip of soldierTemplateGltf.animations) {
     playerTpsActions[clip.name] = playerTpsMixer.clipAction(clip);
   }
-  playPlayerTpsClip('Pistol_Aim_Neutral', true);
+  playPlayerTpsClip('Idle_Loop', true);
   playerTpsMixer.update(0.2);
+  poseCharacterTwoHandRifleIk(playerTpsRoot, playerTpsWeaponMount, 0, 0, 0);
   scene.add(playerTpsRoot);
 }
 
@@ -994,14 +1377,14 @@ function spawnEnemySquad() {
   enemies.length = 0;
 
   const squadSpawns: { name: string; pos: [number, number, number]; patrol: [number, number][]; clip: string }[] = [
-    { name: '武装兵 Alpha (West Dock)', pos: [-6.5, 0.0, 10.5], patrol: [[-6.5, 10.5], [-6.5, 1.5]], clip: 'Pistol_Aim_Neutral' },
+    { name: '武装兵 Alpha (West Dock)', pos: [-6.5, 0.0, 10.5], patrol: [[-6.5, 10.5], [-6.5, 1.5]], clip: 'Idle_Loop' },
     { name: '武装兵 Bravo (Crane Guard)', pos: [-5.2, 0.0, -9.5], patrol: [[-5.2, -9.5], [-8.2, -16.0]], clip: 'Walk_Loop' },
-    { name: '武装兵 Charlie (Center Alley)', pos: [3.2, 0.0, 8.0], patrol: [[3.2, 8.0], [3.2, -2.0]], clip: 'Pistol_Aim_Neutral' },
-    { name: '武装兵 Delta (Overhead Catwalk)', pos: [6.2, 5.34, 4.0], patrol: [[6.2, 4.0], [6.2, -8.0]], clip: 'Pistol_Aim_Down' },
+    { name: '武装兵 Charlie (Center Alley)', pos: [3.2, 0.0, 8.0], patrol: [[3.2, 8.0], [3.2, -2.0]], clip: 'Idle_Loop' },
+    { name: '武装兵 Delta (Overhead Catwalk)', pos: [6.2, 5.34, 4.0], patrol: [[6.2, 4.0], [6.2, -8.0]], clip: 'Idle_Loop' },
     { name: '武装兵 Echo (Guard Post)', pos: [12.5, 0.0, 14.5], patrol: [[12.5, 14.5], [15.5, 8.5]], clip: 'Walk_Loop' },
     { name: '武装兵 Foxtrot (Warehouse Bay)', pos: [16.5, 0.0, -5.5], patrol: [[16.5, -5.5], [20.5, -12.0]], clip: 'Crouch_Idle_Loop' },
     { name: '武装兵 Golf (North Terminal)', pos: [0.5, 0.0, -19.5], patrol: [[0.5, -19.5], [-6.5, -21.0]], clip: 'Walk_Loop' },
-    { name: '武装兵 Commander (Ship Deck)', pos: [-26.5, 6.6, -12.0], patrol: [[-26.5, -12.0], [-26.5, -4.0]], clip: 'Pistol_Aim_Neutral' },
+    { name: '武装兵 Commander (Ship Deck)', pos: [-26.5, 6.6, -12.0], patrol: [[-26.5, -12.0], [-26.5, -4.0]], clip: 'Idle_Loop' },
   ];
 
   squadSpawns.forEach((sp, idx) => {
@@ -1025,7 +1408,7 @@ function spawnEnemySquad() {
       new THREE.SphereGeometry(0.12, 8, 8),
       new THREE.MeshBasicMaterial({ color: 0xffaa22, transparent: true, opacity: 0 })
     );
-    mf.position.set(-0.18, 1.38, 0.55);
+    mf.position.set(-0.10, 1.38, 0.72);
     cloned.add(mf);
 
     scene.add(cloned);
@@ -1048,8 +1431,9 @@ function spawnEnemySquad() {
       muzzleFlash: mf,
     };
     playEnemyClip(actor, sp.clip, true);
-    // Advance mixer slightly so pose is immediately applied even in capture mode
+    // Advance mixer slightly so pose is immediately applied even in capture mode, then lock both hands onto the horizontal rifle via 2-Bone IK!
     mixer.update(0.25 + idx * 0.15);
+    poseCharacterTwoHandRifleIk(cloned, undefined, sp.pos[1] > 2.5 ? -0.22 : 0.0, 0, 0);
     enemies.push(actor);
   });
   updateObjectiveHud();
@@ -2009,12 +2393,14 @@ function stepSimulation(dt: number, elapsedSec: number) {
   if (rainLines && !captureMode) {
     rainLines.position.y = -((t * 18) % 4.0);
   }
-  for (let i = 0; i < puddleRipples.length; i++) {
-    const pr = puddleRipples[i];
-    pr.phase = captureMode ? (i * 0.21) % 1.0 : (pr.phase + dt * pr.speed) % 1.0;
-    const p = pr.phase;
-    pr.mesh.scale.setScalar(0.35 + p * 2.15);
-    (pr.mesh.material as THREE.MeshBasicMaterial).opacity = Math.sin(p * Math.PI) * 0.42;
+  if (puddleShaderMat) {
+    puddleShaderMat.uniforms.uTime.value = t;
+  }
+  if (harborSeaWater && harborSeaWater.material) {
+    const seaMat = harborSeaWater.material as THREE.ShaderMaterial;
+    if (seaMat.uniforms?.time) {
+      seaMat.uniforms.time.value = t * 0.65;
+    }
   }
 
   if (loadoutOpen) {
@@ -2100,11 +2486,19 @@ function stepSimulation(dt: number, elapsedSec: number) {
           playPlayerTpsClip('Jog_Fwd_Loop', true);
         }
       } else {
-        playPlayerTpsClip(player.crouching ? 'Crouch_Idle_Loop' : 'Pistol_Aim_Neutral', true);
+        playPlayerTpsClip(player.crouching ? 'Crouch_Idle_Loop' : 'Idle_Loop', true);
       }
       if (playerTpsMixer) {
         playerTpsMixer.update(dt);
       }
+      const reloadPct = player.reloading ? Math.min(1, player.reloadTimer / WEAPONS[activeWeaponIdx].reloadTime) : 0;
+      poseCharacterTwoHandRifleIk(
+        playerTpsRoot,
+        playerTpsWeaponMount || undefined,
+        player.pitch + player.recoilPitch,
+        player.recoilOffsetZ,
+        reloadPct
+      );
     }
 
     const eyeHeight = player.crouching ? 1.15 : 1.72;
@@ -2168,6 +2562,9 @@ function stepSimulation(dt: number, elapsedSec: number) {
       weaponMount.rotation.x *= 0.85;
       weaponMount.rotation.z *= 0.85;
     }
+
+    // Solve Two-Handed Rifle IK for First-Person CC0 Arms against active weapon grip & foregrip
+    updateFirstPersonCc0HandsIk();
 
     // Auto-fire for AR-7
     if (mouseDownLeft && w.fireMode === 'AUTO') {
@@ -2354,8 +2751,9 @@ function stepSimulation(dt: number, elapsedSec: number) {
         e.stateTimer -= dt;
         if (e.stateTimer <= 0) {
           e.state = 'COMBAT';
-          playEnemyClip(e, 'Pistol_Aim_Neutral', true);
+          playEnemyClip(e, 'Idle_Loop', true);
         }
+        poseCharacterTwoHandRifleIk(e.root, undefined, e.baseY > 2.5 ? -0.22 : 0.0, 0, 0);
         continue;
       }
 
@@ -2372,12 +2770,14 @@ function stepSimulation(dt: number, elapsedSec: number) {
           e.root.rotation.y = Math.atan2(dx, dz);
           playEnemyClip(e, 'Walk_Loop', true);
         }
+        poseCharacterTwoHandRifleIk(e.root, undefined, -0.06, 0, 0);
         if (dist < 22) {
           e.state = 'COMBAT';
         }
       } else if (e.state === 'COMBAT') {
         e.root.rotation.y = Math.atan2(toPlayer.x, toPlayer.z);
-        playEnemyClip(e, e.baseY > 2.5 ? 'Pistol_Aim_Down' : 'Pistol_Aim_Neutral', true);
+        playEnemyClip(e, 'Idle_Loop', true);
+        poseCharacterTwoHandRifleIk(e.root, undefined, e.baseY > 2.5 ? -0.22 : 0.0, 0, 0);
         e.fireCooldown -= dt;
         if (e.fireCooldown <= 0 && dist < 34) {
           e.fireCooldown = 1.45 + Math.random() * 0.8;
@@ -2429,6 +2829,18 @@ function stepSimulation(dt: number, elapsedSec: number) {
   renderMinimap();
 }
 
+function renderSceneWithWater(forceReflection = true) {
+  if (forceReflection) {
+    renderer.shadowMap.needsUpdate = true;
+    updateGroundPlanarReflection();
+  } else {
+    reflectionFrameTick++;
+    if (reflectionFrameTick % 4 === 0) renderer.shadowMap.needsUpdate = true;
+    if (reflectionFrameTick % 2 === 0) updateGroundPlanarReflection();
+  }
+  renderer.render(scene, camera);
+}
+
 function animate(now: number) {
   requestAnimationFrame(animate);
   const rawDt = now - lastTime;
@@ -2439,7 +2851,7 @@ function animate(now: number) {
   }
   const dt = Math.min(0.05, rawDt / 1000);
   stepSimulation(dt, now / 1000);
-  renderer.render(scene, camera);
+  renderSceneWithWater(false);
 
   if (now - lastPerfHudUpdate > 400) {
     lastPerfHudUpdate = now;
@@ -2463,7 +2875,7 @@ window.addEventListener('resize', () => {
 (window as unknown as Record<string, unknown>).__fpsApi = {
   setCamera: (camKey: string | null) => {
     applyNamedCamera(camKey);
-    renderer.render(scene, camera);
+    renderSceneWithWater();
   },
   setPlayerPose: (x: number, y: number, z: number, yaw: number, pitch = 0) => {
     player.fixedCameraKey = null;
@@ -2474,47 +2886,48 @@ window.addEventListener('resize', () => {
     player.yaw = yaw;
     player.pitch = pitch;
     stepSimulation(0.016, 1.5);
-    renderer.render(scene, camera);
+    renderSceneWithWater();
   },
   setThirdPerson: (tp: boolean) => {
     setThirdPersonMode(tp);
     stepSimulation(0.04, 1.5);
-    renderer.render(scene, camera);
+    renderSceneWithWater();
   },
   equipWeapon: (idx: number) => {
     equipWeapon(idx);
-    renderer.render(scene, camera);
+    updateFirstPersonCc0HandsIk();
+    renderSceneWithWater();
   },
   setAds: (ads: boolean) => {
     setAdsState(ads);
     stepSimulation(0.08, 1.5);
-    renderer.render(scene, camera);
+    renderSceneWithWater();
   },
   fire: () => {
     player.fireTimer = 0;
     fireCurrentWeapon();
     stepSimulation(0.016, 1.5);
-    renderer.render(scene, camera);
+    renderSceneWithWater();
   },
   detonateAt: (x: number, y: number, z: number, advanceSec = 0.18) => {
     triggerExplosionAt(new THREE.Vector3(x, y, z), 8.5, 190);
     stepSimulation(advanceSec, 1.5);
-    renderer.render(scene, camera);
+    renderSceneWithWater();
   },
   reload: () => {
     const w = WEAPONS[activeWeaponIdx];
     w.mag = Math.max(1, w.mag - 5);
     startReload();
     stepSimulation(0.35, 1.5);
-    renderer.render(scene, camera);
+    renderSceneWithWater();
   },
   toggleLoadout: (open: boolean) => {
     toggleLoadoutModal(open);
-    renderer.render(scene, camera);
+    renderSceneWithWater();
   },
   openMissionComplete: () => {
     openMissionCompleteModal();
-    renderer.render(scene, camera);
+    renderSceneWithWater();
   },
   closeModals: () => {
     toggleLoadoutModal(false);
@@ -2522,7 +2935,7 @@ window.addEventListener('resize', () => {
     document.getElementById('mission-modal')?.classList.add('hidden');
     document.getElementById('hud')?.classList.remove('hidden');
     fpRig.visible = true;
-    renderer.render(scene, camera);
+    renderSceneWithWater();
   },
   getPerf: () => getPerfSummary(),
   getState: () => ({
