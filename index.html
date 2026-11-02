@@ -49,19 +49,25 @@
         </div>
       </div>
 
-      <!-- Top-Right Killfeed & Perf Telemetry -->
+      <!-- Top-Right Killfeed, Gyroscope Controls & Perf Telemetry -->
       <div class="hud-top-right">
         <div id="perf-badge" class="perf-badge">FPS: -- | P95: -- ms | DC: --</div>
+        <div id="gyro-control-bar" class="gyro-control-bar">
+          <button id="btn-gyro-toggle" class="gyro-btn" title="開啟/關閉手機陀螺儀體感瞄準 (Key: Y)">🎯 陀螺儀瞄準: OFF</button>
+          <button id="btn-gyro-cal" class="gyro-btn gyro-sub-btn" title="將目前手機姿態設為準星中心">校準</button>
+          <button id="btn-gyro-sens" class="gyro-btn gyro-sub-btn" title="切換陀螺儀靈敏度倍率">1.0x</button>
+        </div>
         <div id="killfeed" class="killfeed"></div>
       </div>
 
-      <!-- Center Reticle, Hitmarker & Reload / Kill Popups -->
+      <!-- Center Reticle, Hitmarker, Directional Damage Arc & Reload / Kill Popups -->
       <div id="reticle-wrap" class="reticle-wrap">
         <div class="reticle-line ret-top"></div>
         <div class="reticle-line ret-bottom"></div>
         <div class="reticle-line ret-left"></div>
         <div class="reticle-line ret-right"></div>
         <div id="hitmarker" class="hitmarker hidden"></div>
+        <div id="damage-dir-arc" class="damage-dir-arc hidden"></div>
       </div>
 
       <div id="reload-box" class="reload-box hidden">
@@ -92,7 +98,7 @@
         </div>
         <div class="stance-indicator">
           <span id="stance-text">STAND // 站立</span>
-          <span class="controls-hint">[WASD]移動 [Shift]衝刺 [C]蹲下 [R]換彈 [右鍵]瞄準 [1/2/3]切槍 [P]第一/三人稱 [L]武器庫</span>
+          <span class="controls-hint">[WASD]移動 [Q/E]探頭 [C]蹲下 [B]射擊模式 [F]近戰 [G]手榴彈 [1-5]切槍 [Y]陀螺儀 [P]視角 [L]武器庫</span>
         </div>
       </div>
 
@@ -100,14 +106,19 @@
       <div class="hud-weapon-wrap">
         <div class="weapon-slots">
           <div id="slot-1" class="weapon-slot active"><span class="slot-key">1</span><span class="slot-name">AR-7</span></div>
-          <div id="slot-2" class="weapon-slot"><span class="slot-key">2</span><span class="slot-name">SR-9</span></div>
-          <div id="slot-3" class="weapon-slot"><span class="slot-key">3</span><span class="slot-name">RL-7</span></div>
+          <div id="slot-2" class="weapon-slot"><span class="slot-key">2</span><span class="slot-name">SMG-9</span></div>
+          <div id="slot-3" class="weapon-slot"><span class="slot-key">3</span><span class="slot-name">SG-12</span></div>
+          <div id="slot-4" class="weapon-slot"><span class="slot-key">4</span><span class="slot-name">SR-9</span></div>
+          <div id="slot-5" class="weapon-slot"><span class="slot-key">5</span><span class="slot-name">RL-7</span></div>
         </div>
         <div class="ammo-card">
           <div class="weapon-silhouette-col">
             <div id="weapon-icon-svg" class="weapon-silhouette">︻╦╤─</div>
             <div id="weapon-title" class="weapon-title">AR-7 カービン</div>
-            <div class="hazard-stripe-mini"></div>
+            <div class="tactical-gadget-row">
+              <span class="hazard-stripe-mini"></span>
+              <span id="grenade-badge" class="grenade-badge" title="[G] 投擲 M67 破片手榴彈">💣 [G] x3</span>
+            </div>
           </div>
           <div class="ammo-count-col">
             <div class="ammo-numbers">
@@ -116,10 +127,28 @@
               <span id="ammo-reserve" class="ammo-reserve">120</span>
             </div>
             <div class="fire-mode-row">
-              <span id="fire-mode-badge" class="fire-mode-badge">AUTO</span>
+              <span id="fire-mode-badge" class="fire-mode-badge" title="[B] 切換射擊模式 (AUTO/BURST/SEMI)">AUTO</span>
               <div id="ammo-ticks" class="ammo-ticks">||||||||||||||||||||</div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Mobile Touch & Gyroscope Controls Overlay -->
+      <div id="mobile-touch-controls" class="mobile-touch-controls">
+        <div id="touch-joystick-zone" class="touch-joystick-zone">
+          <div id="touch-joystick-knob" class="touch-joystick-knob"></div>
+        </div>
+        <div class="touch-action-cluster">
+          <button id="touch-btn-lean-l" class="touch-btn touch-btn-sm">↖探頭</button>
+          <button id="touch-btn-lean-r" class="touch-btn touch-btn-sm">探頭↗</button>
+          <button id="touch-btn-mode" class="touch-btn touch-btn-sm">模式</button>
+          <button id="touch-btn-melee" class="touch-btn touch-btn-sm">👊近戰</button>
+          <button id="touch-btn-grenade" class="touch-btn">💣手雷</button>
+          <button id="touch-btn-reload" class="touch-btn">🔄換彈</button>
+          <button id="touch-btn-crouch" class="touch-btn">蹲下</button>
+          <button id="touch-btn-ads" class="touch-btn touch-btn-ads">🎯瞄準</button>
+          <button id="touch-btn-fire" class="touch-btn touch-btn-fire">🔥射擊</button>
         </div>
       </div>
     </div>
@@ -131,8 +160,10 @@
           <div class="loadout-title">LOADOUT <span class="sub-tag">// 戰術裝備檢視</span></div>
           <div class="loadout-tabs">
             <button data-wep="0" class="loadout-tab active">[1] AR-7 カービン</button>
-            <button data-wep="1" class="loadout-tab">[2] SR-9 スナイパー</button>
-            <button data-wep="2" class="loadout-tab">[3] RL-7 ロケット</button>
+            <button data-wep="1" class="loadout-tab">[2] SMG-9 タクティカル</button>
+            <button data-wep="2" class="loadout-tab">[3] SG-12 ブリーチャー</button>
+            <button data-wep="3" class="loadout-tab">[4] SR-9 スナイパー</button>
+            <button data-wep="4" class="loadout-tab">[5] RL-7 ロケット</button>
           </div>
           <div class="loadout-code">CONTAINER ARMS // A 02-17</div>
         </div>
@@ -152,7 +183,7 @@
           </div>
         </div>
         <div class="loadout-footer">
-          <span>[1/2/3] 切換武器</span>
+          <span>[1-5] 切換武器</span>
           <span>[滑鼠拖曳] 旋轉檢視</span>
           <span>[L / Esc] 返回戰鬥</span>
         </div>

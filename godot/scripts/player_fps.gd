@@ -15,10 +15,16 @@ var armor: float = 150.0
 var is_crouching: bool = false
 var is_ads: bool = false
 var is_reloading: bool = false
+var gyro_enabled: bool = false
+var gyro_sensitivity: float = 0.85
+var lean_target: float = 0.0
+var lean_amount: float = 0.0
 var active_weapon_idx: int = 0
 
 var weapons := [
-	{"id": "ar7", "name": "AR-7 カービン", "dmg": 34.0, "hs_mult": 2.2, "mag": 36, "mag_max": 36, "res": 120, "rate": 0.105, "ads_fov": 44.0, "sfx": "res://assets/audio/ar7_shot.wav"},
+	{"id": "ar7", "name": "AR-7 カービン", "dmg": 34.0, "hs_mult": 2.2, "mag": 36, "mag_max": 36, "res": 144, "rate": 0.105, "ads_fov": 44.0, "sfx": "res://assets/audio/ar7_shot.wav"},
+	{"id": "smg9", "name": "SMG-9 タクティカル", "dmg": 25.0, "hs_mult": 2.0, "mag": 45, "mag_max": 45, "res": 180, "rate": 0.068, "ads_fov": 48.0, "sfx": "res://assets/audio/smg9_shot.wav"},
+	{"id": "sg12", "name": "SG-12 ブリーチャー", "dmg": 152.0, "hs_mult": 1.75, "mag": 8, "mag_max": 8, "res": 40, "rate": 0.42, "ads_fov": 50.0, "sfx": "res://assets/audio/sg12_shot.wav"},
 	{"id": "sr9", "name": "SR-9 スナイパー", "dmg": 115.0, "hs_mult": 2.5, "mag": 5, "mag_max": 5, "res": 25, "rate": 1.05, "ads_fov": 16.0, "sfx": "res://assets/audio/sr9_shot.wav"},
 	{"id": "rl7", "name": "RL-7 ロケット", "dmg": 180.0, "hs_mult": 1.2, "mag": 1, "mag_max": 1, "res": 5, "rate": 1.35, "ads_fov": 48.0, "sfx": "res://assets/audio/rl7_shot.wav"},
 ]
@@ -46,6 +52,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			_switch_weapon(1)
 		elif event.keycode == KEY_3:
 			_switch_weapon(2)
+		elif event.keycode == KEY_4:
+			_switch_weapon(3)
+		elif event.keycode == KEY_5:
+			_switch_weapon(4)
+		elif event.keycode == KEY_Y:
+			gyro_enabled = not gyro_enabled
+		elif event.keycode == KEY_Q:
+			lean_target = -1.0 if lean_target >= 0.0 else 0.0
+		elif event.keycode == KEY_E:
+			lean_target = 1.0 if lean_target <= 0.0 else 0.0
 		elif event.keycode == KEY_R:
 			_reload_weapon()
 		elif event.keycode == KEY_C:
@@ -54,6 +70,15 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _physics_process(delta: float) -> void:
 	fire_cooldown = max(0.0, fire_cooldown - delta)
+	if gyro_enabled:
+		var gyro_rate := Input.get_gyroscope()
+		var sens_mult := 0.58 if is_ads else 1.0
+		rotate_y(gyro_rate.y * delta * gyro_sensitivity * sens_mult)
+		camera.rotate_x(gyro_rate.x * delta * gyro_sensitivity * sens_mult)
+		camera.rotation.x = clamp(camera.rotation.x, -1.35, 1.35)
+	lean_amount = lerpf(lean_amount, lean_target, min(1.0, delta * 11.5))
+	camera.rotation.z = -lean_amount * 0.21
+	$Head.position.x = lean_amount * 0.38
 	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
 	elif Input.is_key_pressed(KEY_SPACE):

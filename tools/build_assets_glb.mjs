@@ -469,7 +469,8 @@ function appendBox(geom, cx, cy, cz, sx, sy, sz, uvScale = 1) {
     { n: [0, 0, -1], v: [[hx, -hy, -hz], [-hx, -hy, -hz], [-hx, hy, -hz], [hx, hy, -hz]], u: [sx, sy] },
     { n: [1, 0, 0], v: [[hx, -hy, hz], [hx, -hy, -hz], [hx, hy, -hz], [hx, hy, hz]], u: [sz, sy] },
     { n: [-1, 0, 0], v: [[-hx, -hy, -hz], [-hx, -hy, hz], [-hx, hy, hz], [-hx, hy, -hz]], u: [sz, sy] },
-    { n: [0, 1, 0], v: [[-hx, hy, hz], [hx, hy, hz], [hx, hy, -hz], [-hx, hy, -hz]], u: [sx, sz] },
+    // Top/Bottom faces map U along the longer horizontal dimension so rotated container roofs never show perpendicular stripes!
+    { n: [0, 1, 0], v: sx > sz ? [[-hx, hy, -hz], [-hx, hy, hz], [hx, hy, hz], [hx, hy, -hz]] : [[-hx, hy, hz], [hx, hy, hz], [hx, hy, -hz], [-hx, hy, -hz]], u: sx > sz ? [sz, sx] : [sx, sz] },
     { n: [0, -1, 0], v: [[-hx, -hy, -hz], [hx, -hy, -hz], [hx, -hy, hz], [-hx, -hy, hz]], u: [sx, sz] },
   ];
   for (const f of faces) {
@@ -477,6 +478,33 @@ function appendBox(geom, cx, cy, cz, sx, sy, sz, uvScale = 1) {
     for (let i = 0; i < 4; i++) {
       geom.positions.push(cx + f.v[i][0], cy + f.v[i][1], cz + f.v[i][2]);
       geom.normals.push(f.n[0], f.n[1], f.n[2]);
+    }
+    const uMax = f.u[0] * uvScale, vMax = f.u[1] * uvScale;
+    geom.uvs.push(0, 0, uMax, 0, uMax, vMax, 0, vMax);
+    geom.indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
+}
+
+function appendRotatedYBox(geom, cx, cy, cz, sx, sy, sz, angleRad = 0, uvScale = 1) {
+  const hx = sx / 2, hy = sy / 2, hz = sz / 2;
+  const ca = Math.cos(angleRad), sa = Math.sin(angleRad);
+  const rot = (x, y, z) => [cx + x * ca + z * sa, cy + y, cz - x * sa + z * ca];
+  const rotN = (nx, ny, nz) => [nx * ca + nz * sa, ny, -nx * sa + nz * ca];
+  const faces = [
+    { n: [0, 0, 1], v: [[-hx, -hy, hz], [hx, -hy, hz], [hx, hy, hz], [-hx, hy, hz]], u: [sx, sy] },
+    { n: [0, 0, -1], v: [[hx, -hy, -hz], [-hx, -hy, -hz], [-hx, hy, -hz], [hx, hy, -hz]], u: [sx, sy] },
+    { n: [1, 0, 0], v: [[hx, -hy, hz], [hx, -hy, -hz], [hx, hy, -hz], [hx, hy, hz]], u: [sz, sy] },
+    { n: [-1, 0, 0], v: [[-hx, -hy, -hz], [-hx, -hy, hz], [-hx, hy, hz], [-hx, hy, -hz]], u: [sz, sy] },
+    { n: [0, 1, 0], v: [[-hx, hy, hz], [hx, hy, hz], [hx, hy, -hz], [-hx, hy, -hz]], u: [sx, sz] },
+    { n: [0, -1, 0], v: [[-hx, -hy, -hz], [hx, -hy, -hz], [hx, -hy, hz], [-hx, -hy, hz]], u: [sx, sz] },
+  ];
+  for (const f of faces) {
+    const base = geom.positions.length / 3;
+    const rn = rotN(f.n[0], f.n[1], f.n[2]);
+    for (let i = 0; i < 4; i++) {
+      const rp = rot(f.v[i][0], f.v[i][1], f.v[i][2]);
+      geom.positions.push(rp[0], rp[1], rp[2]);
+      geom.normals.push(rn[0], rn[1], rn[2]);
     }
     const uMax = f.u[0] * uvScale, vMax = f.u[1] * uvScale;
     geom.uvs.push(0, 0, uMax, 0, uMax, vMax, 0, vMax);
@@ -880,9 +908,97 @@ function buildWeaponsPackGlb() {
     b.addMeshPrimitive('RL7_Lens', rlLens.positions, rlLens.normals, rlLens.uvs, rlLens.indices, matGlass),
   ]);
 
-  b.RootNodes.push(arNode, srNode, rlNode);
+  // --- Weapon 4: SMG-9 Suppressed Tactical Submachine Gun ---
+  const smgMetal = makeGeometryCollector();
+  const smgSteel = makeGeometryCollector();
+  const smgPoly = makeGeometryCollector();
+  const smgLens = makeGeometryCollector();
+  const smgRet = makeGeometryCollector();
+  const smgLaser = makeGeometryCollector();
+
+  // Compact CNC Upper/Lower Receiver & Flared 9mm Magwell
+  appendBox(smgMetal, 0, 0.032, -0.02, 0.038, 0.044, 0.21, 0.8);
+  appendBox(smgPoly, 0, -0.004, -0.015, 0.036, 0.034, 0.18, 0.8);
+  appendBox(smgMetal, 0, 0.042, -0.175, 0.034, 0.032, 0.14, 0.8); // Compact Quad-Rail Forend
+  for (let z = -0.23; z <= 0.06; z += 0.016) {
+    appendBox(smgMetal, 0, 0.056, z, 0.022, 0.005, 0.008, 0.5); // Top Picatinny Rail
+  }
+  // Integrated Knurled cylindrical Sound Suppressor (Silencer)
+  appendCylinder(smgSteel, 0, 0.032, -0.34, 0.019, 0.019, 0.22, 16, 'z');
+  for (const sz of [-0.27, -0.34, -0.41]) {
+    appendCylinder(smgMetal, 0, 0.032, sz, 0.0205, 0.0205, 0.014, 16, 'z'); // Suppressor heat-dissipation rings
+  }
+  // Trijicon RMR Micro Reflex Sight on Riser Mount
+  appendBox(smgMetal, 0, 0.066, -0.02, 0.030, 0.016, 0.044, 0.5);
+  appendBox(smgMetal, -0.014, 0.084, -0.02, 0.004, 0.024, 0.032, 0.5);
+  appendBox(smgMetal, 0.014, 0.084, -0.02, 0.004, 0.024, 0.032, 0.5);
+  appendBox(smgLens, 0, 0.084, -0.02, 0.024, 0.020, 0.003, 0.5);
+  appendBox(smgRet, 0, 0.084, -0.022, 0.0035, 0.0035, 0.002, 0.5);
+  // Side-Mounted Tactical Green Laser Pointer Module
+  appendBox(smgPoly, 0.024, 0.032, -0.19, 0.016, 0.020, 0.055, 0.5);
+  appendCylinder(smgLaser, 0.024, 0.032, -0.22, 0.0045, 0.0045, 0.006, 10, 'z');
+  // Dual-Bar Skeleton Folding Stock & Ergonomic Grip + Stubby Foregrip + Extended 45-rd Curved 9mm Mag
+  appendBeam(smgSteel, -0.012, 0.036, 0.08, -0.012, 0.028, 0.24, 0.005, 8);
+  appendBeam(smgSteel, 0.012, 0.014, 0.08, 0.012, 0.006, 0.24, 0.005, 8);
+  appendBox(smgPoly, 0, 0.012, 0.245, 0.034, 0.095, 0.020, 0.5);
+  appendBeam(smgPoly, 0, -0.01, 0.035, 0, -0.092, 0.062, 0.018, 10); // Pistol grip
+  appendCylinder(smgPoly, 0, -0.042, -0.20, 0.014, 0.013, 0.068, 12, 'y'); // Stubby vertical foregrip
+  appendBeam(smgPoly, 0, -0.02, -0.065, 0, -0.175, -0.095, 0.014, 8); // Extended 45-rd curved mag
+  appendBox(smgPoly, 0, -0.095, -0.078, 0.022, 0.155, 0.034, 0.5);
+
+  const smgNode = b.addNode('SMG9_Tactical', [
+    b.addMeshPrimitive('SMG9_Metal', smgMetal.positions, smgMetal.normals, smgMetal.uvs, smgMetal.indices, matGunmetal),
+    b.addMeshPrimitive('SMG9_Steel', smgSteel.positions, smgSteel.normals, smgSteel.uvs, smgSteel.indices, matDarkSteel),
+    b.addMeshPrimitive('SMG9_Polymer', smgPoly.positions, smgPoly.normals, smgPoly.uvs, smgPoly.indices, matPolymer),
+    b.addMeshPrimitive('SMG9_Lens', smgLens.positions, smgLens.normals, smgLens.uvs, smgLens.indices, matGlass),
+    b.addMeshPrimitive('SMG9_Reticle', smgRet.positions, smgRet.normals, smgRet.uvs, smgRet.indices, matReticle),
+    b.addMeshPrimitive('SMG9_Laser', smgLaser.positions, smgLaser.normals, smgLaser.uvs, smgLaser.indices, matLaserGreen),
+  ]);
+
+  // --- Weapon 5: SG-12 Tactical Semi-Auto Breacher Shotgun ---
+  const sgMetal = makeGeometryCollector();
+  const sgSteel = makeGeometryCollector();
+  const sgPoly = makeGeometryCollector();
+  const sgShells = makeGeometryCollector();
+  const sgBrass = makeGeometryCollector();
+
+  // Heavy Combat Receiver & Top Picatinny Rail + Ghost Ring Sight
+  appendBox(sgMetal, 0, 0.030, -0.02, 0.042, 0.048, 0.24, 0.8);
+  appendBox(sgSteel, 0.022, 0.032, -0.03, 0.004, 0.018, 0.075, 0.5); // Silver bolt carrier in ejection port
+  appendBox(sgMetal, 0, 0.060, 0.07, 0.026, 0.016, 0.024, 0.5);      // Ghost ring rear aperture
+  // 18.5" Heavy Breacher Barrel + Full-Length Under-Barrel Tube Magazine + Slotted Heat Shield
+  appendCylinder(sgSteel, 0, 0.042, -0.35, 0.0135, 0.0145, 0.48, 16, 'z'); // Upper shotgun barrel
+  appendCylinder(sgMetal, 0, 0.014, -0.33, 0.0125, 0.0125, 0.44, 16, 'z'); // Lower 8-shell tube magazine
+  appendBox(sgMetal, 0, 0.028, -0.48, 0.030, 0.038, 0.024, 0.5);           // Barrel/Mag clamp bracket
+  appendCylinder(sgSteel, 0, 0.042, -0.60, 0.016, 0.015, 0.045, 14, 'z');  // Stand-off toothed Door Breacher Choke
+  // Ribbed Polymer Pump/Forend Action & Tactical Pistol Grip Stock
+  appendCylinder(sgPoly, 0, 0.012, -0.26, 0.022, 0.022, 0.19, 14, 'z');
+  for (let z = -0.33; z <= -0.19; z += 0.024) {
+    appendCylinder(sgPoly, 0, 0.012, z, 0.024, 0.024, 0.008, 14, 'z'); // Forend grip ribs
+  }
+  appendBeam(sgPoly, 0, -0.008, 0.06, 0, -0.092, 0.088, 0.019, 10); // Pistol grip
+  appendBox(sgPoly, 0, 0.014, 0.20, 0.038, 0.042, 0.22, 0.6);       // Fixed tactical stock comb
+  appendBox(sgPoly, 0, -0.012, 0.29, 0.042, 0.115, 0.028, 0.6);     // Heavy rubber recoil pad
+  appendBeam(sgPoly, 0, -0.055, 0.28, 0, 0.005, 0.11, 0.014, 8);
+  // Side-Saddle 6-Shell Carrier with Red 12-Gauge Buckshot Shells & Brass Bases!
+  appendBox(sgPoly, -0.023, 0.028, -0.02, 0.008, 0.038, 0.15, 0.5);
+  for (let i = 0; i < 6; i++) {
+    const sz = -0.075 + i * 0.022;
+    appendCylinder(sgShells, -0.028, 0.030, sz, 0.008, 0.008, 0.046, 10, 'y'); // Red 12ga hull
+    appendCylinder(sgBrass, -0.028, 0.054, sz, 0.0085, 0.0085, 0.010, 10, 'y'); // Brass rim
+  }
+
+  const sgNode = b.addNode('SG12_Shotgun', [
+    b.addMeshPrimitive('SG12_Metal', sgMetal.positions, sgMetal.normals, sgMetal.uvs, sgMetal.indices, matGunmetal),
+    b.addMeshPrimitive('SG12_Steel', sgSteel.positions, sgSteel.normals, sgSteel.uvs, sgSteel.indices, matDarkSteel),
+    b.addMeshPrimitive('SG12_Polymer', sgPoly.positions, sgPoly.normals, sgPoly.uvs, sgPoly.indices, matPolymer),
+    b.addMeshPrimitive('SG12_Shells', sgShells.positions, sgShells.normals, sgShells.uvs, sgShells.indices, matReticle),
+    b.addMeshPrimitive('SG12_Brass', sgBrass.positions, sgBrass.normals, sgBrass.uvs, sgBrass.indices, matBrass),
+  ]);
+
+  b.RootNodes.push(arNode, srNode, rlNode, smgNode, sgNode);
   fs.writeFileSync(path.join(OUT_MODELS, 'weapons_pack.glb'), b.toGlbBuffer());
-  console.log('Saved public/assets/models/weapons_pack.glb');
+  console.log('Saved public/assets/models/weapons_pack.glb (5 Tactical Weapons)');
 }
 
 // ---------------------------------------------------------------------------
@@ -1031,8 +1147,16 @@ function buildPortEnvironmentGlb() {
     appendBox(gWindows, -25.8, 9.5, wz, 0.1, 0.9, 1.1, 1);
     appendBox(gWindows, -26.7, 13.5, wz - 3, 0.1, 0.9, 1.1, 1);
   }
-  // Boarding Gangway Ramp connecting Dock (x = -23.5, z = -12) to Ship Deck (x = -25, y = 6.5)
+  // Ship Starboard Lifeboat Davits, Orange Enclosed Lifeboat & Accommodation Ladder (Matching CAM_HERO)
+  appendBox(gDarkSteel, -25.6, 10.6, -16.2, 1.4, 1.8, 0.22, 0.5); // Forward davit arm
+  appendBox(gDarkSteel, -25.6, 10.6, -20.2, 1.4, 1.8, 0.22, 0.5); // Aft davit arm
+  appendBox(gExplosive, -25.2, 9.6, -18.2, 1.45, 1.05, 4.4, 0.4); // Bright orange enclosed lifeboat hull
+  appendBox(gWindows, -24.46, 9.85, -18.2, 0.08, 0.32, 2.2, 1);   // Lifeboat canopy viewport
+  appendBox(gLamps, -26.0, 17.8, -21.7, 0.85, 0.28, 0.45, 1);     // Bridge wing searchlight
+  // Boarding Gangway Ramp connecting Dock (x = -23.5, z = -12) to Ship Deck (x = -25, y = 6.5) + Handrails
   appendBox(gSteel, -24.2, 3.2, -12, 2.2, 0.3, 12.5, 0.3);
+  appendBeam(gDarkSteel, -23.2, 0.9, -5.8, -23.2, 6.8, -18.2, 0.045, 6);
+  appendBeam(gDarkSteel, -25.2, 0.9, -5.8, -25.2, 6.8, -18.2, 0.045, 6);
 
   // 3. Towering Port Gantry Crane straddling West Lane (x = -11.5 to -3.5, z = -18)
   const craneZ = -18;
@@ -1140,6 +1264,24 @@ function buildPortEnvironmentGlb() {
   // 5. Elevated Steel Catwalk & Walkable Staircases (concept-to-playable-3d: slope <= 0.8)
   appendBox(gSteel, 6.2, 5.25, -2, 2.2, 0.18, 32, 0.3);
   appendBox(gSteel, -0.5, 5.25, 2, 14.0, 0.18, 2.2, 0.3); // Overhead bridge across combat lane!
+  // Heavy Structural H-Beam Under-Girders, Support Columns, Knee Braces & Under-Bridge Lights (Matching CAM_LANE)
+  appendBox(gDarkSteel, -0.5, 5.04, 0.98, 14.2, 0.24, 0.22, 0.3); // South bridge I-beam girder
+  appendBox(gDarkSteel, -0.5, 5.04, 3.02, 14.2, 0.24, 0.22, 0.3); // North bridge I-beam girder
+  appendBox(gDarkSteel, 5.18, 5.04, -2.0, 0.22, 0.24, 32.0, 0.3); // Main catwalk West girder
+  appendBox(gDarkSteel, 7.22, 5.04, -2.0, 0.22, 0.24, 32.0, 0.3); // Main catwalk East girder
+  for (let gx = -6.5; gx <= 4.5; gx += 2.2) {
+    appendBox(gDarkSteel, gx, 5.06, 2.0, 0.14, 0.18, 2.05, 0.5); // Transverse floor joists under bridge
+  }
+  // Vertical H-Beam Support Columns & Diagonal Knee Braces at Bridge Ends
+  for (const cz of [0.98, 3.02]) {
+    appendBox(gDarkSteel, -2.95, 2.55, cz, 0.24, 5.1, 0.24, 0.4); // West lane support column
+    appendBeam(gDarkSteel, -2.95, 3.8, cz, -1.65, 5.04, cz, 0.08, 6); // West knee brace
+    appendBox(gDarkSteel, 5.18, 2.55, cz, 0.24, 5.1, 0.24, 0.4);  // East lane support column
+    appendBeam(gDarkSteel, 5.18, 3.8, cz, 3.85, 5.04, cz, 0.08, 6);  // East knee brace
+  }
+  // Under-Bridge Glowing Industrial Bulkhead Utility Lamps (illuminating combat lane below)
+  appendBox(gLamps, -4.2, 5.02, 2.0, 0.75, 0.09, 0.32, 1);
+  appendBox(gLamps, 1.8, 5.02, 2.0, 0.75, 0.09, 0.32, 1);
   // Railings + Vertical Stanchion Posts every 2.5m (matching concept art dense handrail grid)
   appendBox(gDarkSteel, 5.15, 6.15, -2, 0.06, 0.06, 32, 0.3);
   appendBox(gDarkSteel, 5.15, 5.68, -2, 0.05, 0.05, 32, 0.3);
@@ -1200,7 +1342,13 @@ function buildPortEnvironmentGlb() {
     appendBox(gWindows, 22.0, 9.65, sz, 2.2, 0.26, 2.8, 1);
     appendBox(gDarkSteel, 19.0, 8.2, sz, 13.4, 0.25, 0.25, 0.3); // Interior Tie Beam
   }
-  // Warehouse Exterior Wall Sconces, HVAC Ducts & Electrical Conduits
+  // Warehouse Exterior Wall Sconces, HVAC Ducts, Roll-Up Shutter Door & Electrical Conduits
+  appendBox(gDarkSteel, 12.18, 5.35, -5.5, 0.48, 0.65, 8.2, 0.35); // Roll-up shutter door housing drum
+  for (let sy = 4.2; sy <= 5.0; sy += 0.25) {
+    appendBox(gSteel, 12.18, sy, -5.5, 0.16, 0.18, 7.9, 0.4); // Partially lowered steel shutter slats
+  }
+  appendBox(gHazard, 12.0, 1.2, -9.6, 0.28, 2.4, 0.28, 0.5); // North bay door safety bollard
+  appendBox(gHazard, 12.0, 1.2, -1.4, 0.28, 2.4, 0.28, 0.5); // South bay door safety bollard
   appendBox(gDarkSteel, 11.8, 6.2, 2.5, 0.7, 1.1, 1.4, 0.5); // HVAC Unit
   appendBox(gDarkSteel, 11.8, 6.2, -13.5, 0.7, 1.1, 1.4, 0.5);
   appendBox(gLamps, 11.95, 6.2, -5.5, 0.25, 0.25, 1.2, 1); // Bay Door Overhead Lamp
@@ -1287,7 +1435,7 @@ function buildPortEnvironmentGlb() {
 
   // 10. Concrete Jersey Barriers, Fire Barrels, Explosive Red Drums & Tactical Cover Crates
   const barriers = [
-    [-4.5, 24.5, 0], [-0.5, 23.5, 0], [3.5, 23.0, 0], [9.5, 22.5, 0],
+    [-0.5, 23.5, 0], [3.5, 23.0, 0], [9.5, 22.5, 0],
     [-8.5, 10.0, 1], [-8.5, -4.0, 1], [3.5, -14.0, 0], [15.5, -2.0, 0],
   ];
   for (const [bx, bz, rot] of barriers) {
@@ -1295,6 +1443,23 @@ function buildPortEnvironmentGlb() {
     appendBox(gConcrete, bx, 0.22, bz, rot ? 0.82 : 2.8, 0.44, rot ? 2.8 : 0.82, 0.5);
     appendBox(gConcrete, bx, 0.72, bz, rot ? 0.46 : 2.76, 0.68, rot ? 2.76 : 0.46, 0.5);
   }
+  // Angled Defensive Concrete Jersey Barrier Semicircle & Supply Cache around South Foreground Fire Barrel (-3.2, 25.5) (Matching CAM_HERO!)
+  for (const [bx, bz, ang] of [
+    [-5.8, 25.4, 0.46],
+    [-3.4, 24.1, 0.08],
+    [-0.8, 24.8, -0.38],
+  ]) {
+    appendRotatedYBox(gConcrete, bx, 0.22, bz, 2.7, 0.44, 0.82, ang, 0.5);
+    appendRotatedYBox(gConcrete, bx, 0.72, bz, 2.66, 0.68, 0.46, ang, 0.5);
+    appendRotatedYBox(gHazard, bx, 0.96, bz, 2.68, 0.12, 0.48, ang, 0.5); // High-vis hazard stripe along barrier top
+  }
+  // Foreground Palletized Supply Crates & Oil Drum Cluster at South Plaza (Matching CAM_HERO foreground!)
+  appendRotatedYBox(gWood, -5.2, 0.08, 26.8, 1.5, 0.16, 1.4, 0.25, 0.5);
+  appendRotatedYBox(gWood, -5.2, 0.62, 26.8, 1.15, 0.92, 1.15, 0.28, 0.5);
+  appendRotatedYBox(gDarkSteel, -5.2, 1.08, 26.8, 1.19, 0.06, 1.19, 0.28, 0.5);
+  appendCylinder(gDarkSteel, -4.1, 0.48, 26.6, 0.30, 0.30, 0.96, 14, 'y');
+  appendRotatedYBox(gWood, 1.8, 0.08, 25.2, 1.45, 0.16, 1.45, -0.22, 0.5);
+  appendRotatedYBox(gVehicleOD, 1.8, 0.52, 25.2, 1.25, 0.72, 0.85, -0.20, 0.5); // Military ammo supply chest
   // Fire Barrels (with glowing embers + burning wood logs & tipped barrel next to foreground fire!)
   const fireBarrels = [[-3.2, 25.5], [-4.8, 9.5], [4.5, -1.5], [-8.0, -15.0], [15.0, 11.0]];
   for (const [fx, fz] of fireBarrels) {

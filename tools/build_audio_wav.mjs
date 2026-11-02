@@ -127,4 +127,31 @@ writeWav('radio_chatter.wav', synth(0.55, (t, _, rand) => {
   return beep + squelch;
 }));
 
-console.log('Generated 13 spatial WAV audio files in public/assets/audio/');
+// 10. SMG-9 Suppressed Submachine Gun Shot (Crisp pneumatic thump + high-speed bolt snap)
+writeWav('smg9_shot.wav', synth(0.24, (t, _, rand) => {
+  const thump = Math.sin(2 * Math.PI * (210 * Math.exp(-t * 36)) * t) * Math.exp(-t * 28);
+  const hiss = rand() * Math.exp(-t * 42) * 0.65;
+  const bolt = t > 0.025 && t < 0.065 ? Math.sin(2 * Math.PI * 1650 * t) * Math.exp(-(t - 0.025) * 65) * 0.35 : 0;
+  return (thump * 0.72 + hiss + bolt) * 0.92;
+}));
+
+// 11. SG-12 Tactical 12-Gauge Shotgun Blast + Pump/Carrier Cycling
+writeWav('sg12_shot.wav', synth(0.62, (t, _, rand) => {
+  const boom = Math.sin(2 * Math.PI * (92 * Math.exp(-t * 16)) * t) * Math.exp(-t * 12);
+  const pellets = rand() * Math.exp(-t * 19) * 0.95;
+  const rack = t > 0.32 && t < 0.48 ? (Math.sin(2 * Math.PI * 760 * t) * 0.35 + rand() * 0.35) * Math.exp(-(t - 0.32) * 28) : 0;
+  return (boom * 0.85 + pellets + rack) * 0.98;
+}));
+
+// 12. M67 Frag Grenade Metallic Bounce & Pin Pull
+writeWav('grenade_bounce.wav', synth(0.22, (t, _, rand) => {
+  const clink = (Math.sin(2 * Math.PI * 2420 * t) + 0.7 * Math.sin(2 * Math.PI * 3680 * t)) * Math.exp(-t * 28);
+  return clink * 0.65 + rand() * Math.exp(-t * 50) * 0.25;
+}));
+
+// 13. Fire Mode Selector Switch Click & Melee Buttstock Bash
+writeWav('fire_mode_click.wav', synth(0.09, (t, _, rand) => {
+  return (Math.sin(2 * Math.PI * 2150 * t) * 0.6 + rand() * 0.4) * Math.exp(-t * 65);
+}));
+
+console.log('Generated 17 spatial WAV audio files in public/assets/audio/');

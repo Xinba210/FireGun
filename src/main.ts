@@ -11,7 +11,11 @@ interface WeaponSpec {
   category: string;
   desc: string;
   nodeName: string;
-  fireMode: 'AUTO' | 'BOLT' | 'ROCKET';
+  fireMode: 'AUTO' | 'BURST' | 'SEMI' | 'PUMP' | 'BOLT' | 'ROCKET';
+  supportedModes?: ('AUTO' | 'BURST' | 'SEMI')[];
+  pellets?: number;
+  spreadRad?: number;
+  hasGreenLaser?: boolean;
   damage: number;
   headshotMult: number;
   fireInterval: number;
@@ -33,16 +37,17 @@ const WEAPONS: WeaponSpec[] = [
     slot: 1,
     name: 'AR-7 カービン',
     category: 'ASSAULT RIFLE / アサルトライフル',
-    desc: '現代模組化突擊卡賓槍。配備全息反射瞄準鏡、M-LOK 護木與垂直前握把，兼具中近距離高射速與穩定後座力控制。',
+    desc: '現代模組化突擊卡賓槍。配備全息反射瞄準鏡、M-LOK 護木與垂直前握把，支援 [B] 切換全自動 / 三連發 / 半自動射擊模式。',
     nodeName: 'AR7_Carbine',
     fireMode: 'AUTO',
+    supportedModes: ['AUTO', 'BURST', 'SEMI'],
     damage: 34,
     headshotMult: 2.2,
     fireInterval: 0.105,
     reloadTime: 1.55,
     magSize: 36,
     mag: 36,
-    reserve: 120,
+    reserve: 144,
     recoilPitch: 0.016,
     recoilZ: 0.038,
     adsFov: 44,
@@ -51,8 +56,56 @@ const WEAPONS: WeaponSpec[] = [
     silhouette: '︻╦╤─',
   },
   {
-    id: 'sr9',
+    id: 'smg9',
     slot: 2,
+    name: 'SMG-9 タクティカル',
+    category: 'SUBMACHINE GUN / サブマシンガン',
+    desc: '配備整合式滅音管與 PEQ-15 綠光雷射指示器的高射速戰術衝鋒槍。880 RPM 極高連射與極低後座力，適合港口貨櫃巷弄突入作戰。',
+    nodeName: 'SMG9_Tactical',
+    fireMode: 'AUTO',
+    supportedModes: ['AUTO', 'BURST', 'SEMI'],
+    hasGreenLaser: true,
+    damage: 25,
+    headshotMult: 2.0,
+    fireInterval: 0.068,
+    reloadTime: 1.32,
+    magSize: 45,
+    mag: 45,
+    reserve: 180,
+    recoilPitch: 0.010,
+    recoilZ: 0.024,
+    adsFov: 48,
+    stats: { dmg: 34, rof: 96, stb: 88, rng: 46, cap: 45 },
+    audioShot: 'assets/audio/smg9_shot.wav',
+    silhouette: '╤╦═─',
+  },
+  {
+    id: 'sg12',
+    slot: 3,
+    name: 'SG-12 ブリーチャー',
+    category: 'SHOTGUN / タクティカルショットガン',
+    desc: '半自動戰術破門霰彈槍。配備開孔散熱護罩與側邊彈殼架，單發同時擊發 8 顆鹿彈 (Buckshot)，近距離具備毀滅性制止力。',
+    nodeName: 'SG12_Shotgun',
+    fireMode: 'PUMP',
+    pellets: 8,
+    spreadRad: 0.042,
+    damage: 19,
+    headshotMult: 1.75,
+    fireInterval: 0.42,
+    reloadTime: 1.85,
+    magSize: 8,
+    mag: 8,
+    reserve: 40,
+    recoilPitch: 0.048,
+    recoilZ: 0.078,
+    adsFov: 50,
+    stats: { dmg: 92, rof: 34, stb: 46, rng: 28, cap: 8 },
+    audioShot: 'assets/audio/sg12_shot.wav',
+    silhouette: '═╦═══',
+  },
+  {
+    id: 'sr9',
+    slot: 4,
     name: 'SR-9 スナイパー',
     category: 'SNIPER / ボルトアクション',
     desc: 'ボルトアクションの狙撃銃。一発で倒せるが、撃つたびに装填が要る。配備 8 倍光學測距狙擊鏡與折疊雙腳架。',
@@ -74,7 +127,7 @@ const WEAPONS: WeaponSpec[] = [
   },
   {
     id: 'rl7',
-    slot: 3,
+    slot: 5,
     name: 'RL-7 ロケット',
     category: 'LAUNCHER / 対戦車ロケット',
     desc: '重型反裝甲火箭發射器。發射高爆破甲彈頭，具備大範圍爆炸衝擊波與掩體壓制能力。',
@@ -167,6 +220,14 @@ interface ActiveSmokePuff {
   maxAge: number;
 }
 
+interface ActiveGrenade {
+  mesh: THREE.Group;
+  vel: THREE.Vector3;
+  age: number;
+  fuseTime: number;
+  bounced: boolean;
+}
+
 const urlParams = new URLSearchParams(window.location.search);
 const captureMode = urlParams.has('capture');
 const initialCamParam = urlParams.get('cam');
@@ -238,10 +299,14 @@ class SpatialAudioManager {
     }
     const files = [
       'assets/audio/ar7_shot.wav',
+      'assets/audio/smg9_shot.wav',
+      'assets/audio/sg12_shot.wav',
       'assets/audio/sr9_shot.wav',
       'assets/audio/rl7_shot.wav',
       'assets/audio/explosion.wav',
       'assets/audio/reload.wav',
+      'assets/audio/grenade_bounce.wav',
+      'assets/audio/fire_mode_click.wav',
       'assets/audio/impact_metal.wav',
       'assets/audio/impact_concrete.wav',
       'assets/audio/impact_water.wav',
@@ -710,11 +775,31 @@ function setupHarborWaterAndPuddles() {
         vec2 reflUv = clamp(projUv + waveGrad * 0.42, 0.002, 0.998);
         vec3 reflCol = texture2D(tReflection, reflUv).rgb;
 
+        // 5. Anisotropic Wet Specular Streaks from Fire Barrels & High-Mast Sodium Floodlights (Matching Concept Art!)
+        vec3 anisoStreak = vec3(0.0);
+        vec3 lightSources[5];
+        lightSources[0] = vec3(-3.2, 1.5, 25.5);
+        lightSources[1] = vec3(-4.8, 1.5, 9.5);
+        lightSources[2] = vec3(4.5, 1.5, -1.5);
+        lightSources[3] = vec3(-12.0, 11.0, 20.0);
+        lightSources[4] = vec3(11.5, 11.0, 4.0);
+        for (int k = 0; k < 5; k++) {
+          vec3 lPos = lightSources[k];
+          vec3 toL = lPos - vWorldPos;
+          float distL = length(toL);
+          vec3 L = toL / max(0.1, distL);
+          // Stretch reflection vector longitudinally along camera view direction for wet asphalt anisotropic sheen
+          vec3 H = normalize(L + V + vec3(waveGrad.x * 2.4, 0.0, waveGrad.y * 0.7));
+          float spec = pow(max(dot(N, H), 0.0), 42.0) / (1.0 + distL * 0.045);
+          vec3 lCol = (k < 3) ? vec3(1.0, 0.42, 0.08) : vec3(1.0, 0.72, 0.32);
+          anisoStreak += lCol * spec * 1.45;
+        }
+
         // Enhance warm sodium/fire highlights reflected in the puddle
         vec3 deepWaterTint = vec3(0.025, 0.038, 0.055);
-        vec3 finalCol = mix(deepWaterTint, reflCol * 1.18, fresnel);
+        vec3 finalCol = mix(deepWaterTint, reflCol * 1.18, fresnel) + anisoStreak * (0.45 + 0.55 * fresnel);
 
-        gl_FragColor = vec4(finalCol, puddleMask * (0.58 + 0.38 * fresnel));
+        gl_FragColor = vec4(finalCol, puddleMask * (0.60 + 0.38 * fresnel));
       }
     `,
   });
@@ -822,6 +907,24 @@ const muzzleLight = new THREE.PointLight(0xff9928, 0, 14, 1.5);
 muzzleLight.position.set(0, 0.05, -0.68);
 weaponMount.add(muzzleLight);
 
+// Green Tactical Laser Sight Beam for SMG-9 (PEQ-15 Laser Module)
+const smgLaserBeamGeo = new THREE.CylinderGeometry(0.0022, 0.0035, 16.0, 6);
+smgLaserBeamGeo.rotateX(Math.PI / 2);
+smgLaserBeamGeo.translate(0, 0, -8.0);
+const smgLaserBeam = new THREE.Mesh(
+  smgLaserBeamGeo,
+  new THREE.MeshBasicMaterial({
+    color: 0x33ff66,
+    transparent: true,
+    opacity: 0.45,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  })
+);
+smgLaserBeam.position.set(0.028, 0.032, -0.24);
+smgLaserBeam.visible = false;
+weaponMount.add(smgLaserBeam);
+
 const weaponModels: Record<string, THREE.Object3D> = {};
 let activeWeaponIdx = 0;
 
@@ -860,6 +963,7 @@ const activeRockets: ActiveRocket[] = [];
 const activeShells: ActiveShell[] = [];
 const activeTracers: ActiveTracer[] = [];
 const activeSmokePuffs: ActiveSmokePuff[] = [];
+const activeGrenades: ActiveGrenade[] = [];
 const enemies: EnemyActor[] = [];
 
 let soldierTemplateGltf: { scene: THREE.Group; animations: THREE.AnimationClip[] } | null = null;
@@ -1458,6 +1562,13 @@ const player = {
   reloading: false,
   reloadTimer: 0,
   fireTimer: 0,
+  burstRemaining: 0,
+  burstTimer: 0,
+  leanTarget: 0, // -1 = Lean Left [Q], +1 = Lean Right [E], 0 = Center
+  leanAmount: 0,
+  meleeTimer: 0,
+  grenades: 3,
+  maxGrenades: 3,
   recoilOffsetZ: 0,
   recoilPitch: 0,
   cameraShake: 0,
@@ -1503,14 +1614,28 @@ function equipWeapon(idx: number) {
   if (idx < 0 || idx >= WEAPONS.length) return;
   activeWeaponIdx = idx;
   player.reloading = false;
+  player.burstRemaining = 0;
   document.getElementById('reload-box')?.classList.add('hidden');
   WEAPONS.forEach((w, i) => {
     if (weaponModels[w.id]) weaponModels[w.id].visible = i === idx;
     if (playerTpsWeapons[w.id]) playerTpsWeapons[w.id].visible = i === idx;
     document.getElementById(`slot-${i + 1}`)?.classList.toggle('active', i === idx);
   });
+  smgLaserBeam.visible = Boolean(WEAPONS[idx].hasGreenLaser);
+  if (player.ads) setAdsState(true);
   updateWeaponHud();
   updateLoadoutModal(idx);
+}
+
+function cycleFireMode() {
+  const w = WEAPONS[activeWeaponIdx];
+  if (!w.supportedModes || w.supportedModes.length <= 1) return;
+  const curIdx = w.supportedModes.indexOf(w.fireMode as 'AUTO' | 'BURST' | 'SEMI');
+  const nextMode = w.supportedModes[(curIdx + 1) % w.supportedModes.length];
+  w.fireMode = nextMode;
+  player.burstRemaining = 0;
+  audioSys.play2D('assets/audio/fire_mode_click.wav', 0.85);
+  updateWeaponHud();
 }
 
 function setThirdPersonMode(enabled?: boolean) {
@@ -1531,11 +1656,13 @@ function updateWeaponHud() {
   const resEl = document.getElementById('ammo-reserve');
   const modeEl = document.getElementById('fire-mode-badge');
   const ticksEl = document.getElementById('ammo-ticks');
+  const grenEl = document.getElementById('grenade-badge');
   if (titleEl) titleEl.textContent = w.name;
   if (iconEl) iconEl.textContent = w.silhouette;
   if (magEl) magEl.textContent = String(w.mag).padStart(2, '0');
   if (resEl) resEl.textContent = String(w.reserve);
   if (modeEl) modeEl.textContent = w.fireMode;
+  if (grenEl) grenEl.textContent = `💣 [G] x${player.grenades}`;
   if (ticksEl) {
     const count = Math.min(20, Math.ceil((w.mag / w.magSize) * 20));
     ticksEl.textContent = '|'.repeat(count) + '·'.repeat(20 - count);
@@ -1554,12 +1681,18 @@ function updateStatusHud() {
   if (arBar) arBar.style.width = `${Math.max(0, (player.armor / player.maxArmor) * 100)}%`;
   if (stanceEl) {
     const viewPrefix = player.thirdPerson ? '[TPS] ' : '[FPS] ';
+    const leanSuffix =
+      player.leanTarget < -0.1
+        ? ' [↖ 左探頭]'
+        : player.leanTarget > 0.1
+        ? ' [↗ 右探頭]'
+        : '';
     const stanceLabel = player.crouching
-      ? 'CROUCH // 戰術蹲姿 (精準提升)'
+      ? 'CROUCH // 戰術蹲姿'
       : player.sprinting
       ? 'SPRINT // 戰術衝刺'
       : 'STAND // 站立警戒';
-    stanceEl.textContent = viewPrefix + stanceLabel;
+    stanceEl.textContent = viewPrefix + stanceLabel + leanSuffix;
   }
 }
 
@@ -1847,31 +1980,36 @@ function damageEnemy(enemy: EnemyActor, amount: number, isHeadshot: boolean, wea
 const raycaster = new THREE.Raycaster();
 const shellGeo = new THREE.CylinderGeometry(0.0055, 0.006, 0.028, 8);
 const shellMat = new THREE.MeshStandardMaterial({ color: 0xd8a838, roughness: 0.22, metalness: 0.92 });
+const sgShellGeo = new THREE.CylinderGeometry(0.0095, 0.0095, 0.042, 8);
+const sgShellMat = new THREE.MeshStandardMaterial({ color: 0xc8221e, roughness: 0.45, metalness: 0.25 });
 
-function spawnEjectedShellAndTracer(camDir: THREE.Vector3, targetPoint: THREE.Vector3) {
-  // 1. Eject Rotating Brass Shell Casing to the Right
+function spawnEjectedShellAndTracer(camDir: THREE.Vector3, targetPoint: THREE.Vector3, isShotgun = false, ejectShell = true) {
   const right = new THREE.Vector3().crossVectors(camDir, new THREE.Vector3(0, 1, 0)).normalize();
   const up = new THREE.Vector3(0, 1, 0);
-  const ejectPos = camera.position
-    .clone()
-    .addScaledVector(camDir, 0.42)
-    .addScaledVector(right, 0.18)
-    .addScaledVector(up, -0.12);
 
-  const shellMesh = new THREE.Mesh(shellGeo, shellMat);
-  shellMesh.position.copy(ejectPos);
-  shellMesh.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
-  scene.add(shellMesh);
-  activeShells.push({
-    mesh: shellMesh,
-    vel: right
+  // 1. Eject Rotating Brass or Red 12-Gauge Shotgun Shell Casing to the Right
+  if (ejectShell) {
+    const ejectPos = camera.position
       .clone()
-      .multiplyScalar(2.4 + Math.random() * 0.8)
-      .addScaledVector(up, 1.8 + Math.random() * 0.6)
-      .addScaledVector(camDir, -0.5),
-    rotVel: new THREE.Vector3(18, 24, 15),
-    age: 0,
-  });
+      .addScaledVector(camDir, 0.42)
+      .addScaledVector(right, 0.18)
+      .addScaledVector(up, -0.12);
+
+    const shellMesh = new THREE.Mesh(isShotgun ? sgShellGeo : shellGeo, isShotgun ? sgShellMat : shellMat);
+    shellMesh.position.copy(ejectPos);
+    shellMesh.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
+    scene.add(shellMesh);
+    activeShells.push({
+      mesh: shellMesh,
+      vel: right
+        .clone()
+        .multiplyScalar(2.4 + Math.random() * 0.8)
+        .addScaledVector(up, 1.8 + Math.random() * 0.6)
+        .addScaledVector(camDir, -0.5),
+      rotVel: new THREE.Vector3(18, 24, 15),
+      age: 0,
+    });
+  }
 
   // 2. High-Velocity Ballistic Tracer Streak from Muzzle to Target
   const muzzleWorld = camera.position
@@ -1881,7 +2019,7 @@ function spawnEjectedShellAndTracer(camDir: THREE.Vector3, targetPoint: THREE.Ve
     .addScaledVector(up, -0.11);
   const tracerGeo = new THREE.BufferGeometry().setFromPoints([muzzleWorld, targetPoint]);
   const tracerMat = new THREE.LineBasicMaterial({
-    color: 0xffd266,
+    color: isShotgun ? 0xffae42 : 0xffd266,
     transparent: true,
     opacity: 0.88,
     blending: THREE.AdditiveBlending,
@@ -1891,12 +2029,97 @@ function spawnEjectedShellAndTracer(camDir: THREE.Vector3, targetPoint: THREE.Ve
   activeTracers.push({ line, age: 0 });
 }
 
-function fireCurrentWeapon() {
+function performSingleHitscanRay(rayDir: THREE.Vector3, w: WeaponSpec, isShotgun: boolean, ejectShell: boolean) {
+  raycaster.set(camera.position, rayDir);
+
+  // 1. Check Explosive Barrels
+  for (const barrel of explosiveBarrels) {
+    if (barrel.exploded) continue;
+    const hits = raycaster.intersectObject(barrel.mesh, false);
+    if (hits.length > 0 && hits[0].distance < 95) {
+      spawnEjectedShellAndTracer(rayDir, hits[0].point, isShotgun, ejectShell);
+      barrel.hp -= w.damage;
+      if (ejectShell) audioSys.play3D('assets/audio/impact_metal.wav', hits[0].point, player.pos);
+      if (barrel.hp <= 0) {
+        barrel.exploded = true;
+        barrel.mesh.visible = false;
+        barrel.wreckGroup.visible = true;
+        triggerExplosionAt(barrel.position, 8.0, 175);
+      }
+      return true;
+    }
+  }
+
+  // 2. Check Enemy Soldiers (Analytical capsule + head sphere for reliable headshot detection)
+  let bestEnemy: EnemyActor | null = null;
+  let bestDist = Infinity;
+  let bestHeadshot = false;
+
+  for (const e of enemies) {
+    if (e.state === 'DEAD') continue;
+    const headCenter = e.root.position.clone().add(new THREE.Vector3(0, 1.62, 0));
+    const bodyCenter = e.root.position.clone().add(new THREE.Vector3(0, 0.98, 0));
+
+    const toHead = headCenter.clone().sub(camera.position);
+    const projHead = toHead.dot(rayDir);
+    if (projHead > 0 && projHead < bestDist) {
+      const perpHeadSq = toHead.lengthSq() - projHead * projHead;
+      if (perpHeadSq <= 0.26 * 0.26) {
+        bestDist = projHead;
+        bestEnemy = e;
+        bestHeadshot = true;
+        continue;
+      }
+    }
+
+    const toBody = bodyCenter.clone().sub(camera.position);
+    const projBody = toBody.dot(rayDir);
+    if (projBody > 0 && projBody < bestDist) {
+      const closestPt = camera.position.clone().addScaledVector(rayDir, projBody);
+      const dx = closestPt.x - bodyCenter.x;
+      const dz = closestPt.z - bodyCenter.z;
+      const dy = Math.abs(closestPt.y - bodyCenter.y);
+      if (dx * dx + dz * dz <= 0.42 * 0.42 && dy <= 0.85) {
+        bestDist = projBody;
+        bestEnemy = e;
+        bestHeadshot = false;
+      }
+    }
+  }
+
+  if (bestEnemy) {
+    const hitPt = bestEnemy.root.position.clone().add(new THREE.Vector3(0, bestHeadshot ? 1.62 : 1.05, 0));
+    spawnEjectedShellAndTracer(rayDir, hitPt, isShotgun, ejectShell);
+    const dmg = bestHeadshot ? w.damage * w.headshotMult : w.damage;
+    damageEnemy(bestEnemy, dmg, bestHeadshot, w.name);
+    return true;
+  } else {
+    const envTarget = camera.position.clone().addScaledVector(rayDir, 22);
+    spawnEjectedShellAndTracer(rayDir, envTarget, isShotgun, ejectShell);
+    if (ejectShell) {
+      if (envTarget.y <= 0.15) {
+        audioSys.play3D('assets/audio/impact_water.wav', envTarget, player.pos);
+      } else {
+        audioSys.play3D('assets/audio/impact_metal.wav', envTarget, player.pos);
+      }
+    }
+    return false;
+  }
+}
+
+function fireSingleRound(fromBurstQueue = false) {
   const w = WEAPONS[activeWeaponIdx];
-  if (player.reloading || player.fireTimer > 0) return;
+  if (player.reloading) return;
+  if (!fromBurstQueue && player.fireTimer > 0) return;
   if (w.mag <= 0) {
+    player.burstRemaining = 0;
     startReload();
     return;
+  }
+
+  if (!fromBurstQueue && w.fireMode === 'BURST') {
+    player.burstRemaining = Math.min(2, w.mag - 1);
+    player.burstTimer = w.fireInterval * 0.82;
   }
 
   w.mag--;
@@ -1943,84 +2166,115 @@ function fireCurrentWeapon() {
     return;
   }
 
-  // Hitscan Raycast against Explosive Barrels & Enemy Hitboxes (Head vs Body)
-  raycaster.set(camera.position, camDir);
+  // Multi-pellet Buckshot Fan for SG-12 Shotgun vs Single Ray for Rifles/SMGs
+  const pelletCount = w.pellets || 1;
+  const spread = (w.spreadRad || 0) * (player.ads ? 0.55 : 1.0);
+  const rightVec = new THREE.Vector3().crossVectors(camDir, new THREE.Vector3(0, 1, 0)).normalize();
+  const upVec = new THREE.Vector3().crossVectors(rightVec, camDir).normalize();
+  let anyHit = false;
 
-  // 1. Check Explosive Barrels
-  for (const barrel of explosiveBarrels) {
-    if (barrel.exploded) continue;
-    const hits = raycaster.intersectObject(barrel.mesh, false);
-    if (hits.length > 0 && hits[0].distance < 95) {
-      spawnEjectedShellAndTracer(camDir, hits[0].point);
-      barrel.hp -= w.damage;
-      audioSys.play3D('assets/audio/impact_metal.wav', hits[0].point, player.pos);
-      if (barrel.hp <= 0) {
-        barrel.exploded = true;
-        barrel.mesh.visible = false;
-        barrel.wreckGroup.visible = true;
-        triggerExplosionAt(barrel.position, 8.0, 175);
-      }
-      return;
+  for (let p = 0; p < pelletCount; p++) {
+    const rayDir = camDir.clone();
+    if (pelletCount > 1 && p > 0) {
+      // Deterministic golden-angle spiral spread pattern for consistent buckshot coverage
+      const ang = p * 2.39996;
+      const rad = spread * Math.sqrt(p / pelletCount);
+      rayDir.addScaledVector(rightVec, Math.cos(ang) * rad).addScaledVector(upVec, Math.sin(ang) * rad).normalize();
     }
+    const hit = performSingleHitscanRay(rayDir, w, pelletCount > 1, p === 0);
+    if (hit) anyHit = true;
   }
-
-  // 2. Check Enemy Soldiers (Analytical capsule + head sphere for reliable headshot detection)
-  let bestEnemy: EnemyActor | null = null;
-  let bestDist = Infinity;
-  let bestHeadshot = false;
-
-  for (const e of enemies) {
-    if (e.state === 'DEAD') continue;
-    const headCenter = e.root.position.clone().add(new THREE.Vector3(0, 1.62, 0));
-    const bodyCenter = e.root.position.clone().add(new THREE.Vector3(0, 0.98, 0));
-
-    const toHead = headCenter.clone().sub(camera.position);
-    const projHead = toHead.dot(camDir);
-    if (projHead > 0 && projHead < bestDist) {
-      const perpHeadSq = toHead.lengthSq() - projHead * projHead;
-      if (perpHeadSq <= 0.26 * 0.26) {
-        bestDist = projHead;
-        bestEnemy = e;
-        bestHeadshot = true;
-        continue;
-      }
-    }
-
-    const toBody = bodyCenter.clone().sub(camera.position);
-    const projBody = toBody.dot(camDir);
-    if (projBody > 0 && projBody < bestDist) {
-      const closestPt = camera.position.clone().addScaledVector(camDir, projBody);
-      const dx = closestPt.x - bodyCenter.x;
-      const dz = closestPt.z - bodyCenter.z;
-      const dy = Math.abs(closestPt.y - bodyCenter.y);
-      if (dx * dx + dz * dz <= 0.42 * 0.42 && dy <= 0.85) {
-        bestDist = projBody;
-        bestEnemy = e;
-        bestHeadshot = false;
-      }
-    }
-  }
-
-  if (bestEnemy) {
-    const hitPt = bestEnemy.root.position.clone().add(new THREE.Vector3(0, bestHeadshot ? 1.62 : 1.05, 0));
-    spawnEjectedShellAndTracer(camDir, hitPt);
-    player.shotsHit++;
-    const dmg = bestHeadshot ? w.damage * w.headshotMult : w.damage;
-    damageEnemy(bestEnemy, dmg, bestHeadshot, w.name);
-  } else {
-    // Environment surface impact audio & tracer
-    const envTarget = camera.position.clone().addScaledVector(camDir, 22);
-    spawnEjectedShellAndTracer(camDir, envTarget);
-    if (envTarget.y <= 0.15) {
-      audioSys.play3D('assets/audio/impact_water.wav', envTarget, player.pos);
-    } else {
-      audioSys.play3D('assets/audio/impact_metal.wav', envTarget, player.pos);
-    }
-  }
+  if (anyHit) player.shotsHit++;
 
   if (w.mag === 0 && w.reserve > 0) {
     setTimeout(() => startReload(), 250);
   }
+}
+
+function fireCurrentWeapon() {
+  fireSingleRound(false);
+}
+
+// ---------------------------------------------------------------------------
+// Tactical Grenade Throw ([G]), Quick Melee Buttstock Bash ([F]) & Damage Arc
+// ---------------------------------------------------------------------------
+function throwFragGrenade() {
+  if (player.grenades <= 0 || loadoutOpen || missionModalOpen) return;
+  player.grenades--;
+  updateWeaponHud();
+  audioSys.play2D('assets/audio/fire_mode_click.wav', 0.7);
+
+  const camDir = new THREE.Vector3();
+  camera.getWorldDirection(camDir);
+
+  const gGroup = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.SphereGeometry(0.068, 12, 10),
+    new THREE.MeshStandardMaterial({ color: 0x3b4d28, roughness: 0.52, metalness: 0.45 })
+  );
+  body.scale.set(1.0, 1.22, 1.0);
+  const lever = new THREE.Mesh(
+    new THREE.BoxGeometry(0.025, 0.09, 0.035),
+    new THREE.MeshStandardMaterial({ color: 0x22262a, roughness: 0.4, metalness: 0.8 })
+  );
+  lever.position.set(0.03, 0.04, 0);
+  const blinkLed = new THREE.Mesh(
+    new THREE.SphereGeometry(0.024, 8, 8),
+    new THREE.MeshBasicMaterial({ color: 0xff3311 })
+  );
+  blinkLed.position.set(0, 0.09, 0);
+  gGroup.add(body, lever, blinkLed);
+
+  gGroup.position.copy(camera.position).addScaledVector(camDir, 0.65);
+  scene.add(gGroup);
+
+  const throwVel = camDir.clone().multiplyScalar(17.5);
+  throwVel.y += 4.2;
+  activeGrenades.push({
+    mesh: gGroup,
+    vel: throwVel,
+    age: 0,
+    fuseTime: 1.85,
+    bounced: false,
+  });
+}
+
+function triggerMeleeBash() {
+  if (player.meleeTimer > 0 || loadoutOpen || missionModalOpen) return;
+  player.meleeTimer = 0.36;
+  audioSys.play2D('assets/audio/fire_mode_click.wav', 0.9);
+
+  const camDir = new THREE.Vector3();
+  camera.getWorldDirection(camDir);
+
+  for (const e of enemies) {
+    if (e.state === 'DEAD') continue;
+    const toEnemy = e.root.position.clone().add(new THREE.Vector3(0, 1.1, 0)).sub(camera.position);
+    const dist = toEnemy.length();
+    if (dist <= 2.85 && toEnemy.normalize().dot(camDir) > 0.45) {
+      audioSys.play3D('assets/audio/impact_concrete.wav', e.root.position, player.pos, 6, 30, 1.0);
+      e.root.position.addScaledVector(camDir, 0.85);
+      damageEnemy(e, 70, false, '近戰槍托擊 (MELEE)');
+      break;
+    }
+  }
+}
+
+let damageArcTimeout: ReturnType<typeof setTimeout> | null = null;
+function showDirectionalDamageArc(attackerPos: THREE.Vector3) {
+  const arcEl = document.getElementById('damage-dir-arc');
+  if (!arcEl) return;
+  const dx = attackerPos.x - player.pos.x;
+  const dz = attackerPos.z - player.pos.z;
+  // Player forward is (-sin(yaw), 0, -cos(yaw))
+  const worldAngle = Math.atan2(dx, -dz);
+  const relAngleDeg = ((worldAngle + player.yaw) * 180) / Math.PI;
+  arcEl.style.transform = `rotate(${relAngleDeg.toFixed(1)}deg)`;
+  arcEl.classList.remove('hidden');
+  if (damageArcTimeout) clearTimeout(damageArcTimeout);
+  damageArcTimeout = setTimeout(() => {
+    arcEl.classList.add('hidden');
+  }, 550);
 }
 
 // ---------------------------------------------------------------------------
@@ -2104,6 +2358,226 @@ function openMissionCompleteModal() {
 }
 
 // ---------------------------------------------------------------------------
+// Mobile Gyroscope Aiming Controller (DeviceOrientation / DeviceMotion + Touch UI)
+// ---------------------------------------------------------------------------
+const gyroController = {
+  enabled: false,
+  sensitivity: 1.0,
+  calibrated: false,
+  baseAlpha: 0,
+  baseBeta: 0,
+  baseGamma: 0,
+  lastAlpha: 0,
+  lastBeta: 0,
+  lastGamma: 0,
+  hasSample: false,
+};
+
+function updateGyroHudButtons() {
+  const toggleBtn = document.getElementById('btn-gyro-toggle');
+  const sensBtn = document.getElementById('btn-gyro-sens');
+  if (toggleBtn) {
+    toggleBtn.textContent = `🎯 陀螺儀瞄準: ${gyroController.enabled ? 'ON' : 'OFF'}`;
+    toggleBtn.classList.toggle('active', gyroController.enabled);
+  }
+  if (sensBtn) {
+    sensBtn.textContent = `${gyroController.sensitivity.toFixed(1)}x`;
+  }
+}
+
+function calibrateGyroCenter() {
+  if (gyroController.hasSample) {
+    gyroController.baseAlpha = gyroController.lastAlpha;
+    gyroController.baseBeta = gyroController.lastBeta;
+    gyroController.baseGamma = gyroController.lastGamma;
+    gyroController.calibrated = true;
+  }
+  audioSys.play2D('assets/audio/fire_mode_click.wav', 0.7);
+}
+
+async function toggleGyroAiming(forceState?: boolean) {
+  const target = forceState !== undefined ? forceState : !gyroController.enabled;
+  if (target) {
+    // Request iOS 13+ DeviceOrientationEvent / DeviceMotionEvent permission if required
+    const DevOrient = window.DeviceOrientationEvent as unknown as {
+      requestPermission?: () => Promise<'granted' | 'denied'>;
+    };
+    if (DevOrient && typeof DevOrient.requestPermission === 'function') {
+      try {
+        const perm = await DevOrient.requestPermission();
+        if (perm !== 'granted') return;
+      } catch {
+        // Ignore in desktop/headless browsers
+      }
+    }
+    gyroController.enabled = true;
+    calibrateGyroCenter();
+  } else {
+    gyroController.enabled = false;
+  }
+  audioSys.play2D('assets/audio/fire_mode_click.wav', 0.75);
+  updateGyroHudButtons();
+}
+
+window.addEventListener('deviceorientation', (ev) => {
+  if (ev.alpha === null || ev.beta === null || ev.gamma === null) return;
+  const prevA = gyroController.lastAlpha;
+  const prevB = gyroController.lastBeta;
+  const prevG = gyroController.lastGamma;
+  gyroController.lastAlpha = ev.alpha;
+  gyroController.lastBeta = ev.beta;
+  gyroController.lastGamma = ev.gamma;
+
+  if (!gyroController.hasSample) {
+    gyroController.hasSample = true;
+    calibrateGyroCenter();
+    return;
+  }
+  if (!gyroController.enabled || loadoutOpen || missionModalOpen || player.fixedCameraKey) return;
+
+  // Handle wraparound on compass alpha (0..360)
+  let dAlpha = ev.alpha - prevA;
+  if (dAlpha > 180) dAlpha -= 360;
+  if (dAlpha < -180) dAlpha += 360;
+  const dBeta = ev.beta - prevB;
+  const dGamma = ev.gamma - prevG;
+
+  // Compensate for screen orientation (Portrait vs Landscape 90/-90)
+  const orientAngle = window.screen?.orientation?.angle || 0;
+  let yawDegDelta = dAlpha * 0.65 - dGamma * 0.35;
+  let pitchDegDelta = dBeta;
+  if (orientAngle === 90) {
+    yawDegDelta = dAlpha * 0.7 - dBeta * 0.35;
+    pitchDegDelta = -dGamma;
+  } else if (orientAngle === -90 || orientAngle === 270) {
+    yawDegDelta = dAlpha * 0.7 + dBeta * 0.35;
+    pitchDegDelta = dGamma;
+  }
+
+  const radScale = (Math.PI / 180) * gyroController.sensitivity * (player.ads ? 0.58 : 0.95);
+  player.yaw += yawDegDelta * radScale;
+  player.pitch = Math.max(-1.35, Math.min(1.35, player.pitch + pitchDegDelta * radScale));
+});
+
+// Also support high-frequency gyroscope angular velocity (`devicemotion.rotationRate`) on mobile devices
+window.addEventListener('devicemotion', (ev) => {
+  if (!gyroController.enabled || gyroController.hasSample || !ev.rotationRate) return;
+  if (loadoutOpen || missionModalOpen || player.fixedCameraKey) return;
+  const alphaRate = ev.rotationRate.alpha || 0;
+  const betaRate = ev.rotationRate.beta || 0;
+  const dtMotion = (ev.interval || 16) / 1000;
+  const radScale = (Math.PI / 180) * gyroController.sensitivity * (player.ads ? 0.55 : 0.85);
+  player.yaw += betaRate * dtMotion * radScale;
+  player.pitch = Math.max(-1.35, Math.min(1.35, player.pitch + alphaRate * dtMotion * radScale));
+});
+
+document.getElementById('btn-gyro-toggle')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleGyroAiming();
+});
+document.getElementById('btn-gyro-cal')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  calibrateGyroCenter();
+});
+document.getElementById('btn-gyro-sens')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const presets = [1.0, 1.5, 2.0, 0.6];
+  const idx = presets.indexOf(gyroController.sensitivity);
+  gyroController.sensitivity = presets[(idx + 1) % presets.length];
+  updateGyroHudButtons();
+});
+
+// Touch Virtual Joystick & Action Buttons for Mobile Play
+const touchMoveVec = new THREE.Vector2(0, 0);
+const joyZone = document.getElementById('touch-joystick-zone');
+const joyKnob = document.getElementById('touch-joystick-knob');
+if (joyZone && joyKnob) {
+  let joyActive = false;
+  const updateJoy = (clientX: number, clientY: number) => {
+    const rect = joyZone.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const maxR = rect.width * 0.42;
+    let dx = clientX - cx;
+    let dy = clientY - cy;
+    const dist = Math.hypot(dx, dy);
+    if (dist > maxR) {
+      dx = (dx / dist) * maxR;
+      dy = (dy / dist) * maxR;
+    }
+    joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+    touchMoveVec.set(dx / maxR, -dy / maxR);
+  };
+  const resetJoy = () => {
+    joyActive = false;
+    joyKnob.style.transform = 'translate(0px, 0px)';
+    touchMoveVec.set(0, 0);
+  };
+  joyZone.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    joyActive = true;
+    joyZone.setPointerCapture(e.pointerId);
+    updateJoy(e.clientX, e.clientY);
+  });
+  joyZone.addEventListener('pointermove', (e) => {
+    if (joyActive) updateJoy(e.clientX, e.clientY);
+  });
+  joyZone.addEventListener('pointerup', resetJoy);
+  joyZone.addEventListener('pointercancel', resetJoy);
+}
+
+document.getElementById('touch-btn-fire')?.addEventListener('pointerdown', (e) => {
+  e.stopPropagation();
+  mouseDownLeft = true;
+  fireCurrentWeapon();
+});
+document.getElementById('touch-btn-fire')?.addEventListener('pointerup', () => {
+  mouseDownLeft = false;
+});
+document.getElementById('touch-btn-ads')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  setAdsState(!player.ads);
+});
+document.getElementById('touch-btn-reload')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  startReload();
+});
+document.getElementById('touch-btn-grenade')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  throwFragGrenade();
+});
+document.getElementById('touch-btn-melee')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  triggerMeleeBash();
+});
+document.getElementById('touch-btn-mode')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  cycleFireMode();
+});
+document.getElementById('touch-btn-crouch')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  player.crouching = !player.crouching;
+  updateStatusHud();
+});
+document.getElementById('touch-btn-lean-l')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  player.leanTarget = player.leanTarget < -0.5 ? 0 : -1;
+  updateStatusHud();
+});
+document.getElementById('touch-btn-lean-r')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  player.leanTarget = player.leanTarget > 0.5 ? 0 : 1;
+  updateStatusHud();
+});
+
+for (let s = 1; s <= 5; s++) {
+  document.getElementById(`slot-${s}`)?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    equipWeapon(s - 1);
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Input Events
 // ---------------------------------------------------------------------------
 window.addEventListener('keydown', (e) => {
@@ -2112,7 +2586,21 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Digit1') equipWeapon(0);
   if (e.code === 'Digit2') equipWeapon(1);
   if (e.code === 'Digit3') equipWeapon(2);
+  if (e.code === 'Digit4') equipWeapon(3);
+  if (e.code === 'Digit5') equipWeapon(4);
   if (e.code === 'KeyR') startReload();
+  if (e.code === 'KeyB') cycleFireMode();
+  if (e.code === 'KeyG') throwFragGrenade();
+  if (e.code === 'KeyF') triggerMeleeBash();
+  if (e.code === 'KeyY') toggleGyroAiming();
+  if (e.code === 'KeyQ') {
+    player.leanTarget = -1;
+    updateStatusHud();
+  }
+  if (e.code === 'KeyE') {
+    player.leanTarget = 1;
+    updateStatusHud();
+  }
   if (e.code === 'KeyP') setThirdPersonMode();
   if (e.code === 'KeyC') {
     player.crouching = !player.crouching;
@@ -2144,6 +2632,14 @@ window.addEventListener('keydown', (e) => {
 
 window.addEventListener('keyup', (e) => {
   keys[e.code] = false;
+  if (e.code === 'KeyQ' && player.leanTarget < 0) {
+    player.leanTarget = keys['KeyE'] ? 1 : 0;
+    updateStatusHud();
+  }
+  if (e.code === 'KeyE' && player.leanTarget > 0) {
+    player.leanTarget = keys['KeyQ'] ? -1 : 0;
+    updateStatusHud();
+  }
 });
 
 function setAdsState(ads: boolean) {
@@ -2419,6 +2915,9 @@ function stepSimulation(dt: number, elapsedSec: number) {
     if (keys['KeyS'] || keys['ArrowDown']) move.sub(fwd);
     if (keys['KeyD'] || keys['ArrowRight']) move.add(right);
     if (keys['KeyA'] || keys['ArrowLeft']) move.sub(right);
+    if (touchMoveVec.lengthSq() > 0.01) {
+      move.addScaledVector(fwd, touchMoveVec.y).addScaledVector(right, touchMoveVec.x);
+    }
 
     const isMoving = move.lengthSq() > 0;
     if (isMoving) {
@@ -2507,10 +3006,16 @@ function stepSimulation(dt: number, elapsedSec: number) {
     const shakeX = player.cameraShake > 0.005 ? Math.sin(t * 58) * player.cameraShake * 0.14 : 0;
     const shakeY = player.cameraShake > 0.005 ? Math.cos(t * 67) * player.cameraShake * 0.14 : 0;
 
+    // Smooth Tactical Corner Lean ([Q] Left / [E] Right)
+    player.leanAmount += (player.leanTarget - player.leanAmount) * Math.min(1, dt * 11.5);
+    const leanOffsetX = right.x * player.leanAmount * 0.38;
+    const leanOffsetZ = right.z * player.leanAmount * 0.38;
+    const leanRollRad = -player.leanAmount * 0.21;
+
     if (player.thirdPerson) {
       // Over-the-Shoulder Third-Person Tactical Camera
       const camBack = player.ads ? 1.38 : 2.38;
-      const camRight = player.ads ? 0.44 : 0.56;
+      const camRight = (player.ads ? 0.44 : 0.56) + player.leanAmount * 0.38;
       const camUp = eyeHeight + (player.crouching ? 0.22 : 0.18);
       camera.position.set(
         player.pos.x + right.x * camRight - fwd.x * camBack + shakeX,
@@ -2520,22 +3025,37 @@ function stepSimulation(dt: number, elapsedSec: number) {
       camera.rotation.order = 'YXZ';
       camera.rotation.y = player.yaw;
       camera.rotation.x = player.pitch + player.recoilPitch + shakeY * 0.35 - 0.04;
+      camera.rotation.z = leanRollRad * 0.6;
     } else {
-      camera.position.set(player.pos.x + bobX + shakeX, player.pos.y + eyeHeight + bobY + shakeY, player.pos.z);
+      camera.position.set(
+        player.pos.x + bobX + shakeX + leanOffsetX,
+        player.pos.y + eyeHeight + bobY + shakeY - Math.abs(player.leanAmount) * 0.06,
+        player.pos.z + leanOffsetZ
+      );
       camera.rotation.order = 'YXZ';
       camera.rotation.y = player.yaw;
       camera.rotation.x = player.pitch + player.recoilPitch + shakeY * 0.35;
+      camera.rotation.z = leanRollRad;
     }
 
-    // Smooth ADS FOV & Viewmodel Position
+    // Smooth ADS FOV & Viewmodel Position (+ Melee Buttstock Lunge)
     const w = WEAPONS[activeWeaponIdx];
     const targetFov = player.ads ? w.adsFov : 60;
     camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 14);
     camera.updateProjectionMatrix();
 
+    let meleeLungeZ = 0;
+    let meleePitch = 0;
+    if (player.meleeTimer > 0) {
+      player.meleeTimer = Math.max(0, player.meleeTimer - dt);
+      const mPhase = Math.sin((player.meleeTimer / 0.36) * Math.PI);
+      meleeLungeZ = -0.18 * mPhase;
+      meleePitch = 0.32 * mPhase;
+    }
+
     const targetRigX = player.ads ? 0.0 : 0.22;
     const targetRigY = player.ads ? -0.145 : -0.24;
-    const targetRigZ = (player.ads ? -0.28 : -0.38) + player.recoilOffsetZ;
+    const targetRigZ = (player.ads ? -0.28 : -0.38) + player.recoilOffsetZ + meleeLungeZ;
     fpRig.position.x += (targetRigX - fpRig.position.x) * Math.min(1, dt * 16);
     fpRig.position.y += (targetRigY - fpRig.position.y) * Math.min(1, dt * 16);
     fpRig.position.z += (targetRigZ - fpRig.position.z) * Math.min(1, dt * 16);
@@ -2559,15 +3079,22 @@ function stepSimulation(dt: number, elapsedSec: number) {
         updateWeaponHud();
       }
     } else {
-      weaponMount.rotation.x *= 0.85;
+      weaponMount.rotation.x = weaponMount.rotation.x * 0.85 + meleePitch * 0.25;
       weaponMount.rotation.z *= 0.85;
     }
 
     // Solve Two-Handed Rifle IK for First-Person CC0 Arms against active weapon grip & foregrip
     updateFirstPersonCc0HandsIk();
 
-    // Auto-fire for AR-7
-    if (mouseDownLeft && w.fireMode === 'AUTO') {
+    // Auto-fire for AR-7 / SMG-9 & 3-Round Burst Queue
+    if (player.burstRemaining > 0) {
+      player.burstTimer -= dt;
+      if (player.burstTimer <= 0) {
+        player.burstRemaining--;
+        player.burstTimer = w.fireInterval * 0.82;
+        fireSingleRound(true);
+      }
+    } else if (mouseDownLeft && w.fireMode === 'AUTO') {
       fireCurrentWeapon();
     }
 
@@ -2670,6 +3197,34 @@ function stepSimulation(dt: number, elapsedSec: number) {
       triggerExplosionAt(r.mesh.position.clone(), 8.5, 190);
       scene.remove(r.mesh);
       activeRockets.splice(i, 1);
+    }
+  }
+
+  // 3b. Active Thrown Frag Grenades ([G]) Parabolic Flight, Bounce & Fuse Detonation
+  for (let i = activeGrenades.length - 1; i >= 0; i--) {
+    const gr = activeGrenades[i];
+    gr.age += dt;
+    gr.vel.y -= 16.5 * dt;
+    gr.mesh.position.addScaledVector(gr.vel, dt);
+    gr.mesh.rotation.x += dt * 9.0;
+    gr.mesh.rotation.z += dt * 7.0;
+
+    const gFloor = getGroundHeightAt(gr.mesh.position.x, gr.mesh.position.z) + 0.08;
+    if (gr.mesh.position.y <= gFloor) {
+      gr.mesh.position.y = gFloor;
+      if (Math.abs(gr.vel.y) > 1.2) {
+        audioSys.play3D('assets/audio/grenade_bounce.wav', gr.mesh.position, player.pos, 6, 40, 0.85);
+      }
+      gr.vel.y = Math.abs(gr.vel.y) * 0.44;
+      gr.vel.x *= 0.62;
+      gr.vel.z *= 0.62;
+      gr.bounced = true;
+    }
+
+    if (gr.age >= gr.fuseTime) {
+      triggerExplosionAt(gr.mesh.position.clone(), 8.2, 180);
+      scene.remove(gr.mesh);
+      activeGrenades.splice(i, 1);
     }
   }
 
@@ -2813,6 +3368,7 @@ function stepSimulation(dt: number, elapsedSec: number) {
             }
             player.damageTaken += dmg;
             updateStatusHud();
+            showDirectionalDamageArc(e.root.position);
             const vig = document.getElementById('damage-vignette');
             if (vig) {
               vig.style.boxShadow = 'inset 0 0 110px rgba(220, 25, 20, 0.55)';
@@ -2914,6 +3470,32 @@ window.addEventListener('resize', () => {
     stepSimulation(advanceSec, 1.5);
     renderSceneWithWater();
   },
+  throwGrenade: (advanceSec = 0.45) => {
+    throwFragGrenade();
+    stepSimulation(advanceSec, 1.5);
+    renderSceneWithWater();
+  },
+  setLean: (leanVal: number) => {
+    player.leanTarget = leanVal;
+    player.leanAmount = leanVal;
+    updateStatusHud();
+    stepSimulation(0.05, 1.5);
+    renderSceneWithWater();
+  },
+  cycleFireMode: () => {
+    cycleFireMode();
+    renderSceneWithWater();
+  },
+  setGyroState: (enabled: boolean, yawDeltaRad = 0, pitchDeltaRad = 0) => {
+    gyroController.enabled = enabled;
+    updateGyroHudButtons();
+    if (enabled && (yawDeltaRad !== 0 || pitchDeltaRad !== 0)) {
+      player.yaw += yawDeltaRad;
+      player.pitch = Math.max(-1.35, Math.min(1.35, player.pitch + pitchDeltaRad));
+    }
+    stepSimulation(0.032, 1.5);
+    renderSceneWithWater();
+  },
   reload: () => {
     const w = WEAPONS[activeWeaponIdx];
     w.mag = Math.max(1, w.mag - 5);
@@ -2945,7 +3527,11 @@ window.addEventListener('resize', () => {
     hp: player.hp,
     armor: player.armor,
     activeWeapon: WEAPONS[activeWeaponIdx].name,
+    fireMode: WEAPONS[activeWeaponIdx].fireMode,
     mag: WEAPONS[activeWeaponIdx].mag,
+    grenades: player.grenades,
+    leanAmount: player.leanAmount,
+    gyroEnabled: gyroController.enabled,
     enemiesAlive: enemies.filter((e) => e.state !== 'DEAD').length,
     enemiesTotal: enemies.length,
     kills: player.kills,

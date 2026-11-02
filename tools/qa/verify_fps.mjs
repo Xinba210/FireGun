@@ -164,7 +164,7 @@ async function main() {
     await page.waitForTimeout(120);
     await page.screenshot({ path: path.join(EVIDENCE_DIR, 'cam_lane_render.png') });
 
-    // 2. Capture 8 Real Engine Port Viewport Screenshots
+    // 2. Capture 10 Real Engine Port Viewport Screenshots (covering all 5 weapons, Lean, Grenades & Gyro)
     await page.evaluate(() => {
       window.__fpsApi.closeModals();
       window.__fpsApi.equipWeapon(0);
@@ -175,24 +175,27 @@ async function main() {
     await page.screenshot({ path: path.join(EVIDENCE_DIR, 'view_01_dock_entrance.png') });
 
     await page.evaluate(() => {
+      window.__fpsApi.equipWeapon(1); // SMG-9 Tactical with Green Laser Sight
+      window.__fpsApi.setGyroState(true, 0.0, 0.0); // Enable Gyroscope Aiming HUD badge
       window.__fpsApi.setPlayerPose(-11.5, 0.0, 17.5, 0.42, 0.08);
     });
     await page.waitForTimeout(120);
     await page.screenshot({ path: path.join(EVIDENCE_DIR, 'view_02_cargo_ship_quay.png') });
 
     await page.evaluate(() => {
+      window.__fpsApi.equipWeapon(2); // SG-12 Breacher Shotgun (8-pellet Buckshot Fan!)
+      window.__fpsApi.setLean(1.0);   // Corner Lean Right [E]
       window.__fpsApi.setPlayerPose(-6.5, 0.0, 15.5, 0.0, -0.02);
       window.__fpsApi.setAds(true);
-      window.__fpsApi.fire();
-      window.__fpsApi.fire();
       window.__fpsApi.fire();
     });
     await page.waitForTimeout(120);
     await page.screenshot({ path: path.join(EVIDENCE_DIR, 'view_03_container_alley_ads.png') });
 
     await page.evaluate(() => {
+      window.__fpsApi.setLean(0.0);
       window.__fpsApi.setAds(false);
-      window.__fpsApi.equipWeapon(2);
+      window.__fpsApi.equipWeapon(4); // RL-7 Rocket Launcher (Slot 5)
       window.__fpsApi.setPlayerPose(5.8, 5.34, 8.5, 0.55, -0.35);
       window.__fpsApi.detonateAt(2.2, 0.4, 6.5, 0.08);
     });
@@ -200,7 +203,7 @@ async function main() {
     await page.screenshot({ path: path.join(EVIDENCE_DIR, 'view_04_overhead_catwalk_rl7.png') });
 
     await page.evaluate(() => {
-      window.__fpsApi.equipWeapon(1);
+      window.__fpsApi.equipWeapon(3); // SR-9 Sniper Rifle (Slot 4)
       window.__fpsApi.setAds(false);
       window.__fpsApi.setPlayerPose(-7.5, 0.0, -2.5, -0.05, 0.42);
     });
@@ -208,7 +211,7 @@ async function main() {
     await page.screenshot({ path: path.join(EVIDENCE_DIR, 'view_05_gantry_crane_lookup.png') });
 
     await page.evaluate(() => {
-      window.__fpsApi.equipWeapon(1);
+      window.__fpsApi.equipWeapon(3); // SR-9 Sniper 8x Scope ADS
       window.__fpsApi.setPlayerPose(-6.5, 0.0, 26.0, 0.0, -0.02);
       window.__fpsApi.setAds(true);
     });
@@ -217,7 +220,7 @@ async function main() {
 
     await page.evaluate(() => {
       window.__fpsApi.setAds(false);
-      window.__fpsApi.equipWeapon(0);
+      window.__fpsApi.equipWeapon(1); // SMG-9 Tactical Reload inside Warehouse
       window.__fpsApi.setPlayerPose(16.5, 0.0, 2.5, 0.0, -0.05);
       window.__fpsApi.reload();
     });
@@ -236,7 +239,7 @@ async function main() {
 
     await page.evaluate(() => {
       window.__fpsApi.setThirdPerson(false);
-      window.__fpsApi.equipWeapon(0);
+      window.__fpsApi.equipWeapon(1); // Showcase SMG-9 in 5-Tab 3D Loadout Inspector
       window.__fpsApi.toggleLoadout(true);
     });
     await page.waitForTimeout(120);
@@ -271,10 +274,10 @@ async function main() {
         browser,
         path.join(EVIDENCE_DIR, 'cam_hero_before.png'),
         path.join(EVIDENCE_DIR, 'cam_hero_render.png'),
-        'OPTIMIZATION CYCLE A/B — Before (277k Tris / No EnvMap) vs v0.5.0 (Rigforge 2-Hand IK + Three.js Water & Planar Puddles)',
+        'OPTIMIZATION CYCLE A/B — Before (277k Tris / No EnvMap) vs v0.6.0 (5 Weapons + Gyro Aim + Anisotropic Wet Puddles)',
         path.join(EVIDENCE_DIR, 'ab_optimization_before_after.png'),
         '[BEFORE] CYCLE 1 ENGINE RENDER (277,664 TRIS)',
-        '[AFTER] CYCLE 6 (v0.5.0) OPTIMIZED RENDER (RIGFORGE 2-HAND IK + PLANAR PUDDLE WATER)'
+        '[AFTER] CYCLE 7 (v0.6.0) OPTIMIZED RENDER (5 WEAPONS + GYRO AIM + ANISOTROPIC WET PUDDLES)'
       );
     }
 
@@ -338,36 +341,49 @@ async function main() {
     });
 
     // 1. Walk forward along the wet dock lane while enemy soldiers patrol and engage
-    await vidPage.evaluate(() => window.__fpsApi.setPlayerPose(-6.5, 0.0, 23.0, 0.0, -0.02));
+    await vidPage.evaluate(() => {
+      window.__fpsApi.setPlayerPose(-6.5, 0.0, 23.0, 0.0, -0.02);
+      window.__fpsApi.setGyroState(true, 0.0, 0.0);
+    });
     await vidPage.keyboard.down('KeyW');
-    for (let step = 0; step < 8; step++) {
-      await vidPage.waitForTimeout(180);
+    for (let step = 0; step < 6; step++) {
+      await vidPage.waitForTimeout(160);
       if (step === 2) await vidPage.evaluate(() => window.__fpsApi.setAds(true));
-      if (step >= 3 && step <= 6) await vidPage.evaluate(() => window.__fpsApi.fire());
+      if (step >= 2 && step <= 5) await vidPage.evaluate(() => window.__fpsApi.fire());
     }
     await vidPage.keyboard.up('KeyW');
 
-    // 2. Trigger Reload animation
+    // 2. Switch to SMG-9 Tactical (Green Laser Sight) & SG-12 Shotgun + Corner Lean & Frag Grenade
     await vidPage.evaluate(() => {
       window.__fpsApi.setAds(false);
-      window.__fpsApi.reload();
-    });
-    await vidPage.waitForTimeout(850);
-
-    // 3. Switch to SR-9 Sniper Rifle, ADS Scope, and fire headshot
-    await vidPage.evaluate(() => {
       window.__fpsApi.equipWeapon(1);
+      window.__fpsApi.setLean(1.0);
+      window.__fpsApi.fire();
+      window.__fpsApi.fire();
+    });
+    await vidPage.waitForTimeout(380);
+    await vidPage.evaluate(() => {
+      window.__fpsApi.setLean(0.0);
+      window.__fpsApi.equipWeapon(2);
+      window.__fpsApi.fire();
+      window.__fpsApi.throwGrenade(0.3);
+    });
+    await vidPage.waitForTimeout(480);
+
+    // 3. Switch to SR-9 Sniper Rifle (Slot 4), ADS Scope, and fire headshot
+    await vidPage.evaluate(() => {
+      window.__fpsApi.equipWeapon(3);
       window.__fpsApi.setPlayerPose(-6.5, 0.0, 25.0, 0.0, -0.02);
       window.__fpsApi.setAds(true);
     });
-    await vidPage.waitForTimeout(420);
+    await vidPage.waitForTimeout(400);
     await vidPage.evaluate(() => window.__fpsApi.fire());
-    await vidPage.waitForTimeout(420);
+    await vidPage.waitForTimeout(400);
 
-    // 4. Switch to RL-7 Rocket Launcher and fire explosive rocket at red barrel & enemy squad
+    // 4. Switch to RL-7 Rocket Launcher (Slot 5) and fire explosive rocket at red barrel & enemy squad
     await vidPage.evaluate(() => {
       window.__fpsApi.setAds(false);
-      window.__fpsApi.equipWeapon(2);
+      window.__fpsApi.equipWeapon(4);
       window.__fpsApi.setPlayerPose(-6.5, 0.0, 18.5, 0.02, -0.08);
       window.__fpsApi.fire();
     });
