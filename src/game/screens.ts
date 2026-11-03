@@ -27,24 +27,42 @@ export const RECON_SLIDES = [
     grid: 'GRID K-03 · ELEVATION 28m',
     desc: '重型門型吊車與懸吊 20 呎集裝箱區，注意高處狙擊手警戒視線。',
     visualClass: 'recon-slide-crane',
+    imageUrl: 'assets/slides/slide_crane.jpg',
   },
   {
     title: 'CAM-02 // CARGO VESSEL ANTONOV QUAYSIDE',
     grid: 'GRID D-08 · MOORING PIER',
     desc: '萬噸貨輪泊位與潮濕舷梯通道，巡邏隊每 45 秒往返碼頭檢查哨。',
     visualClass: 'recon-slide-ship',
+    imageUrl: 'assets/slides/slide_ship.jpg',
   },
   {
     title: 'CAM-03 // UNDERGROUND CATWALK & CONTAINER ALLEY',
     grid: 'GRID W-12 · INNER YARD',
     desc: '集裝箱迷宮與高架鋼構貓道，適合霰彈兵伏擊與手榴彈破點。',
     visualClass: 'recon-slide-alley',
+    imageUrl: 'assets/slides/slide_alley.jpg',
   },
   {
     title: 'CAM-04 // SECURITY CHECKPOINT & TERMINAL',
     grid: 'GRID E-01 · PRIMARY GATE',
     desc: '敵軍戰術通訊終端所在地，駭入此處可取得港口防空火控權限。',
     visualClass: 'recon-slide-dock',
+    imageUrl: 'assets/slides/slide_dock.jpg',
+  },
+  {
+    title: 'CAM-05 // OVERHEAD CATWALK & RL-7 ARSENAL',
+    grid: 'GRID B-04 · ELEVATION 14m',
+    desc: '高架巡邏走道與重火器物資箱，可俯瞰整個西側貨櫃轉運區。',
+    visualClass: 'recon-slide-catwalk',
+    imageUrl: 'assets/slides/slide_catwalk.jpg',
+  },
+  {
+    title: 'CAM-06 // JUGGERNAUT HEAVY DEFENSE ZONE',
+    grid: 'GRID H-09 · STORAGE SILO',
+    desc: '重裝甲機槍首領駐守防區，需保持距離並尋求隊友火力壓制。',
+    visualClass: 'recon-slide-boss',
+    imageUrl: 'assets/slides/slide_boss.jpg',
   },
 ];
 
@@ -186,7 +204,8 @@ export class GameScreensManager {
       pScreen.id = 'screen-preload';
       pScreen.className = 'screen-preload-overlay hidden';
       pScreen.innerHTML = `
-        <div id="recon-slide-bg" class="preload-recon-bg recon-slide-crane"></div>
+        <div id="recon-slide-bg" class="preload-recon-bg ${RECON_SLIDES[0].visualClass}" style="background-image: url('${RECON_SLIDES[0].imageUrl}');"></div>
+        <div class="preload-cinematic-vignette"></div>
         <div class="preload-crt-scanline"></div>
         <div class="preload-recon-hud">
           <div class="recon-hud-top">
@@ -199,10 +218,6 @@ export class GameScreensManager {
           <div id="recon-hud-desc" class="recon-desc-text">${RECON_SLIDES[0].desc}</div>
         </div>
 
-        <div class="preload-line-track">
-          <div id="preload-line-fill" class="preload-line-fill"></div>
-        </div>
-
         <div class="preload-content-center">
           <div class="preload-badge-row">
             <span class="preload-badge-title">OPERATION MIDNIGHT RECON // WARMING ENGINE</span>
@@ -211,6 +226,9 @@ export class GameScreensManager {
           <div class="preload-stage-row">
             <span id="preload-stage-label" class="preload-stage-label">[v1.6.1] STEP 1/7 · DOWNLOADING ASSETS...</span>
             <span id="preload-stage-pct" class="preload-stage-pct">0%</span>
+          </div>
+          <div class="preload-line-track">
+            <div id="preload-line-fill" class="preload-line-fill"></div>
           </div>
           <div id="preload-stage-hint" class="preload-stage-hint">${TACTICAL_TIPS[0]}</div>
           <div class="preload-footer-ver">FIREGUN TACTICAL ENGINE · CLIENT v1.6.1-REL</div>
@@ -385,6 +403,7 @@ export class GameScreensManager {
       const slide = RECON_SLIDES[this.reconIdx];
       if (this.reconSlideEl) {
         this.reconSlideEl.className = `preload-recon-bg ${slide.visualClass}`;
+        this.reconSlideEl.style.backgroundImage = `url("${slide.imageUrl}")`;
       }
       if (this.reconTitleEl) this.reconTitleEl.textContent = slide.title;
       if (this.reconGridEl) this.reconGridEl.textContent = slide.grid;

@@ -335,7 +335,7 @@ class SpatialAudioManager {
       this.ctx = new AudioCtx();
     }
     if (this.ctx.state === 'suspended') {
-      await this.ctx.resume().catch(() => {});
+      this.ctx.resume().catch(() => {});
     }
     const files = [
       'assets/audio/ar7_shot.wav',
@@ -1743,7 +1743,11 @@ async function loadAllAssets() {
     percent: 85,
     hint: '預先載入 Web Audio 緩衝區並在零音量下試運行，避免首次槍聲解碼卡頓...',
   });
-  await audioSys.unlockAndPreload();
+  // Fire audio preload non-blockingly with 250ms race guard to guarantee mobile WebKit never stalls
+  await Promise.race([
+    audioSys.unlockAndPreload().catch(() => {}),
+    new Promise((resolve) => setTimeout(resolve, 250)),
+  ]);
 
   // Step 6 [85%~98%]: Multi-angle offscreen warmup renders
   screensMgr.updatePreload({
@@ -1753,11 +1757,15 @@ async function loadAllAssets() {
     percent: 96,
     hint: '沿港口開場鏡頭路徑預先繪製 6 個關鍵幀，促使 GPU 完成所有管線狀態快取 (PSO)...',
   });
-  for (let camIdx = 0; camIdx < 6; camIdx++) {
-    const angleRad = (camIdx / 6) * Math.PI * 2;
-    camera.position.set(Math.cos(angleRad) * 12, 4.5, Math.sin(angleRad) * 12);
-    camera.lookAt(0, 1.2, 0);
-    renderer.render(scene, camera);
+  try {
+    for (let camIdx = 0; camIdx < 6; camIdx++) {
+      const angleRad = (camIdx / 6) * Math.PI * 2;
+      camera.position.set(Math.cos(angleRad) * 12, 4.5, Math.sin(angleRad) * 12);
+      camera.lookAt(0, 1.2, 0);
+      renderer.render(scene, camera);
+    }
+  } catch (err) {
+    console.warn('Offscreen warmup render non-fatal fallback:', err);
   }
   // Reset camera to default player spawn
   camera.position.set(blueprint.spawn.position[0], 1.72, blueprint.spawn.position[2]);
