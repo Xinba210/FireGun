@@ -42,7 +42,7 @@
         </div>
       </div>
 
-      <!-- Top-Center Compass & Objective -->
+      <!-- Top-Center Compass, Objective & Prominent Gyroscope / Auto-Fire Tactical Pills -->
       <div class="hud-compass-wrap">
         <div id="compass-strip" class="compass-strip">
           <span>NW 300</span><span>330</span><span class="compass-main">N 000</span><span>030</span><span>NE 060</span><span id="compass-heading" class="compass-heading">070</span><span>E 090</span><span>120</span><span>SE 150</span>
@@ -52,16 +52,18 @@
           <span id="objective-text">目標：肅清碼頭武裝守軍並奪還港務主控終端 (0 / 8)</span>
           <span id="objective-dist" class="obj-dist">42m</span>
         </div>
+        <div id="top-tactical-bar" class="top-tactical-bar">
+          <button id="btn-gyro-toggle" class="gyro-btn gyro-pill-main" title="點擊開啟/關閉手機陀螺儀體感瞄準 (Key: Y)">🧭 陀螺儀瞄準: 點擊開啟</button>
+          <button id="btn-gyro-cal" class="gyro-btn gyro-sub-btn" title="將目前手機握持角度設為準星中心">🔄校準</button>
+          <button id="btn-gyro-sens" class="gyro-btn gyro-sub-btn" title="切換陀螺儀靈敏度倍率">1.0x</button>
+          <button id="btn-autofire-toggle" class="gyro-btn autofire-btn" title="準星對準敵人時自動扣扳機開火">🤖 自動開火: OFF</button>
+          <button id="btn-hud-minimal" class="gyro-btn gyro-sub-btn" title="切換精簡/完整戰術介面 (Key: H)">👁️ 精簡</button>
+        </div>
       </div>
 
-      <!-- Top-Right Killfeed, Gyroscope Controls & Perf Telemetry -->
+      <!-- Top-Right Killfeed & Perf Telemetry -->
       <div class="hud-top-right">
         <div id="perf-badge" class="perf-badge">FPS: -- | P95: -- ms | DC: --</div>
-        <div id="gyro-control-bar" class="gyro-control-bar">
-          <button id="btn-gyro-toggle" class="gyro-btn" title="開啟/關閉手機陀螺儀體感瞄準 (Key: Y)">🎯 陀螺儀瞄準: OFF</button>
-          <button id="btn-gyro-cal" class="gyro-btn gyro-sub-btn" title="將目前手機姿態設為準星中心">校準</button>
-          <button id="btn-gyro-sens" class="gyro-btn gyro-sub-btn" title="切換陀螺儀靈敏度倍率">1.0x</button>
-        </div>
         <div id="killfeed" class="killfeed"></div>
       </div>
 
@@ -148,25 +150,44 @@
         </div>
       </div>
 
-      <!-- Mobile Touch & Gyroscope Controls Overlay -->
+      <!-- Mobile / Tablet Ergonomic Touch Controls & Collapsible Tactical Drawer -->
       <div id="mobile-touch-controls" class="mobile-touch-controls">
+        <div id="touch-look-hint" class="touch-look-hint">👆 滑動畫面移動準星 // 雙擊快速開鏡</div>
         <div id="touch-joystick-zone" class="touch-joystick-zone">
+          <div class="joy-sprint-tag">▲ 推到底衝刺</div>
           <div id="touch-joystick-knob" class="touch-joystick-knob"></div>
         </div>
+
+        <!-- Collapsible Secondary Tactical Gadget Drawer (Hidden by default to keep screen clean!) -->
+        <div id="touch-tactical-drawer" class="touch-tactical-drawer hidden">
+          <div class="drawer-title">戰術裝備與動作選單</div>
+          <div class="drawer-grid">
+            <button id="touch-btn-nvg" class="touch-btn touch-btn-sm">🥽 夜視儀</button>
+            <button id="touch-btn-light" class="touch-btn touch-btn-sm">🔦 手電筒</button>
+            <button id="touch-btn-grenade" class="touch-btn touch-btn-sm">💣 手榴彈</button>
+            <button id="touch-btn-lean-l" class="touch-btn touch-btn-sm">↖ 左探頭</button>
+            <button id="touch-btn-lean-r" class="touch-btn touch-btn-sm">右探頭 ↗</button>
+            <button id="touch-btn-crouch" class="touch-btn touch-btn-sm">🧎 蹲下</button>
+            <button id="touch-btn-jump" class="touch-btn touch-btn-sm">⏫ 跳躍</button>
+            <button id="touch-btn-melee" class="touch-btn touch-btn-sm">👊 近戰擊</button>
+            <button id="touch-btn-mode" class="touch-btn touch-btn-sm">🔁 射擊模式</button>
+            <button id="touch-btn-inspect" class="touch-btn touch-btn-sm">🔍 檢視槍械</button>
+            <button id="touch-btn-tps" class="touch-btn touch-btn-sm">🎥 第三人稱</button>
+            <button id="touch-btn-loadout" class="touch-btn touch-btn-sm">🧰 3D武器庫</button>
+          </div>
+        </div>
+
+        <!-- Primary 5-Button Ergonomic Arc (Never overlaps bottom weapon bar!) -->
         <div class="touch-action-cluster">
-          <button id="touch-btn-lean-l" class="touch-btn touch-btn-sm">↖探頭</button>
-          <button id="touch-btn-lean-r" class="touch-btn touch-btn-sm">探頭↗</button>
-          <button id="touch-btn-nvg" class="touch-btn touch-btn-sm">🥽夜視</button>
-          <button id="touch-btn-inspect" class="touch-btn touch-btn-sm">🔍檢視</button>
-          <button id="touch-btn-light" class="touch-btn touch-btn-sm">🔦電筒</button>
-          <button id="touch-btn-stim" class="touch-btn touch-btn-sm">💉強心</button>
-          <button id="touch-btn-mode" class="touch-btn touch-btn-sm">模式</button>
-          <button id="touch-btn-melee" class="touch-btn touch-btn-sm">👊近戰</button>
-          <button id="touch-btn-grenade" class="touch-btn">💣手雷</button>
-          <button id="touch-btn-reload" class="touch-btn">🔄換彈</button>
-          <button id="touch-btn-crouch" class="touch-btn">蹲下</button>
-          <button id="touch-btn-ads" class="touch-btn touch-btn-ads">🎯瞄準</button>
-          <button id="touch-btn-fire" class="touch-btn touch-btn-fire">🔥射擊</button>
+          <div class="touch-sub-row">
+            <button id="touch-btn-drawer" class="touch-btn touch-btn-drawer">🎒 戰術</button>
+            <button id="touch-btn-stim" class="touch-btn touch-btn-stim-quick">💉 強心</button>
+            <button id="touch-btn-reload" class="touch-btn">🔄 換彈</button>
+          </div>
+          <div class="touch-main-row">
+            <button id="touch-btn-ads" class="touch-btn touch-btn-ads">🎯 瞄準</button>
+            <button id="touch-btn-fire" class="touch-btn touch-btn-fire">🔥 射擊</button>
+          </div>
         </div>
       </div>
     </div>

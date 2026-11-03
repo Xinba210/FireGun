@@ -1832,6 +1832,9 @@ const player = {
   maxStims: 2,
   flashlightOn: false,
   nvgOn: false,
+  autoFireOn: Boolean(window.matchMedia?.('(pointer: coarse)')?.matches),
+  hudMinimal: false,
+  drawerOpen: false,
   inspectTimer: 0,
   recoilOffsetZ: 0,
   recoilPitch: 0,
@@ -2860,12 +2863,22 @@ function applyGyroAimAssistToDelta(rawYawDelta: number, rawPitchDelta: number): 
 function updateGyroHudButtons() {
   const toggleBtn = document.getElementById('btn-gyro-toggle');
   const sensBtn = document.getElementById('btn-gyro-sens');
+  const autoBtn = document.getElementById('btn-autofire-toggle');
+  const minBtn = document.getElementById('btn-hud-minimal');
   if (toggleBtn) {
-    toggleBtn.textContent = `🎯 陀螺儀瞄準: ${gyroController.enabled ? 'ON' : 'OFF'}`;
+    toggleBtn.textContent = gyroController.enabled ? '🧭 陀螺儀: ON' : '🧭 陀螺儀瞄準: 點擊開啟';
     toggleBtn.classList.toggle('active', gyroController.enabled);
   }
   if (sensBtn) {
     sensBtn.textContent = `${gyroController.sensitivity.toFixed(1)}x`;
+  }
+  if (autoBtn) {
+    autoBtn.textContent = `🤖 自動開火: ${player.autoFireOn ? 'ON' : 'OFF'}`;
+    autoBtn.classList.toggle('active', player.autoFireOn);
+  }
+  if (minBtn) {
+    minBtn.textContent = player.hudMinimal ? '👁️ 完整' : '👁️ 精簡';
+    minBtn.classList.toggle('active', player.hudMinimal);
   }
 }
 
@@ -2877,6 +2890,7 @@ function calibrateGyroCenter() {
     gyroController.calibrated = true;
   }
   audioSys.play2D('assets/audio/fire_mode_click.wav', 0.7);
+  showKillBanner('GYRO CENTER CALIBRATED');
 }
 
 async function toggleGyroAiming(forceState?: boolean) {
@@ -2889,18 +2903,44 @@ async function toggleGyroAiming(forceState?: boolean) {
     if (DevOrient && typeof DevOrient.requestPermission === 'function') {
       try {
         const perm = await DevOrient.requestPermission();
-        if (perm !== 'granted') return;
+        if (perm !== 'granted') {
+          showKillBanner('請允許瀏覽器動態感測器權限');
+          return;
+        }
       } catch {
         // Ignore in desktop/headless browsers
       }
     }
     gyroController.enabled = true;
     calibrateGyroCenter();
+    showKillBanner('🧭 陀螺儀體感瞄準：已開啟');
   } else {
     gyroController.enabled = false;
+    showKillBanner('🧭 陀螺儀體感瞄準：已關閉');
   }
   audioSys.play2D('assets/audio/fire_mode_click.wav', 0.75);
   updateGyroHudButtons();
+}
+
+function toggleAutoFireAssist(forceState?: boolean) {
+  player.autoFireOn = forceState !== undefined ? forceState : !player.autoFireOn;
+  audioSys.play2D('assets/audio/fire_mode_click.wav', 0.75);
+  showKillBanner(player.autoFireOn ? '🤖 準星自動開火：ON' : '🤖 準星自動開火：OFF');
+  updateGyroHudButtons();
+}
+
+function toggleMinimalHud(forceState?: boolean) {
+  player.hudMinimal = forceState !== undefined ? forceState : !player.hudMinimal;
+  document.getElementById('hud')?.classList.toggle('hud-minimal', player.hudMinimal);
+  audioSys.play2D('assets/audio/fire_mode_click.wav', 0.7);
+  updateGyroHudButtons();
+}
+
+function toggleTacticalDrawer(forceState?: boolean) {
+  player.drawerOpen = forceState !== undefined ? forceState : !player.drawerOpen;
+  document.getElementById('touch-tactical-drawer')?.classList.toggle('hidden', !player.drawerOpen);
+  document.getElementById('touch-btn-drawer')?.classList.toggle('active', player.drawerOpen);
+  audioSys.play2D('assets/audio/fire_mode_click.wav', 0.65);
 }
 
 window.addEventListener('deviceorientation', (ev) => {
@@ -2972,13 +3012,83 @@ document.getElementById('btn-gyro-sens')?.addEventListener('click', (e) => {
   gyroController.sensitivity = presets[(idx + 1) % presets.length];
   updateGyroHudButtons();
 });
+document.getElementById('btn-autofire-toggle')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleAutoFireAssist();
+});
+document.getElementById('btn-hud-minimal')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleMinimalHud();
+});
+document.getElementById('touch-btn-drawer')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleTacticalDrawer();
+});
 
-// Touch Virtual Joystick & Action Buttons for Mobile Play
+// ---------------------------------------------------------------------------
+// Multi-Touch Swipe-to-Look Aiming (Canvas + Fire/ADS Button Drag) & Joystick
+// ---------------------------------------------------------------------------
 const touchMoveVec = new THREE.Vector2(0, 0);
+let joyPointerId: number | null = null;
+let lookPointerId: number | null = null;
+let lastLookX = 0;
+let lastLookY = 0;
+let lastCanvasTapMs = 0;
+
+function applyTouchLookDelta(dxPx: number, dyPx: number) {
+  if (loadoutOpen) {
+    loadoutShowcaseGroup.rotation.y += dxPx * 0.012;
+    return;
+  }
+  if (missionModalOpen || player.fixedCameraKey) return;
+  const baseSens = player.ads ? (WEAPONS[activeWeaponIdx].id === 'sr9' ? 0.0014 : 0.0026) : 0.0046;
+  const [adjYaw, adjPitch] = applyGyroAimAssistToDelta(-dxPx * baseSens, -dyPx * baseSens);
+  player.yaw += adjYaw;
+  player.pitch = Math.max(-1.35, Math.min(1.35, player.pitch + adjPitch));
+  const hintEl = document.getElementById('touch-look-hint');
+  if (hintEl) hintEl.style.opacity = '0';
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+  audioSys.unlockAndPreload();
+  if (e.pointerType === 'touch' || e.pointerType === 'pen' || window.innerWidth <= 1024) {
+    // Double-tap on touch screen toggles ADS scope!
+    const nowMs = performance.now();
+    if (nowMs - lastCanvasTapMs < 280 && Math.hypot(e.clientX - lastLookX, e.clientY - lastLookY) < 36) {
+      setAdsState(!player.ads);
+    }
+    lastCanvasTapMs = nowMs;
+
+    if (lookPointerId === null && e.pointerId !== joyPointerId) {
+      lookPointerId = e.pointerId;
+      lastLookX = e.clientX;
+      lastLookY = e.clientY;
+      canvas.setPointerCapture?.(e.pointerId);
+    }
+  }
+});
+
+canvas.addEventListener('pointermove', (e) => {
+  if (e.pointerId === lookPointerId) {
+    const dx = e.clientX - lastLookX;
+    const dy = e.clientY - lastLookY;
+    lastLookX = e.clientX;
+    lastLookY = e.clientY;
+    applyTouchLookDelta(dx, dy);
+  }
+});
+
+const releaseLookPointer = (e: PointerEvent) => {
+  if (e.pointerId === lookPointerId) {
+    lookPointerId = null;
+  }
+};
+canvas.addEventListener('pointerup', releaseLookPointer);
+canvas.addEventListener('pointercancel', releaseLookPointer);
+
 const joyZone = document.getElementById('touch-joystick-zone');
 const joyKnob = document.getElementById('touch-joystick-knob');
 if (joyZone && joyKnob) {
-  let joyActive = false;
   const updateJoy = (clientX: number, clientY: number) => {
     const rect = joyZone.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
@@ -2994,35 +3104,63 @@ if (joyZone && joyKnob) {
     joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
     touchMoveVec.set(dx / maxR, -dy / maxR);
   };
-  const resetJoy = () => {
-    joyActive = false;
+  const resetJoy = (e: PointerEvent) => {
+    if (e.pointerId !== joyPointerId) return;
+    joyPointerId = null;
     joyKnob.style.transform = 'translate(0px, 0px)';
     touchMoveVec.set(0, 0);
   };
   joyZone.addEventListener('pointerdown', (e) => {
     e.stopPropagation();
-    joyActive = true;
+    audioSys.unlockAndPreload();
+    joyPointerId = e.pointerId;
     joyZone.setPointerCapture(e.pointerId);
     updateJoy(e.clientX, e.clientY);
   });
   joyZone.addEventListener('pointermove', (e) => {
-    if (joyActive) updateJoy(e.clientX, e.clientY);
+    if (e.pointerId === joyPointerId) updateJoy(e.clientX, e.clientY);
   });
   joyZone.addEventListener('pointerup', resetJoy);
   joyZone.addEventListener('pointercancel', resetJoy);
 }
 
-document.getElementById('touch-btn-fire')?.addEventListener('pointerdown', (e) => {
+// Fire Button supports Hold-and-Drag to Aim & Recoil Control simultaneously!
+let firePointerId: number | null = null;
+let lastFireX = 0;
+let lastFireY = 0;
+const fireBtnEl = document.getElementById('touch-btn-fire');
+fireBtnEl?.addEventListener('pointerdown', (e) => {
   e.stopPropagation();
+  audioSys.unlockAndPreload();
+  firePointerId = e.pointerId;
+  lastFireX = e.clientX;
+  lastFireY = e.clientY;
+  fireBtnEl.setPointerCapture(e.pointerId);
   mouseDownLeft = true;
   fireCurrentWeapon();
 });
-document.getElementById('touch-btn-fire')?.addEventListener('pointerup', () => {
-  mouseDownLeft = false;
+fireBtnEl?.addEventListener('pointermove', (e) => {
+  if (e.pointerId === firePointerId) {
+    const dx = e.clientX - lastFireX;
+    const dy = e.clientY - lastFireY;
+    lastFireX = e.clientX;
+    lastFireY = e.clientY;
+    applyTouchLookDelta(dx, dy);
+  }
 });
+const releaseFireBtn = (e: PointerEvent) => {
+  if (e.pointerId === firePointerId) {
+    firePointerId = null;
+    mouseDownLeft = false;
+  }
+};
+fireBtnEl?.addEventListener('pointerup', releaseFireBtn);
+fireBtnEl?.addEventListener('pointercancel', releaseFireBtn);
+
 document.getElementById('touch-btn-ads')?.addEventListener('click', (e) => {
   e.stopPropagation();
   setAdsState(!player.ads);
+  document.getElementById('touch-btn-ads')?.classList.toggle('active', player.ads);
 });
 document.getElementById('touch-btn-reload')?.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -3031,10 +3169,12 @@ document.getElementById('touch-btn-reload')?.addEventListener('click', (e) => {
 document.getElementById('touch-btn-grenade')?.addEventListener('click', (e) => {
   e.stopPropagation();
   throwFragGrenade();
+  toggleTacticalDrawer(false);
 });
 document.getElementById('touch-btn-melee')?.addEventListener('click', (e) => {
   e.stopPropagation();
   triggerMeleeBash();
+  toggleTacticalDrawer(false);
 });
 document.getElementById('touch-btn-mode')?.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -3044,6 +3184,24 @@ document.getElementById('touch-btn-crouch')?.addEventListener('click', (e) => {
   e.stopPropagation();
   player.crouching = !player.crouching;
   updateStatusHud();
+});
+document.getElementById('touch-btn-jump')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (player.grounded) {
+    player.vel.y = 6.2;
+    player.grounded = false;
+  }
+  toggleTacticalDrawer(false);
+});
+document.getElementById('touch-btn-tps')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  setThirdPersonMode();
+  toggleTacticalDrawer(false);
+});
+document.getElementById('touch-btn-loadout')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleTacticalDrawer(false);
+  toggleLoadoutModal(true);
 });
 document.getElementById('touch-btn-lean-l')?.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -3066,6 +3224,7 @@ document.getElementById('touch-btn-nvg')?.addEventListener('click', (e) => {
 document.getElementById('touch-btn-inspect')?.addEventListener('click', (e) => {
   e.stopPropagation();
   triggerWeaponInspect();
+  toggleTacticalDrawer(false);
 });
 document.getElementById('touch-btn-stim')?.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -3111,6 +3270,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyI') triggerWeaponInspect();
   if (e.code === 'KeyX') useCombatMedStim();
   if (e.code === 'KeyY') toggleGyroAiming();
+  if (e.code === 'KeyH') toggleMinimalHud();
   if (e.code === 'KeyQ') {
     player.leanTarget = -1;
     updateStatusHud();
@@ -3456,7 +3616,8 @@ function stepSimulation(dt: number, elapsedSec: number) {
 
   // 2. Player Movement, First-Person CC0 Arms & Third-Person Over-the-Shoulder Camera
   if (!player.fixedCameraKey && !loadoutOpen && !missionModalOpen) {
-    player.sprinting = Boolean(keys['ShiftLeft'] || keys['ShiftRight']) && !player.crouching && !player.ads;
+    const joySprint = touchMoveVec.y > 0.85 && Math.abs(touchMoveVec.x) < 0.45;
+    player.sprinting = (Boolean(keys['ShiftLeft'] || keys['ShiftRight']) || joySprint) && !player.crouching && !player.ads;
     const speed = player.crouching ? 2.8 : player.sprinting ? 6.4 : 4.3;
 
     const fwd = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
@@ -3681,7 +3842,7 @@ function stepSimulation(dt: number, elapsedSec: number) {
       termBox?.classList.add('hidden');
     }
 
-    // Auto-fire for AR-7 / SMG-9 & 3-Round Burst Queue
+    // Auto-fire for AR-7 / SMG-9, 3-Round Burst Queue & Mobile Reticle Auto-Fire Assist
     if (player.burstRemaining > 0) {
       player.burstTimer -= dt;
       if (player.burstTimer <= 0) {
@@ -3691,6 +3852,20 @@ function stepSimulation(dt: number, elapsedSec: number) {
       }
     } else if (mouseDownLeft && w.fireMode === 'AUTO') {
       fireCurrentWeapon();
+    } else if (player.autoFireOn && !player.reloading && player.fireTimer <= 0 && w.fireMode !== 'ROCKET') {
+      // Check if center reticle is aligned with any alive enemy within 32m!
+      const camDir = new THREE.Vector3();
+      camera.getWorldDirection(camDir);
+      for (const e of enemies) {
+        if (e.state === 'DEAD') continue;
+        const chestPos = e.root.position.clone().add(new THREE.Vector3(0, 1.25, 0));
+        const toE = chestPos.sub(camera.position);
+        const distE = toE.length();
+        if (distE <= 32 && toE.normalize().dot(camDir) >= 0.993) {
+          fireCurrentWeapon();
+          break;
+        }
+      }
     }
 
     // Update Sniper Rangefinder & Compass Heading
@@ -4263,6 +4438,19 @@ window.addEventListener('resize', () => {
     stepSimulation(0.45, 1.95);
     renderSceneWithWater();
   },
+  swipeLook: (dxPx: number, dyPx: number) => {
+    applyTouchLookDelta(dxPx, dyPx);
+    stepSimulation(0.016, 1.5);
+    renderSceneWithWater();
+  },
+  toggleAutoFire: (on?: boolean) => {
+    toggleAutoFireAssist(on);
+    renderSceneWithWater();
+  },
+  toggleDrawer: (open?: boolean) => {
+    toggleTacticalDrawer(open);
+    renderSceneWithWater();
+  },
   toggleLoadout: (open: boolean) => {
     toggleLoadoutModal(open);
     renderSceneWithWater();
@@ -4315,5 +4503,6 @@ loadAllAssets().then(() => {
   }
   updateStatusHud();
   updateWeaponHud();
+  updateGyroHudButtons();
   requestAnimationFrame(animate);
 });

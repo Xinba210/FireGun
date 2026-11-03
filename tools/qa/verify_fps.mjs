@@ -256,6 +256,30 @@ async function main() {
 
     await ctx.close();
 
+    // Capture 11th Viewport: Mobile Portrait (390x844 iPhone Viewport) Ergonomic HUD + Swipe-to-Look + Prominent Gyro & Auto-Fire Pill
+    const mobCtx = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      hasTouch: true,
+      isMobile: true,
+    });
+    const mobPage = await mobCtx.newPage();
+    await mobPage.goto(`${standaloneUrl}?capture=1`, { waitUntil: 'load', timeout: 30000 });
+    await mobPage.waitForFunction(() => {
+      const st = window.__fpsApi?.getState?.();
+      return st && st.enemiesTotal === 8;
+    }, null, { timeout: 20000 });
+    await mobPage.evaluate(() => {
+      window.__fpsApi.closeModals();
+      window.__fpsApi.equipWeapon(0);
+      window.__fpsApi.setPlayerPose(-6.5, 0.0, 21.0, 0.0, -0.02);
+      window.__fpsApi.setGyroState(true, 0.0, 0.0);
+      window.__fpsApi.toggleAutoFire(true);
+      window.__fpsApi.swipeLook(-42, 12);
+    });
+    await mobPage.waitForTimeout(150);
+    await mobPage.screenshot({ path: path.join(EVIDENCE_DIR, 'view_11_mobile_portrait_hud.png') });
+    await mobCtx.close();
+
     // Generate Side-by-Side A/B Comparisons
     await composeSideBySideAB(
       browser,

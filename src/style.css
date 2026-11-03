@@ -742,23 +742,34 @@ body, html {
   cursor: pointer;
 }
 
-/* Gyroscope Control Bar */
-.gyro-control-bar {
-  display: flex;
+/* Top Tactical Bar (Prominent Gyroscope Pill, Auto-Fire & HUD Minimal Toggle) */
+.top-tactical-bar {
+  margin-top: 6px;
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
   gap: 5px;
   pointer-events: auto;
 }
 
 .gyro-btn {
-  background: rgba(10, 15, 24, 0.88);
-  border: 1px solid rgba(148, 163, 184, 0.32);
-  color: #cbd5e1;
-  padding: 4px 10px;
-  font-size: 11px;
-  font-weight: 700;
-  border-radius: 3px;
+  background: rgba(10, 16, 26, 0.9);
+  border: 1.5px solid rgba(148, 163, 184, 0.38);
+  color: #e2e8f0;
+  padding: 5px 11px;
+  font-size: 11.5px;
+  font-weight: 800;
+  border-radius: 16px;
   cursor: pointer;
   transition: all 0.15s ease;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+}
+
+.gyro-pill-main {
+  border-color: rgba(250, 204, 21, 0.65);
+  color: #fef08a;
+  background: rgba(24, 22, 10, 0.92);
 }
 
 .gyro-btn:hover {
@@ -767,15 +778,31 @@ body, html {
 }
 
 .gyro-btn.active {
-  background: rgba(22, 101, 52, 0.88);
+  background: rgba(20, 83, 45, 0.92);
   border-color: #4ade80;
-  color: #86efac;
-  box-shadow: 0 0 10px rgba(74, 222, 128, 0.35);
+  color: #dcfce7;
+  box-shadow: 0 0 12px rgba(74, 222, 128, 0.45);
+}
+
+.autofire-btn.active {
+  background: rgba(14, 116, 144, 0.92);
+  border-color: #38bdf8;
+  color: #e0f2fe;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.45);
 }
 
 .gyro-sub-btn {
-  padding: 4px 7px;
+  padding: 4px 8px;
   font-size: 10.5px;
+}
+
+/* Minimal HUD Mode ([H] or 👁️精簡 button) */
+#hud.hud-minimal .hud-compass-wrap .compass-strip,
+#hud.hud-minimal .perf-badge,
+#hud.hud-minimal .stance-indicator,
+#hud.hud-minimal .tactical-gadget-row,
+#hud.hud-minimal .touch-look-hint {
+  display: none !important;
 }
 
 /* Directional Damage Indicator Arc */
@@ -904,7 +931,7 @@ body, html {
   pointer-events: none;
 }
 
-@media (pointer: coarse), (max-width: 920px) {
+@media (pointer: coarse), (max-width: 1024px) {
   .mobile-touch-controls {
     display: block;
   }
@@ -914,17 +941,45 @@ body, html {
   display: block;
 }
 
+.touch-look-hint {
+  position: absolute;
+  top: 22%;
+  right: 18px;
+  background: rgba(10, 16, 26, 0.65);
+  border: 1px dashed rgba(250, 204, 21, 0.45);
+  color: rgba(254, 240, 138, 0.85);
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 10.5px;
+  font-weight: 700;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+
 .touch-joystick-zone {
   position: absolute;
-  bottom: 120px;
-  left: 34px;
-  width: 116px;
-  height: 116px;
+  bottom: 128px;
+  left: 24px;
+  width: 114px;
+  height: 114px;
   border-radius: 50%;
-  background: rgba(15, 23, 42, 0.45);
-  border: 2px solid rgba(255, 255, 255, 0.25);
+  background: radial-gradient(circle, rgba(15, 23, 42, 0.52) 0%, rgba(15, 23, 42, 0.25) 100%);
+  border: 2px solid rgba(255, 255, 255, 0.28);
   pointer-events: auto;
   touch-action: none;
+}
+
+.joy-sprint-tag {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 9.5px;
+  font-weight: 800;
+  color: rgba(250, 204, 21, 0.82);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
 }
 
 .touch-joystick-knob {
@@ -936,51 +991,283 @@ body, html {
   margin-left: -22px;
   margin-top: -22px;
   border-radius: 50%;
-  background: rgba(250, 204, 21, 0.78);
+  background: rgba(250, 204, 21, 0.82);
   border: 2px solid #fef08a;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
 }
 
 .touch-action-cluster {
   position: absolute;
-  bottom: 118px;
-  right: 22px;
-  width: 230px;
+  bottom: 126px;
+  right: 18px;
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  flex-direction: column;
+  align-items: flex-end;
   gap: 8px;
   pointer-events: auto;
   touch-action: none;
 }
 
+.touch-sub-row,
+.touch-main-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .touch-btn {
-  background: rgba(15, 23, 42, 0.72);
+  background: rgba(15, 23, 42, 0.78);
   border: 1.5px solid rgba(255, 255, 255, 0.32);
   color: #f8fafc;
-  border-radius: 6px;
-  padding: 8px 12px;
+  border-radius: 20px;
+  padding: 8px 13px;
   font-size: 12px;
   font-weight: 800;
   cursor: pointer;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+  touch-action: none;
+}
+
+.touch-btn-drawer {
+  background: rgba(30, 41, 59, 0.88);
+  border-color: #eab308;
+  color: #fef08a;
+}
+
+.touch-btn-drawer.active {
+  background: rgba(234, 179, 8, 0.92);
+  color: #0f172a;
+}
+
+.touch-btn-stim-quick {
+  border-color: rgba(74, 222, 128, 0.65);
+  color: #86efac;
 }
 
 .touch-btn-sm {
-  padding: 5px 9px;
+  padding: 7px 10px;
   font-size: 11px;
+  border-radius: 8px;
 }
 
 .touch-btn-ads {
   border-color: #38bdf8;
-  color: #7dd3fc;
+  background: rgba(12, 74, 110, 0.78);
+  color: #bae6fd;
+  padding: 12px 16px;
+  font-size: 13px;
+  border-radius: 26px;
+}
+
+.touch-btn-ads.active {
+  background: rgba(2, 132, 199, 0.92);
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.5);
 }
 
 .touch-btn-fire {
-  background: rgba(185, 28, 28, 0.78);
-  border-color: #f87171;
+  background: rgba(185, 28, 28, 0.85);
+  border: 2px solid #f87171;
   color: #fef2f2;
-  padding: 10px 18px;
-  font-size: 13px;
+  padding: 15px 22px;
+  font-size: 14px;
+  border-radius: 30px;
+  box-shadow: 0 0 14px rgba(220, 38, 38, 0.45);
+}
+
+/* Collapsible Secondary Tactical Gadget Drawer */
+.touch-tactical-drawer {
+  position: absolute;
+  bottom: 242px;
+  right: 18px;
+  width: 248px;
+  background: rgba(9, 14, 23, 0.94);
+  border: 1.5px solid rgba(250, 204, 21, 0.55);
+  border-radius: 12px;
+  padding: 10px;
+  pointer-events: auto;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.78);
+  z-index: 15;
+}
+
+.drawer-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: #facc15;
+  margin-bottom: 8px;
+  text-align: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  padding-bottom: 4px;
+}
+
+.drawer-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+/* -------------------------------------------------------------------------
+   Responsive Layout Adaptation: Mobile Portrait, Mobile Landscape & Tablet
+   ------------------------------------------------------------------------- */
+@media (max-width: 920px), (pointer: coarse) {
+  /* Hide long desktop keyboard shortcut hints on mobile & tablet! */
+  .controls-hint {
+    display: none !important;
+  }
+  .tactical-gadget-row {
+    display: none !important;
+  }
+}
+
+@media (max-width: 680px) {
+  /* Compact Top-Left Minimap (92x92) so it never collides with center compass/gyro */
+  .hud-minimap-card {
+    top: 10px;
+    left: 10px;
+    width: 96px;
+  }
+  #minimap-canvas {
+    width: 96px;
+    height: 96px;
+  }
+  .minimap-footer {
+    padding: 2px 5px;
+    font-size: 9px;
+  }
+  .hazard-stripe-mini {
+    width: 24px;
+    height: 5px;
+  }
+
+  /* Compact Top-Center Compass, Objective & Prominent Gyro Bar */
+  .hud-compass-wrap {
+    top: 8px;
+    left: 114px;
+    right: 8px;
+    transform: none;
+    text-align: left;
+  }
+  .compass-strip {
+    display: none;
+  }
+  .objective-banner {
+    margin-top: 0;
+    padding: 3px 8px;
+    font-size: 10.5px;
+    width: 100%;
+    justify-content: space-between;
+  }
+  .top-tactical-bar {
+    margin-top: 5px;
+    justify-content: flex-start;
+    gap: 4px;
+  }
+  .gyro-btn {
+    padding: 4px 8px;
+    font-size: 10.5px;
+  }
+
+  /* Move Killfeed below minimap & hide verbose perf-badge unless inspected */
+  .hud-top-right {
+    top: 124px;
+    left: 10px;
+    right: auto;
+    align-items: flex-start;
+  }
+  .perf-badge {
+    font-size: 9.5px;
+    padding: 2px 6px;
+  }
+  .killfeed-item {
+    font-size: 10px;
+    padding: 2px 7px;
+    gap: 5px;
+  }
+  .nvg-hud-tag {
+    top: 98px;
+    font-size: 9.5px;
+  }
+
+  /* Compact Bottom Status (Left) & Weapon/Ammo Bar (Right) with Zero Overlap! */
+  .hud-status-card {
+    bottom: 10px;
+    left: 10px;
+    width: 152px;
+    padding: 6px 8px;
+  }
+  .status-row {
+    margin-bottom: 3px;
+    gap: 5px;
+  }
+  .status-num {
+    width: 28px;
+    font-size: 14px;
+  }
+  .armor-num {
+    font-size: 13px;
+  }
+  .status-unit {
+    display: none;
+  }
+  .stance-indicator {
+    display: none;
+  }
+
+  .hud-weapon-wrap {
+    bottom: 10px;
+    right: 10px;
+    gap: 4px;
+  }
+  .weapon-slots {
+    gap: 3px;
+  }
+  .weapon-slot {
+    padding: 3px 5px;
+    font-size: 9.5px;
+    gap: 3px;
+  }
+  .ammo-card {
+    width: 196px;
+    padding: 6px 9px;
+  }
+  .weapon-silhouette {
+    font-size: 15px;
+  }
+  .weapon-title {
+    font-size: 9.5px;
+    margin: 1px 0;
+  }
+  .ammo-mag {
+    font-size: 22px;
+  }
+  .ammo-sep, .ammo-reserve {
+    font-size: 12px;
+  }
+  .ammo-ticks {
+    display: none;
+  }
+
+  /* Position Joystick & Ergonomic Action Cluster clearly above the 76px bottom bar! */
+  .touch-joystick-zone {
+    bottom: 94px;
+    left: 16px;
+    width: 104px;
+    height: 104px;
+  }
+  .touch-action-cluster {
+    bottom: 94px;
+    right: 12px;
+  }
+  .touch-tactical-drawer {
+    bottom: 204px;
+    right: 12px;
+    width: 236px;
+  }
+  .touch-look-hint {
+    top: 155px;
+    right: 10px;
+    font-size: 9.5px;
+  }
 }
 
 /* SG-12 Circular Shotgun Spread Reticle */
