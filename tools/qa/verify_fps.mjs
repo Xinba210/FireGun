@@ -156,11 +156,17 @@ async function main() {
     await page.waitForTimeout(350);
 
     // 1. Same-camera A/B Reference Renders (matching AGY Concept Art)
-    await page.evaluate(() => window.__fpsApi.setCamera('hero'));
+    await page.evaluate(() => {
+      window.__fpsApi.closeModals();
+      window.__fpsApi.setCamera('hero');
+    });
     await page.waitForTimeout(120);
     await page.screenshot({ path: path.join(EVIDENCE_DIR, 'cam_hero_render.png') });
 
-    await page.evaluate(() => window.__fpsApi.setCamera('lane'));
+    await page.evaluate(() => {
+      window.__fpsApi.closeModals();
+      window.__fpsApi.setCamera('lane');
+    });
     await page.waitForTimeout(120);
     await page.screenshot({ path: path.join(EVIDENCE_DIR, 'cam_lane_render.png') });
 

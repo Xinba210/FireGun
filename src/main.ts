@@ -17,6 +17,7 @@ import {
 } from './game/progression.ts';
 import { WeaponsAttachmentVisualizer, PictureInPictureScope } from './game/weapons.ts';
 import { WorldDetailsManager } from './world/details.ts';
+import { tacticalRadioAudio } from './game/audio.ts';
 
 interface WeaponSpec {
   id: string;
@@ -394,6 +395,8 @@ const audioSys = new SpatialAudioManager();
 // ---------------------------------------------------------------------------
 // Night Port Atmosphere, Sky Dome, Lights & Volumetric Cones (Step 5)
 // ---------------------------------------------------------------------------
+let moonLight: THREE.DirectionalLight;
+
 function buildAtmosphereAndLights() {
   // 1. Stormy Night Sky Dome & Distant Harbor Mountain Silhouette
   const skyGeo = new THREE.SphereGeometry(175, 32, 20);
@@ -434,7 +437,7 @@ function buildAtmosphereAndLights() {
   const hemi = new THREE.HemisphereLight(0x749fd1, 0x2b241c, 1.85);
   scene.add(hemi);
 
-  const moonLight = new THREE.DirectionalLight(0x9ec2ec, 2.35);
+  moonLight = new THREE.DirectionalLight(0x9ec2ec, 2.35);
   moonLight.position.set(-28, 42, 24);
   moonLight.castShadow = true;
   moonLight.shadow.mapSize.set(1024, 1024);
@@ -657,6 +660,280 @@ function setupFireBarrels() {
   rainLines = new THREE.LineSegments(rainGeo, rainMat);
   scene.add(rainLines);
 }
+
+// ---------------------------------------------------------------------------
+// Tactical Stealth Helicopter (MH-60 Blackhawk / Stealth Little Bird)
+// ---------------------------------------------------------------------------
+function createStealthHelicopter() {
+  const group = new THREE.Group();
+  const matBody = new THREE.MeshStandardMaterial({
+    color: 0x141a24,
+    metalness: 0.85,
+    roughness: 0.35,
+  });
+  const matRotor = new THREE.MeshStandardMaterial({
+    color: 0x0a0d12,
+    metalness: 0.9,
+    roughness: 0.2,
+  });
+  const matGlass = new THREE.MeshStandardMaterial({
+    color: 0x0f2027,
+    metalness: 0.95,
+    roughness: 0.1,
+    transparent: true,
+    opacity: 0.65,
+  });
+
+  // Fuselage (chiseled stealth body)
+  const bodyGeo = new THREE.BoxGeometry(2.2, 2.0, 7.5);
+  const bodyMesh = new THREE.Mesh(bodyGeo, matBody);
+  bodyMesh.castShadow = true;
+  group.add(bodyMesh);
+
+  // Cockpit Nose (slanted)
+  const noseGeo = new THREE.ConeGeometry(1.3, 2.5, 4);
+  noseGeo.rotateX(-Math.PI / 2);
+  noseGeo.rotateY(Math.PI / 4);
+  const noseMesh = new THREE.Mesh(noseGeo, matGlass);
+  noseMesh.position.set(0, -0.15, -4.6);
+  group.add(noseMesh);
+
+  // Tail Boom
+  const tailGeo = new THREE.CylinderGeometry(0.35, 0.6, 6.2, 6);
+  tailGeo.rotateX(Math.PI / 2);
+  const tailMesh = new THREE.Mesh(tailGeo, matBody);
+  tailMesh.position.set(0, 0.45, 5.8);
+  group.add(tailMesh);
+
+  // Vertical Tail Fin
+  const finGeo = new THREE.BoxGeometry(0.18, 1.8, 1.2);
+  const finMesh = new THREE.Mesh(finGeo, matBody);
+  finMesh.position.set(0, 1.2, 8.6);
+  group.add(finMesh);
+
+  // Main Rotor Hub & 4 Blades
+  const mainRotor = new THREE.Group();
+  mainRotor.position.set(0, 1.45, -0.4);
+  const hubGeo = new THREE.CylinderGeometry(0.45, 0.45, 0.5, 8);
+  mainRotor.add(new THREE.Mesh(hubGeo, matRotor));
+  for (let b = 0; b < 4; b++) {
+    const bladeGeo = new THREE.BoxGeometry(0.35, 0.05, 5.8);
+    const bladeMesh = new THREE.Mesh(bladeGeo, matRotor);
+    bladeMesh.rotation.y = (b * Math.PI) / 2;
+    bladeMesh.position.set(
+      Math.sin((b * Math.PI) / 2) * 2.8,
+      0.15,
+      Math.cos((b * Math.PI) / 2) * 2.8
+    );
+    mainRotor.add(bladeMesh);
+  }
+  group.add(mainRotor);
+
+  // Tail Rotor Hub & 2 Blades
+  const tailRotor = new THREE.Group();
+  tailRotor.position.set(0.35, 1.6, 8.8);
+  tailRotor.rotation.z = Math.PI / 2;
+  const tHubGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.25, 6);
+  tailRotor.add(new THREE.Mesh(tHubGeo, matRotor));
+  const tBladeGeo = new THREE.BoxGeometry(0.18, 0.04, 1.6);
+  tailRotor.add(new THREE.Mesh(tBladeGeo, matRotor));
+  group.add(tailRotor);
+
+  // Landing Skids
+  const skidMat = new THREE.MeshStandardMaterial({ color: 0x22262c, metalness: 0.8, roughness: 0.3 });
+  for (const sx of [-1.25, 1.25]) {
+    const skidGeo = new THREE.CylinderGeometry(0.08, 0.08, 5.5, 6);
+    skidGeo.rotateX(Math.PI / 2);
+    const skid = new THREE.Mesh(skidGeo, skidMat);
+    skid.position.set(sx, -1.35, -0.4);
+    group.add(skid);
+
+    for (const sz of [-1.5, 1.2]) {
+      const strutGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.7, 6);
+      const strut = new THREE.Mesh(strutGeo, skidMat);
+      strut.position.set(sx * 0.75, -1.0, sz);
+      strut.rotation.z = (sx > 0 ? -1 : 1) * 0.45;
+      group.add(strut);
+    }
+  }
+
+  // Interior Jump Cabin Point Light
+  const cabinLight = new THREE.PointLight(0xff2222, 3.5, 8);
+  cabinLight.position.set(0, 0.2, 0.5);
+  group.add(cabinLight);
+
+  return {
+    group,
+    mainRotor,
+    tailRotor,
+    cabinLight,
+    update(dt: number, pos: THREE.Vector3, rotY: number, lightColor: THREE.Color) {
+      group.position.copy(pos);
+      group.rotation.y = rotY;
+      mainRotor.rotation.y += dt * 44;
+      tailRotor.rotation.x += dt * 48;
+      cabinLight.color.copy(lightColor);
+    },
+  };
+}
+let stealthHeli: ReturnType<typeof createStealthHelicopter> | null = null;
+
+// ---------------------------------------------------------------------------
+// Tactical Props (Jersey Barriers, Mooring Bollards, Ammo Crates & Caution Markings)
+// ---------------------------------------------------------------------------
+function setupTacticalPropsAndMarkings() {
+  // 1. Heavy Steel Mooring Bollards along water edge with mooring cables
+  const bollardMat = new THREE.MeshStandardMaterial({ color: 0x1c2128, metalness: 0.85, roughness: 0.3 });
+  const cableMat = new THREE.LineBasicMaterial({ color: 0x2d3748 });
+  const bollardGeo = new THREE.CylinderGeometry(0.24, 0.28, 0.85, 12);
+  const capGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.15, 12);
+
+  const bZcoords = [-16, -6, 4, 14, 24, 32];
+  bZcoords.forEach((bz) => {
+    const bg = new THREE.Group();
+    bg.position.set(-17.2, 0.42, bz);
+    const bMesh = new THREE.Mesh(bollardGeo, bollardMat);
+    bMesh.castShadow = true;
+    bg.add(bMesh);
+    const cMesh = new THREE.Mesh(capGeo, bollardMat);
+    cMesh.position.y = 0.45;
+    bg.add(cMesh);
+    scene.add(bg);
+
+    // Mooring steel cable connecting to cargo ship hull
+    const cableGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-17.2, 0.8, bz),
+      new THREE.Vector3(-24.5, 3.8, bz - 2.5),
+    ]);
+    const cable = new THREE.Line(cableGeo, cableMat);
+    scene.add(cable);
+  });
+
+  // 2. Yellow/Black Caution Edge Stripes along Dock Quay
+  const stripeCanvas = document.createElement('canvas');
+  stripeCanvas.width = 128;
+  stripeCanvas.height = 16;
+  const sCtx = stripeCanvas.getContext('2d')!;
+  sCtx.fillStyle = '#facc15';
+  sCtx.fillRect(0, 0, 128, 16);
+  sCtx.fillStyle = '#1e293b';
+  for (let i = -16; i < 140; i += 24) {
+    sCtx.beginPath();
+    sCtx.moveTo(i, 0);
+    sCtx.lineTo(i + 14, 0);
+    sCtx.lineTo(i + 4, 16);
+    sCtx.lineTo(i - 10, 16);
+    sCtx.closePath();
+    sCtx.fill();
+  }
+  const stripeTex = new THREE.CanvasTexture(stripeCanvas);
+  stripeTex.wrapS = THREE.RepeatWrapping;
+  stripeTex.repeat.set(18, 1);
+  const stripeMat = new THREE.MeshStandardMaterial({
+    map: stripeTex,
+    roughness: 0.8,
+    metalness: 0.1,
+  });
+  const stripeMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 54), stripeMat);
+  stripeMesh.rotation.x = -Math.PI / 2;
+  stripeMesh.position.set(-17.0, 0.02, 8.0);
+  scene.add(stripeMesh);
+
+  // 3. Concrete Jersey Barriers & Stacked Ammo Crates / Pallets
+  const barrierMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.9, metalness: 0.05 });
+  const palletMat = new THREE.MeshStandardMaterial({ color: 0x785633, roughness: 0.85, metalness: 0.05 });
+  const crateMat = new THREE.MeshStandardMaterial({ color: 0x33442a, roughness: 0.75, metalness: 0.2 });
+
+  const barrierPositions = [
+    [-8.8, 19.8, 0],
+    [-8.8, 22.8, 0],
+    [1.8, 12.5, Math.PI / 2],
+    [5.0, 12.5, Math.PI / 2],
+    [-2.5, 4.5, 0.3],
+  ];
+  barrierPositions.forEach(([bx, bz, ry]) => {
+    const barGeo = new THREE.BoxGeometry(0.65, 0.95, 2.8);
+    const barMesh = new THREE.Mesh(barGeo, barrierMat);
+    barMesh.position.set(bx, 0.48, bz);
+    barMesh.rotation.y = ry;
+    barMesh.castShadow = true;
+    barMesh.receiveShadow = true;
+    scene.add(barMesh);
+  });
+
+  const cratePositions = [
+    [-9.6, 18.2], [-9.6, 17.1], [-9.6, 16.0],
+    [3.2, 10.5], [4.2, 10.5], [-5.2, -1.2],
+  ];
+  cratePositions.forEach(([cx, cz], i) => {
+    const pMesh = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.15, 1.2), palletMat);
+    pMesh.position.set(cx, 0.08, cz);
+    scene.add(pMesh);
+
+    const cMesh = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.55, 0.65), crateMat);
+    cMesh.position.set(cx, 0.44, cz);
+    cMesh.rotation.y = i * 0.4;
+    cMesh.castShadow = true;
+    cMesh.receiveShadow = true;
+    scene.add(cMesh);
+  });
+
+  // 4. Slow-Breathing Red Aviation Beacon at top of Gantry Crane
+  const beaconLight = new THREE.PointLight(0xef4444, 2.5, 35);
+  beaconLight.position.set(-7.5, 27.5, -22.0);
+  scene.add(beaconLight);
+
+  const beaconGeo = new THREE.SphereGeometry(0.35, 8, 8);
+  const beaconMat = new THREE.MeshBasicMaterial({ color: 0xff3333 });
+  const beaconMesh = new THREE.Mesh(beaconGeo, beaconMat);
+  beaconMesh.position.copy(beaconLight.position);
+  scene.add(beaconMesh);
+}
+
+// ---------------------------------------------------------------------------
+// Dynamic Thunderstorm Lightning & Distant Thunder Engine
+// ---------------------------------------------------------------------------
+let lightningTimer = 14.0;
+let lightningFlashPhase = 0;
+const lightningBaseIntensity = 2.35;
+
+function updateLightningAndThunder(dt: number, moonDirLight: THREE.DirectionalLight) {
+  lightningTimer -= dt;
+  if (lightningTimer <= 0) {
+    lightningFlashPhase = 1;
+    lightningTimer = 18.0 + Math.random() * 12.0;
+    setTimeout(() => {
+      tacticalRadioAudio.playThunderRumble(0.68);
+    }, 750 + Math.random() * 450);
+  }
+
+  if (lightningFlashPhase > 0) {
+    if (lightningFlashPhase === 1) {
+      moonDirLight.intensity = 8.5;
+      moonDirLight.color.setHex(0xd0e6ff);
+      lightningFlashPhase = 2;
+    } else if (lightningFlashPhase === 2) {
+      moonDirLight.intensity = 1.8;
+      lightningFlashPhase = 3;
+    } else if (lightningFlashPhase === 3) {
+      moonDirLight.intensity = 6.2;
+      lightningFlashPhase = 4;
+    } else {
+      moonDirLight.intensity = lightningBaseIntensity;
+      moonDirLight.color.setHex(0x9ec2ec);
+      lightningFlashPhase = 0;
+    }
+  }
+}
+
+// Dynamic Radio Narrative State
+const narrativeState = {
+  firstContact: false,
+  sniperDown: false,
+  fuelDepot: false,
+  terminalHacked: false,
+};
+
 
 // ---------------------------------------------------------------------------
 // Realistic Water & Planar Reflective Wet Puddles (Three.js Water.js + Fresnel Rain Ripple Shader)
@@ -1398,6 +1675,13 @@ async function loadAllAssets() {
   setupPlayerCc0ArmsAndThirdPerson();
   equipWeapon(0);
   spawnEnemySquad();
+  setupTacticalPropsAndMarkings();
+
+  // Initialize Tactical Stealth Helicopter
+  if (!stealthHeli) {
+    stealthHeli = createStealthHelicopter();
+    scene.add(stealthHeli.group);
+  }
 
   // Initialize Allied Squad (2 Members)
   squadMgr.initSquadMembers(soldierTemplateGltf, scene, player.pos);
@@ -1452,6 +1736,9 @@ async function loadAllAssets() {
     screensMgr.hidePreload();
     if (!captureMode && !initialCamParam) {
       infiltrationDirector.play(() => {
+        if (playerTpsRoot) playerTpsRoot.visible = false;
+        fpRig.visible = true;
+        if (stealthHeli) stealthHeli.group.visible = false;
         audioSys.play2D('assets/audio/radio_chatter.wav', 0.85);
         audioSys.play2D('assets/audio/fire_mode_click.wav', 0.85);
         showKillBanner('TACTICAL INSERTION CONFIRMED // FREE TO ENGAGE');
@@ -2344,6 +2631,15 @@ function triggerExplosionAt(pos: THREE.Vector3, radius = 7.5, maxDamage = 165) {
       b.exploded = true;
       b.mesh.visible = false;
       b.wreckGroup.visible = true;
+      if (!narrativeState.fuelDepot) {
+        narrativeState.fuelDepot = true;
+        tacticalRadioAudio.speakRadioLine('ROACH', 'Depot is up in smoke! Alarm sounding!');
+        screensMgr.showInGameRadio('[ROACH]', '"Depot is up in smoke! Alarm sounding across the port!"', 4.0);
+        setTimeout(() => {
+          tacticalRadioAudio.speakRadioLine('COMMAND', 'Hostile armor reacting! Advance to the ship bridge terminal!');
+          screensMgr.showInGameRadio('[COMMAND]', '"Hostile armor reacting! Advance to the ship bridge terminal!"', 4.5);
+        }, 3500);
+      }
     } else if (!b.exploded && dBarrel < radius * 0.92) {
       b.exploded = true;
       setTimeout(() => {
@@ -2571,6 +2867,12 @@ function damageEnemy(enemy: EnemyActor, amount: number, isHeadshot: boolean, wea
       age: 0,
       collected: false,
     });
+
+    if (enemy.name.includes('Sniper') && !narrativeState.sniperDown) {
+      narrativeState.sniperDown = true;
+      tacticalRadioAudio.speakRadioLine('GHOST', 'Sniper neutralized! High ground is secure.');
+      screensMgr.showInGameRadio('[GHOST]', '"Sniper neutralized! High catwalk is secure, good shooting!"', 4.0);
+    }
 
     if (isHeadshot) {
       player.headshots++;
@@ -4120,15 +4422,21 @@ function stepSimulation(dt: number, elapsedSec: number) {
     const leanOffsetZ = right.z * player.leanAmount * 0.38;
     const leanRollRad = -player.leanAmount * 0.21;
 
+    // Dynamic Thunderstorm Lightning & Distant Thunder Engine
+    updateLightningAndThunder(dt, moonLight);
+
     if (infiltrationDirector && infiltrationDirector.active) {
       infiltrationDirector.update(dt, player.pos);
       fpRig.visible = false;
-      if (playerTpsRoot) {
-        playerTpsRoot.visible = infiltrationDirector.currentElapsed >= 4.2;
-        if (playerTpsMixer) playerTpsMixer.update(dt);
-        poseCharacterTwoHandRifleIk(playerTpsRoot, playerTpsWeaponMount || undefined, 0, 0, 0);
+      if (playerTpsRoot) playerTpsRoot.visible = false;
+      if (stealthHeli) {
+        stealthHeli.update(dt, infiltrationDirector.helicopterPos, infiltrationDirector.helicopterRotY, infiltrationDirector.cabinLightColor);
+        stealthHeli.group.visible = true;
       }
     } else if (player.thirdPerson) {
+      if (stealthHeli) stealthHeli.group.visible = false;
+      if (playerTpsRoot) playerTpsRoot.visible = !loadoutOpen && !missionModalOpen;
+      fpRig.visible = false;
       // Over-the-Shoulder Third-Person Tactical Camera
       const camBack = player.ads ? 1.38 : 2.38;
       const camRight = (player.ads ? 0.44 : 0.56) + player.leanAmount * 0.38;
@@ -4143,6 +4451,10 @@ function stepSimulation(dt: number, elapsedSec: number) {
       camera.rotation.x = player.pitch + player.recoilPitch + shakeY * 0.35 - 0.04;
       camera.rotation.z = leanRollRad * 0.6;
     } else {
+      // First-Person Mode: NEVER RENDER 3RD PERSON HEAD/BODY MODEL!
+      if (stealthHeli) stealthHeli.group.visible = false;
+      if (playerTpsRoot) playerTpsRoot.visible = false;
+      fpRig.visible = !loadoutOpen && !missionModalOpen;
       camera.position.set(
         player.pos.x + bobX + shakeX + leanOffsetX,
         player.pos.y + eyeHeight + bobY + shakeY - Math.abs(player.leanAmount) * 0.06,
@@ -4237,6 +4549,11 @@ function stepSimulation(dt: number, elapsedSec: number) {
           audioSys.play2D('assets/audio/fire_mode_click.wav', 0.95);
           showKillBanner('TERMINAL SECURED +250');
           updateObjectiveHud();
+          if (!narrativeState.terminalHacked) {
+            narrativeState.terminalHacked = true;
+            tacticalRadioAudio.speakRadioLine('COMMAND', 'Terminal data secured! Pelican is inbound for extraction!');
+            screensMgr.showInGameRadio('[COMMAND]', '"Terminal data secured! Pelican is inbound for extraction!"', 5.0);
+          }
           setTimeout(() => termBox?.classList.add('hidden'), 1400);
         }
       } else {
@@ -4915,6 +5232,10 @@ window.addEventListener('resize', () => {
     toggleLoadoutModal(false);
     missionModalOpen = false;
     document.getElementById('mission-modal')?.classList.add('hidden');
+    document.getElementById('screen-title-portal')?.classList.add('hidden');
+    document.getElementById('screen-preload')?.classList.add('hidden');
+    document.getElementById('screen-pause')?.classList.add('hidden');
+    document.getElementById('screen-records')?.classList.add('hidden');
     document.getElementById('hud')?.classList.remove('hidden');
     fpRig.visible = true;
     renderSceneWithWater();
@@ -4970,7 +5291,16 @@ if (isAutomatedQa) {
   startOperationPipeline();
 } else {
   // Mainstream AAA Tactical Experience: present Title Portal first!
-  screensMgr.showPortal(() => {
-    startOperationPipeline();
-  });
+  screensMgr.showPortal(
+    () => {
+      startOperationPipeline();
+    },
+    () => {
+      // Gunsmith tab clicked on title screen
+      startOperationPipeline();
+      setTimeout(() => {
+        toggleLoadoutModal(true);
+      }, 500);
+    }
+  );
 }

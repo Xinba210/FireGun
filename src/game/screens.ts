@@ -106,11 +106,18 @@ export class GameScreensManager {
             </div>
           </div>
 
+          <!-- Tactical Navigation Glass Bar -->
+          <div class="portal-nav-bar">
+            <button id="btn-portal-tab-campaign" class="btn-portal-tab active">⚔️ 戰役行動 (CAMPAIGN)</button>
+            <button id="btn-portal-tab-gunsmith" class="btn-portal-tab">🧰 戰術軍械庫 (GUNSMITH)</button>
+            <button id="btn-portal-tab-dossier" class="btn-portal-tab">📊 作戰紀錄 (DOSSIER)</button>
+          </div>
+
           <div class="portal-features-chips">
-            <span class="p-chip">⚡ 7-STEP PRELOAD</span>
+            <span class="p-chip">🚁 HELI INFILTRATION</span>
+            <span class="p-chip">📻 RADIO NARRATIVE</span>
             <span class="p-chip">🧭 2.2x GYRO AIM</span>
             <span class="p-chip">👥 SQUAD TACTICS</span>
-            <span class="p-chip">🧰 3D GUNSMITH</span>
           </div>
 
           <button id="btn-portal-deploy" class="btn-portal-deploy">
@@ -122,6 +129,31 @@ export class GameScreensManager {
         </div>
       `;
       document.body.appendChild(portalEl);
+
+      // In-game dynamic radio transmission HUD
+      let radioChatter = document.getElementById('ingame-radio-chatter');
+      if (!radioChatter) {
+        radioChatter = document.createElement('div');
+        radioChatter.id = 'ingame-radio-chatter';
+        radioChatter.className = 'ingame-radio-overlay hidden';
+        radioChatter.innerHTML = `
+          <div class="radio-card">
+            <div class="radio-card-header">
+              <div class="radio-speaker-badge">
+                <span class="radio-live-blip"></span>
+                <span id="radio-card-speaker" class="radio-speaker-callsign">[COMMAND]</span>
+              </div>
+              <div class="radio-freq-waveform">
+                <span></span><span></span><span></span><span></span><span></span><span></span>
+              </div>
+            </div>
+            <div class="radio-card-body" id="radio-card-text">
+              "SAT-RECON confirms enemy presence. Keep it quiet."
+            </div>
+          </div>
+        `;
+        document.body.appendChild(radioChatter);
+      }
     }
     this.titlePortal = portalEl;
 
@@ -337,7 +369,23 @@ export class GameScreensManager {
     }, 2400);
   }
 
-  public showPortal(onDeploy: () => void) {
+  private radioTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  public showInGameRadio(speaker: string, text: string, durationSec = 4.0): void {
+    const el = document.getElementById('ingame-radio-chatter');
+    const spk = document.getElementById('radio-card-speaker');
+    const txt = document.getElementById('radio-card-text');
+    if (!el || !spk || !txt) return;
+    spk.textContent = speaker;
+    txt.textContent = text;
+    el.classList.remove('hidden');
+    if (this.radioTimeout) clearTimeout(this.radioTimeout);
+    this.radioTimeout = setTimeout(() => {
+      el.classList.add('hidden');
+    }, durationSec * 1000);
+  }
+
+  public showPortal(onDeploy: () => void, onGunsmith?: () => void) {
     if (!this.titlePortal) return;
     this.titlePortal.classList.remove('hidden');
     const startDeploy = () => {
@@ -347,6 +395,13 @@ export class GameScreensManager {
       });
     };
     document.getElementById('btn-portal-deploy')?.addEventListener('click', startDeploy, { once: true });
+    document.getElementById('btn-portal-tab-campaign')?.addEventListener('click', startDeploy, { once: true });
+    document.getElementById('btn-portal-tab-gunsmith')?.addEventListener('click', () => {
+      onGunsmith?.();
+    });
+    document.getElementById('btn-portal-tab-dossier')?.addEventListener('click', () => {
+      this.showRecords();
+    });
     const keyStart = (e: KeyboardEvent) => {
       if (e.code === 'Space' || e.code === 'Enter') {
         window.removeEventListener('keydown', keyStart);
