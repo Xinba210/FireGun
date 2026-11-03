@@ -101,15 +101,17 @@ export class GameScreensManager {
           <div class="portal-header-tag">
             <span class="portal-badge-dot"></span>
             <span class="portal-badge-text">TASK FORCE 141 // RECON OPS DIVISION</span>
+            <span class="portal-version-badge">v1.6.1</span>
             <span class="portal-server-status">PACIFIC ASIA-EAST [ONLINE 22ms]</span>
           </div>
 
           <div class="portal-main-branding">
-            <h1 class="portal-title-h1">FIREGUN</h1>
+            <h1 class="portal-title-h1">FIREGUN <span class="portal-version-inline">v1.6.1</span></h1>
             <div class="portal-hazard-line"></div>
             <div class="portal-subtitle-row">
               <span class="portal-sub-code">ACT-01 // PFT-08</span>
               <span class="portal-sub-name">OPERATION COLD HARBOR (寒港行動)</span>
+              <span class="portal-sub-ver">BUILD 1.6.1</span>
             </div>
           </div>
 
@@ -132,7 +134,7 @@ export class GameScreensManager {
             <span class="btn-portal-text">⚔️ DEPLOY OPERATOR // 點擊進入作戰</span>
           </button>
 
-          <div class="portal-footer-note">PRESS ANY KEY OR TAP SCREEN TO COMMENCE OPERATION</div>
+          <div class="portal-footer-note">PRESS ANY KEY OR TAP SCREEN TO COMMENCE OPERATION · CLIENT v1.6.1</div>
         </div>
       `;
       document.body.appendChild(portalEl);
@@ -202,7 +204,7 @@ export class GameScreensManager {
         </div>
 
         <div class="preload-content-center">
-          <div class="preload-badge-title">OPERATION MIDNIGHT RECON // WARMING ENGINE</div>
+          <div class="preload-badge-title">OPERATION MIDNIGHT RECON // WARMING ENGINE [v1.6.1]</div>
           <div class="preload-stage-row">
             <span id="preload-stage-label" class="preload-stage-label">STEP 1/7 · DOWNLOADING ASSETS...</span>
             <span id="preload-stage-pct" class="preload-stage-pct">0%</span>
@@ -232,7 +234,7 @@ export class GameScreensManager {
         <div class="pause-card">
           <div class="pause-header">
             <span class="pause-title">PAUSED // 作戰暫停</span>
-            <span class="pause-code">GRID K2 · PACIFIC TIME 02:40</span>
+            <span class="pause-code">GRID K2 · PACIFIC TIME 02:40 · BUILD v1.6.1</span>
           </div>
           <div class="pause-actions">
             <button id="btn-pause-resume" class="btn-pause-act btn-pause-primary">RESUME OPERATION // 繼續作戰</button>
