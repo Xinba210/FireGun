@@ -74,6 +74,12 @@ export class GameScreensManager {
   private targetPct = 0;
   private lerpRaf: number | null = null;
 
+  // Dedicated lifecycle and deploy triggers
+  private onDeployCallback: (() => void) | null = null;
+  private onGunsmithCallback: (() => void) | null = null;
+  private portalDeployPending = false;
+  private isDeploying = false;
+
   constructor() {
     this.createDomElements();
     this.startLerpLoop();
@@ -87,7 +93,7 @@ export class GameScreensManager {
     if (!portalEl) {
       portalEl = document.createElement('div');
       portalEl.id = 'screen-title-portal';
-      portalEl.className = 'screen-portal-overlay';
+      portalEl.className = 'screen-portal-overlay hidden';
       portalEl.innerHTML = `
         <div class="portal-backdrop"></div>
         <div class="portal-scanline"></div>
@@ -157,6 +163,19 @@ export class GameScreensManager {
       }
     }
     this.titlePortal = portalEl;
+
+    // Attach early eager fallback listeners so even pre-warmed clicks/touches register safely
+    const earlyDeployBtn = portalEl.querySelector('#btn-portal-deploy') as HTMLElement | null;
+    const earlyCampBtn = portalEl.querySelector('#btn-portal-tab-campaign') as HTMLElement | null;
+    this.bindPortalTap(earlyDeployBtn, (e) => this.triggerDeployAction(e));
+    this.bindPortalTap(earlyCampBtn, (e) => this.triggerDeployAction(e));
+    this.bindPortalTap(portalEl, (e) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('.btn-portal-tab') || target.closest('.btn-portal-deploy') || target.closest('.portal-nav-bar')) {
+        return;
+      }
+      this.triggerDeployAction(e);
+    });
 
     // 1. Dynamic Recon Preload Screen (Multi-Angle Surveillance & Lerp Progress Bar)
     let pScreen = document.getElementById('screen-preload');
@@ -388,81 +407,96 @@ export class GameScreensManager {
     }, durationSec * 1000);
   }
 
-  public showPortal(onDeploy: () => void, onGunsmith?: () => void) {
-    if (!this.titlePortal) return;
-    this.titlePortal.classList.remove('hidden');
-
-    let isDeploying = false;
-    const startDeploy = (e?: Event) => {
-      if (e) {
-        e.preventDefault();
-        e.stopPropagation();
+  private bindPortalTap(el: HTMLElement | null, handler: (e: Event) => void) {
+    if (!el) return;
+    el.onclick = (e) => handler(e);
+    el.ontouchend = (e) => handler(e);
+    el.addEventListener('pointerup', (e) => {
+      // Fire on touch or primary mouse button
+      if (e.pointerType === 'touch' || e.button === 0) {
+        handler(e);
       }
-      if (isDeploying) return;
-      isDeploying = true;
+    });
+  }
 
-      // Unlock Web Audio immediately on user interaction
-      tacticalRadioAudio.initAudio().catch(() => {});
+  public triggerDeployAction(e?: Event) {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (this.isDeploying) return;
 
-      // Instantly hide title portal to guarantee immediate response
+    // Unlock Web Audio immediately on first user touch / click
+    tacticalRadioAudio.initAudio().catch(() => {});
+
+    if (this.onDeployCallback) {
+      this.isDeploying = true;
       this.titlePortal?.classList.add('hidden');
       this.triggerWhiteFlash();
-      onDeploy();
-    };
+      this.onDeployCallback();
+    } else {
+      // User tapped while engine is still warming up
+      this.portalDeployPending = true;
+      const btnText = this.titlePortal?.querySelector('.btn-portal-text');
+      if (btnText) {
+        btnText.textContent = '⏳ INFILTRATION READY // 準備著陸中...';
+      }
+    }
+  }
+
+  public showPortal(onDeploy: () => void, onGunsmith?: () => void) {
+    this.onDeployCallback = onDeploy;
+    if (onGunsmith) this.onGunsmithCallback = onGunsmith;
+
+    if (this.portalDeployPending) {
+      this.portalDeployPending = false;
+      this.triggerDeployAction();
+      return;
+    }
+
+    if (!this.titlePortal) return;
+    this.titlePortal.classList.remove('hidden');
 
     const deployBtn = document.getElementById('btn-portal-deploy');
     const campBtn = document.getElementById('btn-portal-tab-campaign');
     const gunsmithBtn = document.getElementById('btn-portal-tab-gunsmith');
     const dossierBtn = document.getElementById('btn-portal-tab-dossier');
 
-    const bindAction = (el: HTMLElement | null, handler: (e: Event) => void) => {
-      if (!el) return;
-      el.onclick = (e) => handler(e);
-      el.ontouchend = (e) => handler(e);
-    };
+    this.bindPortalTap(deployBtn, (e) => this.triggerDeployAction(e));
+    this.bindPortalTap(campBtn, (e) => this.triggerDeployAction(e));
 
-    bindAction(deployBtn, startDeploy);
-    bindAction(campBtn, startDeploy);
-
-    bindAction(gunsmithBtn, (e) => {
+    this.bindPortalTap(gunsmithBtn, (e) => {
       e.preventDefault();
       e.stopPropagation();
       this.titlePortal?.classList.add('hidden');
-      onGunsmith?.();
+      (this.onGunsmithCallback || onGunsmith)?.();
     });
 
-    bindAction(dossierBtn, (e) => {
+    this.bindPortalTap(dossierBtn, (e) => {
       e.preventDefault();
       e.stopPropagation();
       this.titlePortal?.classList.add('hidden');
       this.showRecords(() => {
         // Return to title portal if closed before game deployment
-        if (!isDeploying) {
+        if (!this.isDeploying) {
           this.titlePortal?.classList.remove('hidden');
         }
       });
     });
 
     // Tap anywhere on the portal backdrop/screen to deploy as stated in footer note
-    this.titlePortal.onclick = (e) => {
+    this.bindPortalTap(this.titlePortal, (e) => {
       const target = e.target as HTMLElement;
-      if (target.closest('.btn-portal-tab') || target.closest('.btn-portal-deploy')) {
+      if (target.closest('.btn-portal-tab') || target.closest('.btn-portal-deploy') || target.closest('.portal-nav-bar')) {
         return;
       }
-      startDeploy(e);
-    };
-    this.titlePortal.ontouchend = (e) => {
-      const target = e.target as HTMLElement;
-      if (target.closest('.btn-portal-tab') || target.closest('.btn-portal-deploy')) {
-        return;
-      }
-      startDeploy(e);
-    };
+      this.triggerDeployAction(e);
+    });
 
     const keyStart = (e: KeyboardEvent) => {
       if (e.code === 'Space' || e.code === 'Enter') {
         window.removeEventListener('keydown', keyStart);
-        startDeploy();
+        this.triggerDeployAction(e);
       }
     };
     window.addEventListener('keydown', keyStart);

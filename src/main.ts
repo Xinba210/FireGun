@@ -1606,7 +1606,12 @@ async function loadGlbAsset(relPath: string) {
     for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
     return gltfLoader.parseAsync(bytes.buffer, '');
   }
-  return gltfLoader.loadAsync(relPath);
+  return Promise.race([
+    gltfLoader.loadAsync(relPath),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Timeout loading GLB asset: ${relPath}`)), 15000)
+    ),
+  ]);
 }
 
 async function loadAllAssets() {
@@ -1786,7 +1791,6 @@ async function loadAllAssets() {
           launchInfiltrationCutscene();
         },
         () => {
-          operationStarted = true;
           toggleLoadoutModal(true);
         }
       );
@@ -5979,28 +5983,39 @@ window.addEventListener('resize', () => {
 };
 
 // Boot
+const isAutomatedQa = captureMode || Boolean(navigator.webdriver) || Boolean(initialCamParam) || Boolean(initialUiParam);
+
 const startOperationPipeline = () => {
   screensMgr.showPreload();
-  audioSys.unlockAndPreload();
-  loadAllAssets().then(() => {
-    loadAndApplyCustomHudLayout();
-    syncWeaponAttachments(WEAPONS[activeWeaponIdx].id);
-    if (initialCamParam) {
-      applyNamedCamera(initialCamParam);
-    }
-    if (initialUiParam === 'loadout') {
-      toggleLoadoutModal(true);
-    } else if (initialUiParam === 'complete') {
-      openMissionCompleteModal();
-    }
-    updateStatusHud();
-    updateWeaponHud();
-    updateGyroHudButtons();
-    requestAnimationFrame(animate);
-  });
+  audioSys.unlockAndPreload().catch(() => {});
+  loadAllAssets()
+    .catch((err) => {
+      console.warn('Asset loading encountered fallback:', err);
+      screensMgr.hidePreload();
+      screensMgr.showPortal(
+        () => launchInfiltrationCutscene(),
+        () => {
+          toggleLoadoutModal(true);
+        }
+      );
+    })
+    .finally(() => {
+      loadAndApplyCustomHudLayout();
+      syncWeaponAttachments(WEAPONS[activeWeaponIdx].id);
+      if (initialCamParam) {
+        applyNamedCamera(initialCamParam);
+      }
+      if (initialUiParam === 'loadout') {
+        toggleLoadoutModal(true);
+      } else if (initialUiParam === 'complete') {
+        openMissionCompleteModal();
+      }
+      updateStatusHud();
+      updateWeaponHud();
+      updateGyroHudButtons();
+      requestAnimationFrame(animate);
+    });
 };
-
-const isAutomatedQa = captureMode || Boolean(navigator.webdriver) || Boolean(initialCamParam) || Boolean(initialUiParam);
 
 // Boot immediately: warm up engine and assets, then present live 3D portal or direct QA harness
 startOperationPipeline();
