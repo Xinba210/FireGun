@@ -5,7 +5,7 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import blueprint from '../blueprints/night_port.json';
 import { GameScreensManager } from './game/screens.ts';
 import { SquadManager, SquadOrder } from './game/soldier.ts';
-import { InfiltrationDirector } from './game/cinematics.ts';
+import { InfiltrationDirector, EvacuationDirector } from './game/cinematics.ts';
 import {
   loadProgression,
   saveProgression,
@@ -13,6 +13,7 @@ import {
   equipAttachment,
   unequipAttachment,
   calculateWeaponEffectiveStats,
+  getAttachmentComparison,
   ATTACHMENTS_CATALOG,
 } from './game/progression.ts';
 import { WeaponsAttachmentVisualizer, PictureInPictureScope } from './game/weapons.ts';
@@ -167,7 +168,7 @@ const WEAPONS: WeaponSpec[] = [
 interface EnemyActor {
   id: string;
   name: string;
-  archetype: 'ASSAULT' | 'SNIPER' | 'BREACHER';
+  archetype: 'ASSAULT' | 'SNIPER' | 'BREACHER' | 'JUGGERNAUT';
   root: THREE.Group;
   mixer: THREE.AnimationMixer;
   actions: Record<string, THREE.AnimationAction>;
@@ -185,6 +186,9 @@ interface EnemyActor {
   statusSprite?: THREE.Sprite;
   hpFillMesh?: THREE.Mesh;
   hpBarGroup?: THREE.Group;
+  shieldGroup?: THREE.Group;
+  isStaggered?: boolean;
+  staggerTimer?: number;
 }
 
 interface SuspendedCargoDrop {
@@ -1584,6 +1588,7 @@ const squadMgr = new SquadManager();
 const gunsmithVisualizer = new WeaponsAttachmentVisualizer();
 const pipScope = new PictureInPictureScope();
 const infiltrationDirector = new InfiltrationDirector(camera);
+const evacuationDirector = new EvacuationDirector(camera);
 let worldDetails: WorldDetailsManager | null = null;
 
 const first5SecTracker = {
@@ -2016,6 +2021,18 @@ function setupPlayerCc0ArmsAndThirdPerson() {
   fpArmsRoot = SkeletonUtils.clone(soldierTemplateGltf.scene) as THREE.Group;
   const toRemoveFromFp: THREE.Object3D[] = [];
   fpArmsRoot.traverse((obj) => {
+    // Explicitly zero out and hide head, helmet, balaclava and visor nodes so they can never occlude first-person camera!
+    const isHeadOrHelmet =
+      obj.name === 'Head' ||
+      obj.name === 'neck_01' ||
+      obj.name.includes('Helmet') ||
+      obj.name.includes('Balaclava') ||
+      obj.name.includes('Visor');
+    if (isHeadOrHelmet) {
+      obj.visible = false;
+      obj.scale.set(0.0001, 0.0001, 0.0001);
+    }
+
     if ((obj as THREE.Mesh).isMesh) {
       const isArmsOrWatch =
         obj.name.includes('Soldier_CC0_Arms') ||
@@ -2024,7 +2041,8 @@ function setupPlayerCc0ArmsAndThirdPerson() {
         obj.parent?.name === 'Soldier_CC0_Arms' ||
         obj.parent?.name?.includes('WristWatch') ||
         obj.parent?.name?.includes('WatchScreen');
-      if (!isArmsOrWatch) {
+      if (!isArmsOrWatch || isHeadOrHelmet) {
+        obj.visible = false;
         toRemoveFromFp.push(obj);
       } else {
         obj.visible = true;
@@ -2035,6 +2053,7 @@ function setupPlayerCc0ArmsAndThirdPerson() {
     }
   });
   for (const rem of toRemoveFromFp) {
+    rem.visible = false;
     rem.parent?.remove(rem);
   }
 
@@ -2308,7 +2327,7 @@ const player = {
   multiKillTimer: 0,
   damageTaken: 0,
   gameMode: 'RAID' as 'RAID' | 'SURVIVAL' | 'SNIPER' | 'BLITZ',
-  raidStage: 1 as 1 | 2 | 3,
+  raidStage: 1 as 1 | 2 | 3 | 4 | 5,
   c4Planted: false,
   c4PlantProgress: 0,
   waveNumber: 1,
@@ -2530,17 +2549,31 @@ function updateObjectiveHud() {
   }
 
   if (player.gameMode === 'RAID') {
-    if (stageEl) stageEl.textContent = `${player.raidStage}/3 · OBJECTIVE`;
+    if (stageEl) stageEl.textContent = `${player.raidStage}/5 · OBJECTIVE`;
     if (objText) {
       if (player.raidStage === 1) {
         objText.textContent = `肅清西側碼頭前哨守軍 (${Math.min(2, killed)}/2) 推進防線`;
       } else if (player.raidStage === 2) {
-        objText.textContent = 'Plant the charge on the fuel barrels — PICK at the barrels';
-      } else {
+        objText.textContent = '於油料桶區安裝 C4 爆破電荷 — 靠近油桶按 [E] 安裝';
+      } else if (player.raidStage === 3) {
         objText.textContent =
           alive > 0 || !player.terminalHacked
             ? `奪還北側主控終端並肅清守軍 (${killed}/${total})`
             : '目標達成：港務主控終端已奪還！';
+      } else if (player.raidStage === 4) {
+        objText.textContent = '⚠️ 全域紅色警報：消滅巨型起重機重裝兵 [GOLIATH-01]！';
+      } else {
+        objText.textContent = '🚁 全員熱撤離：迅速撤退至西側碼頭停機坪 (LZ-DELTA) 登機！';
+      }
+    }
+    const distEl = document.getElementById('objective-dist');
+    if (distEl) {
+      if (player.raidStage === 4 && bossActorRef && bossActorRef.state !== 'DEAD') {
+        const d = Math.round(player.pos.distanceTo(bossActorRef.root.position));
+        distEl.textContent = `(${d} m)`;
+      } else if (player.raidStage === 5) {
+        const d = Math.round(player.pos.distanceTo(new THREE.Vector3(-18, 0.2, 38)));
+        distEl.textContent = `(${d} m)`;
       }
     }
   } else if (player.gameMode === 'SURVIVAL') {
@@ -2851,8 +2884,52 @@ function triggerExplosionAt(pos: THREE.Vector3, radius = 7.5, maxDamage = 165) {
 
 function damageEnemy(enemy: EnemyActor, amount: number, isHeadshot: boolean, weaponLabel: string) {
   if (enemy.state === 'DEAD') return;
-  enemy.hp -= amount;
+
+  let finalAmount = amount;
+  if (enemy.archetype === 'JUGGERNAUT') {
+    const isExplosive = weaponLabel.includes('ロケット') || weaponLabel.includes('GRENADE') || weaponLabel.includes('BARREL') || weaponLabel.includes('C4');
+    if (isExplosive) {
+      enemy.isStaggered = true;
+      enemy.staggerTimer = 3.5;
+      if (enemy.shieldGroup) {
+        enemy.shieldGroup.rotation.y = -1.45;
+      }
+      tacticalRadioAudio.playJuggernautStagger();
+      showKillBanner('JUGGERNAUT STAGGERED // CORE EXPOSED!');
+      screensMgr.showInGameRadio('[ROACH]', '"Shield guard broken! Pour fire into his core now!"', 3.5);
+      tacticalRadioAudio.speakRadioLine('ROACH', 'Shield guard broken! Pour fire into his core now!');
+    } else {
+      const toPlayer = player.pos.clone().sub(enemy.root.position);
+      toPlayer.y = 0;
+      const enemyFwd = new THREE.Vector3(0, 0, 1).applyQuaternion(enemy.root.quaternion);
+      const dot = toPlayer.normalize().dot(enemyFwd);
+      if (dot > 0.35) {
+        if (!enemy.isStaggered) {
+          finalAmount *= 0.2;
+          tacticalRadioAudio.playHeavyShieldImpact();
+          showKillBanner('SHIELD DEFLECTED (-80%)');
+        } else {
+          finalAmount *= 1.4;
+          showKillBanner('CRITICAL CORE HIT +150');
+        }
+      }
+    }
+  }
+
+  enemy.hp -= finalAmount;
   triggerHitmarker();
+
+  if (enemy.archetype === 'JUGGERNAUT') {
+    const bossHpText = document.getElementById('boss-hp-text');
+    const bossHpFill = document.getElementById('boss-hp-fill');
+    const bossShieldInd = document.getElementById('boss-shield-indicator');
+    if (bossHpText) bossHpText.textContent = `${Math.max(0, Math.round(enemy.hp))} / 1200 HP`;
+    if (bossHpFill) bossHpFill.style.width = `${Math.max(0, (enemy.hp / 1200) * 100)}%`;
+    if (bossShieldInd) {
+      bossShieldInd.textContent = enemy.isStaggered ? '⚠️ 核心暴露中: 破防 (易傷40%)' : '🛡️ 防彈重盾: 啟用中 (減傷80%)';
+      bossShieldInd.style.color = enemy.isStaggered ? '#ef4444' : '#38bdf8';
+    }
+  }
 
   if (enemy.hpBarGroup && enemy.hpFillMesh) {
     enemy.hpBarGroup.visible = true;
@@ -2888,6 +2965,19 @@ function damageEnemy(enemy: EnemyActor, amount: number, isHeadshot: boolean, wea
     if (enemy.hpBarGroup) enemy.hpBarGroup.visible = false;
     playEnemyClip(enemy, 'Death01', false);
     player.kills++;
+
+    if (enemy.archetype === 'JUGGERNAUT') {
+      bossDefeated = true;
+      bossActive = false;
+      document.getElementById('boss-hud-card')?.classList.add('hidden');
+      player.raidStage = 5;
+      spawnGreenSmokeEvacFlare();
+      screensMgr.showInGameRadio('[COMMAND]', '"Goliath neutralized! Hot extraction bird inbound to West Helipad! Move to the LZ, NOW!"', 6.0);
+      tacticalRadioAudio.speakRadioLine('COMMAND', 'Goliath neutralized! Hot extraction bird inbound to West Helipad! Move to the LZ, NOW!');
+      showKillBanner('JUGGERNAUT ELIMINATED // MOVE TO EVAC LZ');
+      updateObjectiveHud();
+      return;
+    }
 
     // Spawn Lootable Tactical Supply Pack (+25 Armor & Ammo Resupply) at eliminated enemy position!
     const lootGroup = new THREE.Group();
@@ -2952,7 +3042,13 @@ function damageEnemy(enemy: EnemyActor, amount: number, isHeadshot: boolean, wea
     }
     updateObjectiveHud();
     if (enemies.every((e) => e.state === 'DEAD')) {
-      setTimeout(() => openMissionCompleteModal(), 1200);
+      if (player.gameMode === 'RAID') {
+        if (!bossSpawned && player.terminalHacked) {
+          triggerBossPhase();
+        }
+      } else {
+        setTimeout(() => openMissionCompleteModal(), 1200);
+      }
     }
   } else {
     enemy.state = 'HIT';
@@ -3351,19 +3447,139 @@ function showDirectionalDamageArc(attackerPos: THREE.Vector3) {
 }
 
 // ---------------------------------------------------------------------------
-// Loadout Inspection & Mission Complete Modals
+// 3D Gunsmith Interactive Workbench (Goal A) & Loadout Inspection
 // ---------------------------------------------------------------------------
 let loadoutOpen = false;
 let missionModalOpen = false;
+let activeGunsmithSlot: 'optic' | 'muzzle' | 'grip' | 'mag' = 'optic';
+
+function syncWeaponAttachments(weaponId: string) {
+  const prog = loadProgression();
+  const eq = prog.weapons[weaponId]?.equippedAttachments || {};
+  // 1. First-person viewmodel
+  if (weaponModels[weaponId]) {
+    gunsmithVisualizer.mountAttachmentsOnWeapon(weaponModels[weaponId] as THREE.Group, weaponId, eq);
+  }
+  // 2. Third-person weapon
+  if (playerTpsWeapons[weaponId]) {
+    gunsmithVisualizer.mountAttachmentsOnWeapon(playerTpsWeapons[weaponId] as THREE.Group, weaponId, eq);
+  }
+  updateWeaponHud();
+}
+
+function renderGunsmithAttachmentsList(weaponId: string, wState: any) {
+  const listEl = document.getElementById('gunsmith-attachments-list');
+  const titleEl = document.getElementById('gunsmith-slot-title');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+
+  const slotLabels: Record<string, string> = {
+    optic: '🎯 瞄具配件庫 (OPTICS CATALOG)',
+    muzzle: '🔇 槍口制動配件庫 (MUZZLE CATALOG)',
+    grip: '握 戰術握把配件庫 (GRIP CATALOG)',
+    mag: '🔋 供彈系統配件庫 (MAGAZINE CATALOG)',
+  };
+  if (titleEl) titleEl.textContent = slotLabels[activeGunsmithSlot] || '配件庫';
+
+  const equippedId = wState.equippedAttachments[activeGunsmithSlot];
+
+  // 1. None / Default card
+  const noneCard = document.createElement('div');
+  noneCard.className = `att-card ${!equippedId ? 'equipped' : ''}`;
+  noneCard.innerHTML = `
+    <div class="att-card-header">
+      <span class="att-card-name">標準原廠規格 (DEFAULT)</span>
+      ${!equippedId ? '<span class="att-badge-equipped">✓ ACTIVE</span>' : ''}
+    </div>
+    <p class="att-card-desc">移除此槽位改裝配件，恢復原廠原裝設定。</p>
+    <button class="btn-att-action ${!equippedId ? 'btn-att-unequip' : 'btn-att-equip'}">
+      ${!equippedId ? '✓ 已裝備 (EQUIPPED)' : '恢復原廠 (DEFAULT)'}
+    </button>
+  `;
+  noneCard.querySelector('button')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    unequipAttachment(weaponId, activeGunsmithSlot);
+    tacticalRadioAudio.playMechanicalGunsmithClick('unmount');
+    syncWeaponAttachments(weaponId);
+    updateLoadoutModal(activeWeaponIdx);
+  });
+  listEl.appendChild(noneCard);
+
+  // 2. Catalog attachments
+  const catalog = ATTACHMENTS_CATALOG.filter((a) => a.slot === activeGunsmithSlot);
+  for (const att of catalog) {
+    const isEq = equippedId === att.id;
+    const isUnlocked = wState.level >= att.unlockLevel;
+    const prog = loadProgression();
+    const canAfford = prog.credits >= att.cost;
+    const delta = getAttachmentComparison(weaponId, activeGunsmithSlot, att.id);
+
+    const card = document.createElement('div');
+    card.className = `att-card ${isEq ? 'equipped' : ''}`;
+
+    let deltaHtml = '';
+    if (delta.damageDelta !== 0) {
+      deltaHtml += `<span class="${delta.damageDelta > 0 ? 'att-delta-pos' : 'att-delta-neg'}">${delta.damageDelta > 0 ? '+' : ''}${delta.damageDelta} 威力</span>`;
+    }
+    if (delta.recoilDeltaPct !== 0) {
+      deltaHtml += `<span class="${delta.recoilDeltaPct < 0 ? 'att-delta-pos' : 'att-delta-neg'}">${delta.recoilDeltaPct > 0 ? '+' : ''}${delta.recoilDeltaPct}% 後座力</span>`;
+    }
+    if (delta.magDelta !== 0) {
+      deltaHtml += `<span class="${delta.magDelta > 0 ? 'att-delta-pos' : 'att-delta-neg'}">${delta.magDelta > 0 ? '+' : ''}${delta.magDelta} 彈容</span>`;
+    }
+    if (delta.isSilenced) {
+      deltaHtml += `<span class="att-delta-pos">🔇 匿蹤消音</span>`;
+    }
+
+    card.innerHTML = `
+      <div class="att-card-header">
+        <span class="att-card-name">${att.name}</span>
+        ${isEq ? '<span class="att-badge-equipped">✓ EQUIPPED</span>' : `<span class="att-card-cost text-gold">${att.cost} CR</span>`}
+      </div>
+      <p class="att-card-desc">${att.desc}</p>
+      <div class="att-stat-deltas">${deltaHtml}</div>
+      <button class="btn-att-action ${isEq ? 'btn-att-unequip' : isUnlocked ? 'btn-att-equip' : canAfford ? 'btn-att-equip' : 'btn-att-locked'}">
+        ${isEq ? '卸除 (REMOVE)' : isUnlocked ? '裝備 (EQUIP)' : canAfford ? `購買並裝備 (${att.cost} CR)` : `🔒 LV.${att.unlockLevel} 解鎖`}
+      </button>
+    `;
+
+    card.querySelector('button')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (isEq) {
+        unequipAttachment(weaponId, activeGunsmithSlot);
+        tacticalRadioAudio.playMechanicalGunsmithClick('unmount');
+      } else if (isUnlocked || canAfford) {
+        equipAttachment(weaponId, att.id);
+        tacticalRadioAudio.playMechanicalGunsmithClick('mount');
+      } else {
+        return;
+      }
+      syncWeaponAttachments(weaponId);
+      updateLoadoutModal(activeWeaponIdx);
+    });
+
+    listEl.appendChild(card);
+  }
+}
 
 function updateLoadoutModal(idx: number) {
   const w = WEAPONS[idx];
   const cat = document.getElementById('loadout-cat');
   const name = document.getElementById('loadout-name');
   const desc = document.getElementById('loadout-desc');
+  const lvlBadge = document.getElementById('loadout-level-badge');
+  const creditsVal = document.getElementById('gunsmith-credits-val');
   if (cat) cat.textContent = w.category;
   if (name) name.textContent = w.name;
   if (desc) desc.textContent = w.desc;
+
+  const prog = loadProgression();
+  const wState = prog.weapons[w.id] || { level: 1, exp: 0, equippedAttachments: {} };
+  if (lvlBadge) lvlBadge.textContent = `LV. ${wState.level}`;
+  if (creditsVal) creditsVal.textContent = `${prog.credits.toLocaleString()} CR`;
+
+  // Compute effective stats
+  const eff = calculateWeaponEffectiveStats(w, w.id);
 
   const setBar = (id: string, val: number, max = 100) => {
     const bar = document.getElementById(id);
@@ -3371,11 +3587,11 @@ function updateLoadoutModal(idx: number) {
     if (bar) bar.style.width = `${Math.min(100, (val / max) * 100)}%`;
     if (v) v.textContent = String(val);
   };
-  setBar('stat-dmg', w.stats.dmg);
+  setBar('stat-dmg', eff.damage);
   setBar('stat-rof', w.stats.rof);
-  setBar('stat-stb', w.stats.stb);
+  setBar('stat-stb', Math.round(100 - eff.recoilPitch * 1400));
   setBar('stat-rng', w.stats.rng);
-  setBar('stat-cap', w.stats.cap, 40);
+  setBar('stat-cap', eff.magSize, 50);
 
   document.querySelectorAll('.loadout-tab').forEach((btn, bIdx) => {
     btn.classList.toggle('active', bIdx === idx);
@@ -3393,12 +3609,24 @@ function updateLoadoutModal(idx: number) {
         m.receiveShadow = false;
       }
     });
-    // Rotate +0.42 * Math.PI so the barrel points left-forward (-X) matching standard tactical weapon sheets, catching bright studio key/front lights!
     preview.scale.setScalar(1.52);
     preview.rotation.set(0.14, Math.PI * 0.42, -0.05);
+
+    // Mount 3D attachments onto the showcase preview!
+    gunsmithVisualizer.mountAttachmentsOnWeapon(preview as THREE.Group, w.id, wState.equippedAttachments);
     loadoutWeaponHolder.add(preview);
   }
   loadoutShowcaseGroup.position.set(0.24, -0.02, -0.94);
+
+  // Render Slot Tabs (Optic, Muzzle, Grip, Mag)
+  const slotTabs = document.querySelectorAll('.slot-tab');
+  slotTabs.forEach((tab) => {
+    const s = (tab as HTMLElement).dataset.slot as 'optic' | 'muzzle' | 'grip' | 'mag';
+    tab.classList.toggle('active', s === activeGunsmithSlot);
+  });
+
+  // Render Attachment List for active slot
+  renderGunsmithAttachmentsList(w.id, wState);
 }
 
 function toggleLoadoutModal(force?: boolean) {
@@ -3418,6 +3646,234 @@ function toggleLoadoutModal(force?: boolean) {
     if (document.pointerLockElement) document.exitPointerLock();
   } else {
     camera.remove(loadoutShowcaseGroup);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Goal B: Boss Encounter (Juggernaut Goliath-01) & Hot Evacuation
+// ---------------------------------------------------------------------------
+let bossActive = false;
+let bossDefeated = false;
+let bossSpawned = false;
+let bossActorRef: EnemyActor | null = null;
+let greenSmokeGroup: THREE.Group | null = null;
+let emergencyAlarmActive = false;
+let emergencyAlarmTimer = 0;
+
+function spawnJuggernautBoss() {
+  if (bossSpawned || !soldierTemplateGltf) return;
+  bossSpawned = true;
+  bossActive = true;
+
+  const cloned = SkeletonUtils.clone(soldierTemplateGltf.scene) as THREE.Group;
+  cloned.scale.setScalar(1.35);
+
+  cloned.traverse((obj) => {
+    if ((obj as THREE.Mesh).isMesh) {
+      const m = obj as THREE.Mesh;
+      m.castShadow = true;
+      m.receiveShadow = true;
+      if (m.material) {
+        const mat = (m.material as THREE.MeshStandardMaterial).clone();
+        mat.color.setHex(0x111620);
+        mat.metalness = 0.88;
+        mat.roughness = 0.28;
+        m.material = mat;
+      }
+    }
+  });
+
+  const mixer = new THREE.AnimationMixer(cloned);
+  const actions: Record<string, THREE.AnimationAction> = {};
+  soldierTemplateGltf.animations.forEach((clip: THREE.AnimationClip) => {
+    actions[clip.name] = mixer.clipAction(clip);
+  });
+
+  const mfMat = new THREE.MeshBasicMaterial({ color: 0xffdd44, transparent: true, opacity: 0 });
+  const mf = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), mfMat);
+  mf.position.set(0.35, 0.85, 0.95);
+  cloned.add(mf);
+
+  // Ballistic Riot Shield
+  const shieldGroup = new THREE.Group();
+  shieldGroup.name = 'Juggernaut_Riot_Shield';
+  const shieldPlate = new THREE.Mesh(
+    new THREE.BoxGeometry(0.62, 1.05, 0.05),
+    new THREE.MeshStandardMaterial({ color: 0x161c24, roughness: 0.35, metalness: 0.88 })
+  );
+  const shieldGlass = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.32, 0.12),
+    new THREE.MeshStandardMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.75, roughness: 0.1 })
+  );
+  shieldGlass.position.set(0, 0.32, 0.028);
+  const chevron = new THREE.Mesh(
+    new THREE.BoxGeometry(0.54, 0.05, 0.055),
+    new THREE.MeshBasicMaterial({ color: 0xfacc15 })
+  );
+  chevron.position.set(0, -0.28, 0);
+  shieldGroup.add(shieldPlate, shieldGlass, chevron);
+  shieldGroup.position.set(-0.35, 0.95, 0.42);
+  shieldGroup.rotation.y = 0.22;
+  cloned.add(shieldGroup);
+
+  // Heavy LMG / Minigun
+  const lmgGroup = new THREE.Group();
+  const lmgBody = new THREE.Mesh(
+    new THREE.BoxGeometry(0.14, 0.18, 0.72),
+    new THREE.MeshStandardMaterial({ color: 0x0c0f14, metalness: 0.92, roughness: 0.25 })
+  );
+  const barrelCluster = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.048, 0.048, 0.58, 8),
+    new THREE.MeshStandardMaterial({ color: 0x1f2530, metalness: 0.95, roughness: 0.2 })
+  );
+  barrelCluster.rotation.x = Math.PI / 2;
+  barrelCluster.position.set(0, 0, -0.45);
+  lmgGroup.add(lmgBody, barrelCluster);
+  lmgGroup.position.set(0.35, 0.85, 0.35);
+  cloned.add(lmgGroup);
+
+  const bossSpawnPos = new THREE.Vector3(12.5, 0.2, -18.5);
+  cloned.position.copy(bossSpawnPos);
+  scene.add(cloned);
+
+  const actor: EnemyActor = {
+    id: 'boss_juggernaut',
+    name: 'PMC JUGGERNAUT [GOLIATH-01]',
+    archetype: 'JUGGERNAUT',
+    root: cloned,
+    mixer,
+    actions,
+    activeClip: '',
+    hp: 1200,
+    maxHp: 1200,
+    state: 'COMBAT',
+    stateTimer: 0,
+    fireCooldown: 0.4,
+    patrolPoints: [[bossSpawnPos.x, bossSpawnPos.z]],
+    patrolIdx: 0,
+    baseY: bossSpawnPos.y,
+    muzzleFlash: mf,
+    shieldGroup,
+    isStaggered: false,
+    staggerTimer: 0,
+  };
+
+  playEnemyClip(actor, 'Combat_Idle', true);
+  enemies.push(actor);
+  bossActorRef = actor;
+
+  // Trigger emergency siren and red alert
+  emergencyAlarmActive = true;
+  tacticalRadioAudio.playEmergencySiren(8.0);
+
+  // Show Boss HUD Card
+  const bossCard = document.getElementById('boss-hud-card');
+  const bossHpText = document.getElementById('boss-hp-text');
+  const bossHpFill = document.getElementById('boss-hp-fill');
+  const bossHpGhost = document.getElementById('boss-hp-ghost');
+  if (bossCard) bossCard.classList.remove('hidden');
+  if (bossHpText) bossHpText.textContent = '1200 / 1200 HP';
+  if (bossHpFill) bossHpFill.style.width = '100%';
+  if (bossHpGhost) bossHpGhost.style.width = '100%';
+
+  screensMgr.showInGameRadio('[COMMAND]', '"WARNING! Alert level RED! Heavy Juggernaut inbound at Crane Gantry!"', 6.0);
+  tacticalRadioAudio.speakRadioLine('COMMAND', 'WARNING! Alert level RED! Hostile heavy reinforcements detected advancing from Crane Gantry Sector 3!');
+  tacticalRadioAudio.speakRadioLine('GHOST', 'Look at the size of that guy... Juggernaut on the catwalk! Heavy armor and riot shield! Flank his six or use rockets to break his guard!');
+
+  updateObjectiveHud();
+}
+
+function triggerBossPhase() {
+  if (bossSpawned) return;
+  player.raidStage = 4;
+  spawnJuggernautBoss();
+}
+
+function spawnGreenSmokeEvacFlare() {
+  if (greenSmokeGroup) return;
+  greenSmokeGroup = new THREE.Group();
+  greenSmokeGroup.position.set(-18, 0.2, 38);
+
+  const canMat = new THREE.MeshStandardMaterial({ color: 0x166534, metalness: 0.8, roughness: 0.3 });
+  const can = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.38, 12), canMat);
+  can.position.y = 0.19;
+  greenSmokeGroup.add(can);
+
+  const greenLight = new THREE.PointLight(0x22c55e, 14, 18, 1.2);
+  greenLight.position.set(0, 1.2, 0);
+  greenSmokeGroup.add(greenLight);
+
+  for (let i = 0; i < 8; i++) {
+    const sMat = new THREE.MeshBasicMaterial({
+      color: 0x4ade80,
+      transparent: true,
+      opacity: 0.35 - i * 0.03,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const sMesh = new THREE.Mesh(new THREE.CircleGeometry(0.8 + i * 0.35, 12), sMat);
+    sMesh.position.set(
+      (Math.random() - 0.5) * 0.8,
+      0.8 + i * 0.55,
+      (Math.random() - 0.5) * 0.8
+    );
+    sMesh.rotation.x = Math.PI * 0.45;
+    greenSmokeGroup.add(sMesh);
+  }
+
+  scene.add(greenSmokeGroup);
+  tacticalRadioAudio.playGreenSmokeIgnition();
+}
+
+function launchHotEvacuation() {
+  if (evacuationDirector.active || missionModalOpen) return;
+  fpRig.visible = false;
+  if (playerTpsRoot) playerTpsRoot.visible = false;
+  if (stealthHeli) stealthHeli.group.visible = true;
+  document.getElementById('hud')?.classList.add('hidden');
+  if (document.pointerLockElement) document.exitPointerLock();
+
+  evacuationDirector.play(() => {
+    if (stealthHeli) stealthHeli.group.visible = false;
+    openMissionCompleteModal();
+  });
+}
+
+function loadAndApplyCustomHudLayout() {
+  if (typeof localStorage === 'undefined') return;
+  const layoutStr = localStorage.getItem('firegun_hud_layout_v1');
+  if (layoutStr) {
+    try {
+      const layout = JSON.parse(layoutStr);
+      for (const [id, item] of Object.entries(layout) as [string, { leftPct: number; topPct: number; scale: number; opacity: number }][]) {
+        const el = document.getElementById(id);
+        if (el) {
+          el.style.position = 'fixed';
+          el.style.left = `${item.leftPct}%`;
+          el.style.top = `${item.topPct}%`;
+          el.style.bottom = 'auto';
+          el.style.right = 'auto';
+          el.style.transform = `scale(${item.scale})`;
+          el.style.opacity = String(item.opacity);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const gyroStr = localStorage.getItem('firegun_gyro_config_v1');
+  if (gyroStr) {
+    try {
+      const cfg = JSON.parse(gyroStr);
+      if (typeof cfg.yawSens === 'number') gyroController.yawSens = cfg.yawSens;
+      if (typeof cfg.pitchSens === 'number') gyroController.pitchSens = cfg.pitchSens;
+      if (typeof cfg.deadzone === 'number') gyroController.deadzone = cfg.deadzone;
+      if (typeof cfg.invertPitch === 'boolean') gyroController.invertPitch = cfg.invertPitch;
+      if (typeof cfg.aimAssist === 'boolean') gyroController.aimAssist = cfg.aimAssist;
+    } catch {
+      // ignore
+    }
   }
 }
 
@@ -3472,6 +3928,10 @@ const gyroController = {
   enabled: false,
   aimAssist: false, // Default OFF to ensure 100% deterministic control without phantom pulling
   sensitivity: 2.2,
+  yawSens: 2.2,
+  pitchSens: 2.2,
+  deadzone: 0.02,
+  invertPitch: false,
   yawMult: 1.0,
   pitchMult: 0.95,
   accelGain: 1.35,
@@ -3631,14 +4091,28 @@ window.addEventListener('deviceorientation', (ev) => {
   }
 
   // Non-linear acceleration curve calculation
-  const absYaw = Math.abs(yawDegDelta);
-  const absPitch = Math.abs(pitchDegDelta);
+  let absYaw = Math.abs(yawDegDelta);
+  let absPitch = Math.abs(pitchDegDelta);
+
+  // Deadzone filter to suppress micro hand tremors
+  if (absYaw < gyroController.deadzone * 57.3) {
+    yawDegDelta = 0;
+    absYaw = 0;
+  }
+  if (absPitch < gyroController.deadzone * 57.3) {
+    pitchDegDelta = 0;
+    absPitch = 0;
+  }
+  if (gyroController.invertPitch) {
+    pitchDegDelta = -pitchDegDelta;
+  }
+
   const accelYaw = absYaw > gyroController.accelThreshold ? Math.pow(absYaw / gyroController.accelThreshold, 1.35) : 1.0;
   const accelPitch = absPitch > gyroController.accelThreshold ? Math.pow(absPitch / gyroController.accelThreshold, 1.35) : 1.0;
   const adsScale = player.ads ? 0.65 : 1.0;
 
-  const radScaleYaw = (Math.PI / 180) * gyroController.sensitivity * gyroController.yawMult * accelYaw * adsScale;
-  const radScalePitch = (Math.PI / 180) * gyroController.sensitivity * gyroController.pitchMult * accelPitch * adsScale;
+  const radScaleYaw = (Math.PI / 180) * (gyroController.yawSens || gyroController.sensitivity) * gyroController.yawMult * accelYaw * adsScale;
+  const radScalePitch = (Math.PI / 180) * (gyroController.pitchSens || gyroController.sensitivity) * gyroController.pitchMult * accelPitch * adsScale;
   const [adjYaw, adjPitch] = applyGyroAimAssistToDelta(yawDegDelta * radScaleYaw, pitchDegDelta * radScalePitch);
   player.yaw += adjYaw;
   player.pitch = Math.max(-1.35, Math.min(1.35, player.pitch + adjPitch));
@@ -3652,18 +4126,120 @@ window.addEventListener('devicemotion', (ev) => {
   const betaRate = ev.rotationRate.beta || 0;
   const dtMotion = (ev.interval || 16) / 1000;
 
-  const absYaw = Math.abs(betaRate * dtMotion);
-  const absPitch = Math.abs(alphaRate * dtMotion);
+  let absYaw = Math.abs(betaRate * dtMotion);
+  let absPitch = Math.abs(alphaRate * dtMotion);
+  let effBeta = betaRate;
+  let effAlpha = gyroController.invertPitch ? -alphaRate : alphaRate;
+
+  if (absYaw < gyroController.deadzone * dtMotion * 57.3) {
+    effBeta = 0;
+    absYaw = 0;
+  }
+  if (absPitch < gyroController.deadzone * dtMotion * 57.3) {
+    effAlpha = 0;
+    absPitch = 0;
+  }
+
   const accelYaw = absYaw > (gyroController.accelThreshold * dtMotion) ? Math.pow(absYaw / (gyroController.accelThreshold * dtMotion), 1.35) : 1.0;
   const accelPitch = absPitch > (gyroController.accelThreshold * dtMotion) ? Math.pow(absPitch / (gyroController.accelThreshold * dtMotion), 1.35) : 1.0;
   const adsScale = player.ads ? 0.65 : 1.0;
 
-  const radScaleYaw = (Math.PI / 180) * gyroController.sensitivity * gyroController.yawMult * accelYaw * adsScale;
-  const radScalePitch = (Math.PI / 180) * gyroController.sensitivity * gyroController.pitchMult * accelPitch * adsScale;
-  const [adjYaw, adjPitch] = applyGyroAimAssistToDelta(betaRate * dtMotion * radScaleYaw, alphaRate * dtMotion * radScalePitch);
+  const radScaleYaw = (Math.PI / 180) * (gyroController.yawSens || gyroController.sensitivity) * gyroController.yawMult * accelYaw * adsScale;
+  const radScalePitch = (Math.PI / 180) * (gyroController.pitchSens || gyroController.sensitivity) * gyroController.pitchMult * accelPitch * adsScale;
+  const [adjYaw, adjPitch] = applyGyroAimAssistToDelta(effBeta * dtMotion * radScaleYaw, effAlpha * dtMotion * radScalePitch);
   player.yaw += adjYaw;
   player.pitch = Math.max(-1.35, Math.min(1.35, player.pitch + adjPitch));
 });
+
+// Floating Instant Gyroscope Recenter
+document.getElementById('touch-btn-gyro-recenter')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  calibrateGyroCenter();
+});
+
+// HUD & Gyro Customizer Opener
+const openCustomHudEditor = () => {
+  screensMgr.showHudEditor({
+    gyroConfig: {
+      yawSens: gyroController.yawSens,
+      pitchSens: gyroController.pitchSens,
+      deadzone: gyroController.deadzone,
+      invertPitch: gyroController.invertPitch,
+      aimAssist: gyroController.aimAssist,
+    },
+    onSave: (layout, gyro) => {
+      gyroController.yawSens = gyro.yawSens;
+      gyroController.pitchSens = gyro.pitchSens;
+      gyroController.deadzone = gyro.deadzone;
+      gyroController.invertPitch = gyro.invertPitch;
+      gyroController.aimAssist = gyro.aimAssist;
+      loadAndApplyCustomHudLayout();
+      showKillBanner('HUD & GYRO CONFIG SAVED');
+    },
+    onReset: () => {
+      for (const id of [
+        'touch-joystick-zone',
+        'touch-btn-fire',
+        'touch-btn-ads',
+        'touch-btn-reload',
+        'touch-btn-swap',
+        'touch-btn-jump',
+        'touch-btn-crouch',
+        'touch-btn-grenade',
+        'touch-btn-gyro-recenter',
+      ]) {
+        const el = document.getElementById(id);
+        if (el) {
+          el.style.position = '';
+          el.style.left = '';
+          el.style.top = '';
+          el.style.bottom = '';
+          el.style.right = '';
+          el.style.transform = '';
+          el.style.opacity = '';
+        }
+      }
+      gyroController.yawSens = 2.2;
+      gyroController.pitchSens = 2.2;
+      gyroController.deadzone = 0.02;
+      gyroController.invertPitch = false;
+      showKillBanner('HUD & GYRO RESTORED TO DEFAULT');
+    },
+  });
+};
+
+document.getElementById('btn-pause-hud-editor')?.addEventListener('click', () => {
+  screensMgr.togglePause(false);
+  openCustomHudEditor();
+});
+document.getElementById('touch-btn-hud-editor')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleTacticalDrawer(false);
+  openCustomHudEditor();
+});
+document.getElementById('btn-pause-gunsmith')?.addEventListener('click', () => {
+  screensMgr.togglePause(false);
+  toggleLoadoutModal(true);
+});
+const closeGunsmith = (e?: Event) => {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  toggleLoadoutModal(false);
+  if (!operationStarted) {
+    screensMgr.showPortal(
+      () => launchInfiltrationCutscene(),
+      () => toggleLoadoutModal(true)
+    );
+  }
+};
+const closeBtn = document.getElementById('btn-gunsmith-close');
+if (closeBtn) {
+  closeBtn.onclick = closeGunsmith;
+  closeBtn.ontouchend = closeGunsmith;
+}
+
 
 document.getElementById('btn-gyro-toggle')?.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -4114,6 +4690,17 @@ document.querySelectorAll('.loadout-tab').forEach((btn) => {
   btn.addEventListener('click', () => {
     const idx = Number((btn as HTMLElement).dataset.wep || 0);
     equipWeapon(idx);
+    updateLoadoutModal(idx);
+  });
+});
+
+document.querySelectorAll('.slot-tab').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const s = (btn as HTMLElement).dataset.slot as 'optic' | 'muzzle' | 'grip' | 'mag';
+    if (s) {
+      activeGunsmithSlot = s;
+      updateLoadoutModal(activeWeaponIdx);
+    }
   });
 });
 
@@ -4495,6 +5082,20 @@ function stepSimulation(dt: number, elapsedSec: number) {
         );
         stealthHeli.group.visible = true;
       }
+    } else if (evacuationDirector && evacuationDirector.active) {
+      evacuationDirector.update(dt);
+      fpRig.visible = false;
+      if (playerTpsRoot) playerTpsRoot.visible = false;
+      if (stealthHeli) {
+        stealthHeli.update(
+          dt,
+          evacuationDirector.helicopterPos,
+          evacuationDirector.helicopterRotY,
+          evacuationDirector.helicopterPitch,
+          new THREE.Color('#22c55e')
+        );
+        stealthHeli.group.visible = true;
+      }
     } else if (player.thirdPerson) {
       if (stealthHeli) stealthHeli.group.visible = false;
       if (playerTpsRoot) playerTpsRoot.visible = !loadoutOpen && !missionModalOpen;
@@ -4526,6 +5127,14 @@ function stepSimulation(dt: number, elapsedSec: number) {
       camera.rotation.y = player.yaw;
       camera.rotation.x = player.pitch + player.recoilPitch + shakeY * 0.35;
       camera.rotation.z = leanRollRad;
+    }
+
+    // Hot Extraction Helipad Trigger (Goal B - Stage 5)
+    if (player.gameMode === 'RAID' && player.raidStage === 5 && !evacuationDirector.active && !missionModalOpen) {
+      const evacDist = player.pos.distanceTo(new THREE.Vector3(-18, 0.2, 38));
+      if (evacDist <= 4.2) {
+        launchHotEvacuation();
+      }
     }
 
     // Smooth ADS FOV & Viewmodel Position (+ Melee Buttstock Lunge)
@@ -4916,6 +5525,25 @@ function stepSimulation(dt: number, elapsedSec: number) {
       );
       const dist = toPlayer.length();
 
+      // Juggernaut Boss Stagger & Screen Shake (Goal B)
+      if (e.archetype === 'JUGGERNAUT') {
+        if (e.isStaggered) {
+          e.staggerTimer = (e.staggerTimer || 0) - dt;
+          if (e.staggerTimer <= 0) {
+            e.isStaggered = false;
+            if (e.shieldGroup) e.shieldGroup.rotation.y = 0.22;
+            const shieldInd = document.getElementById('boss-shield-indicator');
+            if (shieldInd) {
+              shieldInd.textContent = '🛡️ 防彈重盾: 啟用中 (減傷80%)';
+              shieldInd.style.color = '#38bdf8';
+            }
+          }
+        }
+        if (dist < 15.0) {
+          player.cameraShake = Math.max(player.cameraShake, 0.08 * (1 - dist / 15.0));
+        }
+      }
+
       // Update Elite Sniper Visible Red Laser Sight Beam (sweeps forward on patrol; locks onto player ONLY when alert/in combat!)
       if (e.laserLine && reflectionFrameTick % 2 === 0) {
         const posAttr = e.laserLine.geometry.getAttribute('position') as THREE.BufferAttribute;
@@ -5012,9 +5640,9 @@ function stepSimulation(dt: number, elapsedSec: number) {
         }
         e.fireCooldown -= dt;
         if (e.fireCooldown <= 0 && dist < 34) {
-          e.fireCooldown = 1.45 + Math.random() * 0.8;
+          e.fireCooldown = e.archetype === 'JUGGERNAUT' ? 0.35 : 1.45 + Math.random() * 0.8;
           (e.muzzleFlash.material as THREE.MeshBasicMaterial).opacity = 0.95;
-          audioSys.play3D('assets/audio/ar7_shot.wav', e.root.position, player.pos, 5, 45, 0.55);
+          audioSys.play3D('assets/audio/ar7_shot.wav', e.root.position, player.pos, 5, 45, e.archetype === 'JUGGERNAUT' ? 0.85 : 0.55);
 
           // Spawn visible orange-red enemy outgoing tracer streak
           const enemyMuzzle = new THREE.Vector3();
@@ -5323,7 +5951,31 @@ window.addEventListener('resize', () => {
     enemiesAlive: enemies.filter((e) => e.state !== 'DEAD').length,
     enemiesTotal: enemies.length,
     kills: player.kills,
+    bossSpawned,
+    bossDefeated,
+    raidStage: player.raidStage,
   }),
+  triggerBossPhase: () => {
+    triggerBossPhase();
+    stepSimulation(0.05, 1.5);
+    renderSceneWithWater();
+  },
+  damageBoss: (amount: number, isExplosive = false) => {
+    if (bossActorRef) {
+      damageEnemy(bossActorRef, amount, false, isExplosive ? 'RL-7 ロケット' : 'AR-7 カービン');
+      stepSimulation(0.05, 1.5);
+      renderSceneWithWater();
+    }
+  },
+  triggerHotEvacuation: () => {
+    launchHotEvacuation();
+  },
+  openHudEditor: () => {
+    openCustomHudEditor();
+  },
+  syncAttachments: (weaponId: string) => {
+    syncWeaponAttachments(weaponId);
+  },
 };
 
 // Boot
@@ -5331,6 +5983,8 @@ const startOperationPipeline = () => {
   screensMgr.showPreload();
   audioSys.unlockAndPreload();
   loadAllAssets().then(() => {
+    loadAndApplyCustomHudLayout();
+    syncWeaponAttachments(WEAPONS[activeWeaponIdx].id);
     if (initialCamParam) {
       applyNamedCamera(initialCamParam);
     }

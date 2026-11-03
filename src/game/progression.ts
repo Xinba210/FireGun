@@ -303,3 +303,57 @@ export function calculateWeaponEffectiveStats(
     hasPipScope: hasPip,
   };
 }
+
+export function getAttachmentComparison(weaponId: string, slot: 'muzzle' | 'optic' | 'grip' | 'mag', candidateId: string | null) {
+  const p = loadProgression();
+  const currentEquipped = p.weapons[weaponId]?.equippedAttachments || {};
+  const dummyBase = {
+    damage: 34,
+    recoilPitch: 0.024,
+    recoilZ: 0.045,
+    reloadTime: 2.2,
+    adsFov: 50,
+    magSize: 30,
+  };
+
+  const before = calculateWeaponEffectiveStats(dummyBase, weaponId);
+
+  // Simulate new
+  const simulatedEquipped = { ...currentEquipped };
+  if (candidateId) {
+    simulatedEquipped[slot] = candidateId;
+  } else {
+    delete simulatedEquipped[slot];
+  }
+
+  // Calculate simulated
+  let dmg = dummyBase.damage;
+  let recoilP = dummyBase.recoilPitch;
+  let reloadT = dummyBase.reloadTime;
+  let fov = dummyBase.adsFov;
+  let mag = dummyBase.magSize;
+  let quiet = false;
+
+  for (const s of ['muzzle', 'optic', 'grip', 'mag'] as const) {
+    const aId = simulatedEquipped[s];
+    if (!aId) continue;
+    const att = ATTACHMENTS_CATALOG.find((a) => a.id === aId);
+    if (!att) continue;
+    const m = att.statMods;
+    if (m.damageAdd) dmg += m.damageAdd;
+    if (m.recoilMult) recoilP *= m.recoilMult;
+    if (m.reloadTimeMult) reloadT *= m.reloadTimeMult;
+    if (m.adsFov !== undefined) fov = m.adsFov;
+    if (m.magSizeAdd) mag += m.magSizeAdd;
+    if (m.soundQuiet) quiet = true;
+  }
+
+  return {
+    damageDelta: Math.round(dmg - before.damage),
+    recoilDeltaPct: Math.round(((recoilP - before.recoilPitch) / before.recoilPitch) * 100),
+    reloadDeltaSec: Number((reloadT - before.reloadTime).toFixed(2)),
+    magDelta: mag - before.magSize,
+    isSilenced: quiet,
+  };
+}
+

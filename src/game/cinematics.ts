@@ -330,3 +330,168 @@ export class InfiltrationDirector {
     return false;
   }
 }
+
+export class EvacuationDirector {
+  private camera: THREE.PerspectiveCamera;
+  private isPlaying = false;
+  private elapsedSec = 0;
+  private totalDurationSec = 5.5;
+  private onCompleteCallback: (() => void) | null = null;
+  private onFrameCallback: ((t: number) => void) | null = null;
+
+  private cutsceneOverlay: HTMLElement | null = null;
+  private camLabelEl: HTMLElement | null = null;
+  private radioSpeakerEl: HTMLElement | null = null;
+  private radioTextEl: HTMLElement | null = null;
+
+  // Helicopter motion state for evacuation
+  public helicopterPos = new THREE.Vector3(-18, 12, 54);
+  public helicopterRotY = Math.PI * 0.95;
+  public helicopterPitch = 0.05;
+
+  constructor(camera: THREE.PerspectiveCamera) {
+    this.camera = camera;
+    this.createDom();
+  }
+
+  private createDom() {
+    if (typeof document === 'undefined') return;
+    let overlay = document.getElementById('cutscene-evacuation');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'cutscene-evacuation';
+      overlay.className = 'cutscene-overlay hidden';
+      overlay.innerHTML = `
+        <div class="cutscene-vignette"></div>
+        <div class="cutscene-letterbox cutscene-letterbox-top">
+          <div class="cutscene-rec-chip">
+            <span class="cutscene-rec-dot" style="background:#22c55e;box-shadow:0 0 10px #22c55e"></span>
+            <span id="evac-cam-label" class="cutscene-rec-label">HOT-EXTRACT // WEST HELIPAD LZ-DELTA</span>
+          </div>
+          <span class="cutscene-timestamp">EVAC IN PROGRESS</span>
+        </div>
+        <div class="cutscene-letterbox cutscene-letterbox-bottom">
+          <div class="cutscene-radio-sub">
+            <span class="radio-speaker" id="evac-radio-speaker">[PILOT]</span>
+            <span class="radio-text" id="evac-radio-text">"Dustoff on the deck! Move move move!"</span>
+          </div>
+          <button id="btn-skip-evac" class="btn-skip-cutscene">SKIP [SPACE / TAP]</button>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+    }
+    this.cutsceneOverlay = overlay;
+    this.camLabelEl = document.getElementById('evac-cam-label');
+    this.radioSpeakerEl = document.getElementById('evac-radio-speaker');
+    this.radioTextEl = document.getElementById('evac-radio-text');
+
+    document.getElementById('btn-skip-evac')?.addEventListener('click', () => {
+      this.skip();
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (this.isPlaying && (e.code === 'Space' || e.code === 'Enter' || e.code === 'Escape')) {
+        this.skip();
+      }
+    });
+  }
+
+  public play(onComplete?: () => void, onFrame?: (t: number) => void) {
+    this.isPlaying = true;
+    this.elapsedSec = 0;
+    this.onCompleteCallback = onComplete || null;
+    this.onFrameCallback = onFrame || null;
+
+    if (this.cutsceneOverlay) {
+      this.cutsceneOverlay.classList.remove('hidden');
+    }
+
+    tacticalRadioAudio.initAudio().then(() => {
+      tacticalRadioAudio.startHelicopterAudio();
+      tacticalRadioAudio.speakRadioLine('PILOT', 'Dustoff on the deck! Move move move!');
+    });
+  }
+
+  public update(dt: number): boolean {
+    if (!this.isPlaying) return false;
+    this.elapsedSec += dt;
+    const t = this.elapsedSec;
+
+    if (this.onFrameCallback) {
+      this.onFrameCallback(t);
+    }
+
+    if (t >= this.totalDurationSec) {
+      this.finish();
+      return false;
+    }
+
+    // Act 1: 0.0s - 1.8s (Helicopter touchdown beside green smoke)
+    if (t < 1.8) {
+      const p = t / 1.8;
+      this.helicopterPos.set(-18, THREE.MathUtils.lerp(12, 1.8, p), THREE.MathUtils.lerp(50, 38, p));
+      this.helicopterPitch = THREE.MathUtils.lerp(0.18, 0.0, p);
+      this.camera.position.set(-13, 2.2, 33);
+      this.camera.lookAt(-18, 2.2, 38);
+      this.camera.fov = 65;
+    }
+    // Act 2: 1.8s - 3.4s (Player rushing into cabin, squad boarding)
+    else if (t < 3.4) {
+      const p = (t - 1.8) / 1.6;
+      if (t > 1.9 && this.radioSpeakerEl && this.radioSpeakerEl.textContent !== '[GHOST]') {
+        this.radioSpeakerEl.textContent = '[GHOST]';
+        if (this.radioTextEl) this.radioTextEl.textContent = '"Grab my hand! Everyone aboard!"';
+        tacticalRadioAudio.speakRadioLine('GHOST', 'Grab my hand! Everyone aboard!');
+      }
+      this.helicopterPos.set(-18, 1.8, 38);
+      this.helicopterPitch = 0.0;
+      this.camera.position.set(
+        THREE.MathUtils.lerp(-13, -17.5, p),
+        THREE.MathUtils.lerp(2.2, 2.4, p),
+        THREE.MathUtils.lerp(33, 38.2, p)
+      );
+      this.camera.lookAt(-18.2, 2.4, 38.2);
+      this.camera.fov = 68;
+    }
+    // Act 3: 3.4s - 5.5s (Helicopter lift-off and climb out into storm)
+    else {
+      const p = (t - 3.4) / 2.1;
+      if (t > 3.5 && this.radioSpeakerEl && this.radioSpeakerEl.textContent !== '[COMMAND]') {
+        this.radioSpeakerEl.textContent = '[COMMAND]';
+        if (this.radioTextEl) this.radioTextEl.textContent = '"Strike team is outbound. Operation complete. Good work, 141."';
+        tacticalRadioAudio.speakRadioLine('COMMAND', 'Strike team is outbound. Operation complete. Good work, 141.');
+      }
+      this.helicopterPos.set(-18, THREE.MathUtils.lerp(1.8, 26, p * p), THREE.MathUtils.lerp(38, -15, p));
+      this.helicopterPitch = THREE.MathUtils.lerp(0.0, -0.22, Math.min(1, p * 1.5));
+      // Camera looks out cabin door back at the burning harbor dock
+      this.camera.position.set(this.helicopterPos.x + 0.4, this.helicopterPos.y + 0.4, this.helicopterPos.z + 0.2);
+      this.camera.lookAt(-5, 2, 20);
+      this.camera.fov = 62;
+    }
+
+    this.camera.updateProjectionMatrix();
+    return true;
+  }
+
+  public skip() {
+    if (!this.isPlaying) return;
+    this.finish();
+  }
+
+  private finish() {
+    this.isPlaying = false;
+    tacticalRadioAudio.stopHelicopterAudio(1.5);
+    if (this.cutsceneOverlay) {
+      this.cutsceneOverlay.classList.add('hidden');
+    }
+    const cb = this.onCompleteCallback;
+    this.onCompleteCallback = null;
+    this.onFrameCallback = null;
+    cb?.();
+  }
+
+  public get active(): boolean {
+    return this.isPlaying;
+  }
+}
+

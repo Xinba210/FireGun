@@ -1,5 +1,6 @@
 import { loadProgression, saveProgression } from './progression.ts';
 import { calculateOperationRank, computeMatchRewards, type MatchStats, type MatchRewardResult } from './rewards.ts';
+import { tacticalRadioAudio } from './audio.ts';
 
 export interface PreloadStatus {
   step: number;
@@ -216,6 +217,8 @@ export class GameScreensManager {
           </div>
           <div class="pause-actions">
             <button id="btn-pause-resume" class="btn-pause-act btn-pause-primary">RESUME OPERATION // 繼續作戰</button>
+            <button id="btn-pause-gunsmith" class="btn-pause-act">🧰 戰術軍械庫 (GUNSMITH WORKBENCH)</button>
+            <button id="btn-pause-hud-editor" class="btn-pause-act">⚙️ 鍵位自訂與體感 (CUSTOM TOUCH & GYRO)</button>
             <button id="btn-pause-records" class="btn-pause-act">RECORDS // 作戰紀錄與成就</button>
             <button id="btn-pause-restart" class="btn-pause-act">RESTART MISSION // 重新開始</button>
             <button id="btn-pause-main" class="btn-pause-act btn-pause-danger">MAIN MENU // 返回主畫面</button>
@@ -388,20 +391,74 @@ export class GameScreensManager {
   public showPortal(onDeploy: () => void, onGunsmith?: () => void) {
     if (!this.titlePortal) return;
     this.titlePortal.classList.remove('hidden');
-    const startDeploy = () => {
-      this.triggerWhiteFlash(() => {
-        this.titlePortal?.classList.add('hidden');
-        onDeploy();
-      });
+
+    let isDeploying = false;
+    const startDeploy = (e?: Event) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      if (isDeploying) return;
+      isDeploying = true;
+
+      // Unlock Web Audio immediately on user interaction
+      tacticalRadioAudio.initAudio().catch(() => {});
+
+      // Instantly hide title portal to guarantee immediate response
+      this.titlePortal?.classList.add('hidden');
+      this.triggerWhiteFlash();
+      onDeploy();
     };
-    document.getElementById('btn-portal-deploy')?.addEventListener('click', startDeploy, { once: true });
-    document.getElementById('btn-portal-tab-campaign')?.addEventListener('click', startDeploy, { once: true });
-    document.getElementById('btn-portal-tab-gunsmith')?.addEventListener('click', () => {
+
+    const deployBtn = document.getElementById('btn-portal-deploy');
+    const campBtn = document.getElementById('btn-portal-tab-campaign');
+    const gunsmithBtn = document.getElementById('btn-portal-tab-gunsmith');
+    const dossierBtn = document.getElementById('btn-portal-tab-dossier');
+
+    const bindAction = (el: HTMLElement | null, handler: (e: Event) => void) => {
+      if (!el) return;
+      el.onclick = (e) => handler(e);
+      el.ontouchend = (e) => handler(e);
+    };
+
+    bindAction(deployBtn, startDeploy);
+    bindAction(campBtn, startDeploy);
+
+    bindAction(gunsmithBtn, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.titlePortal?.classList.add('hidden');
       onGunsmith?.();
     });
-    document.getElementById('btn-portal-tab-dossier')?.addEventListener('click', () => {
-      this.showRecords();
+
+    bindAction(dossierBtn, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.titlePortal?.classList.add('hidden');
+      this.showRecords(() => {
+        // Return to title portal if closed before game deployment
+        if (!isDeploying) {
+          this.titlePortal?.classList.remove('hidden');
+        }
+      });
     });
+
+    // Tap anywhere on the portal backdrop/screen to deploy as stated in footer note
+    this.titlePortal.onclick = (e) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('.btn-portal-tab') || target.closest('.btn-portal-deploy')) {
+        return;
+      }
+      startDeploy(e);
+    };
+    this.titlePortal.ontouchend = (e) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('.btn-portal-tab') || target.closest('.btn-portal-deploy')) {
+        return;
+      }
+      startDeploy(e);
+    };
+
     const keyStart = (e: KeyboardEvent) => {
       if (e.code === 'Space' || e.code === 'Enter') {
         window.removeEventListener('keydown', keyStart);
@@ -569,7 +626,7 @@ export class GameScreensManager {
     return this.pauseModal ? !this.pauseModal.classList.contains('hidden') : false;
   }
 
-  public showRecords() {
+  public showRecords(onClose?: () => void) {
     if (!this.recordsModal) return;
     const p = loadProgression();
     const kEl = document.getElementById('rec-total-kills');
@@ -585,9 +642,304 @@ export class GameScreensManager {
     }
     if (wEl) wEl.textContent = `WAVE ${p.stats.highestSurvivalWave}`;
     this.recordsModal.classList.remove('hidden');
+
+    const backBtn = document.getElementById('btn-records-back');
+    if (backBtn) {
+      const handleClose = (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.recordsModal?.classList.add('hidden');
+        onClose?.();
+      };
+      backBtn.onclick = handleClose;
+      backBtn.ontouchend = handleClose;
+    }
   }
 
   public hideRecords() {
     this.recordsModal?.classList.add('hidden');
   }
+
+  // ---------------------------------------------------------------------------
+  // Goal C: Mobile Pro Touch HUD Editor & Advanced Gyro Tuning
+  // ---------------------------------------------------------------------------
+  public showHudEditor(options: {
+    gyroConfig: { yawSens: number; pitchSens: number; deadzone: number; invertPitch: boolean; aimAssist: boolean };
+    onSave: (layout: Record<string, { leftPct: number; topPct: number; scale: number; opacity: number }>, gyro: typeof options.gyroConfig) => void;
+    onReset: () => void;
+  }) {
+    const editor = document.getElementById('screen-hud-editor');
+    if (!editor) return;
+    editor.classList.remove('hidden');
+
+    const viewport = document.getElementById('hud-editor-viewport');
+    if (!viewport) return;
+
+    // Load saved layout or defaults
+    const savedLayoutStr = typeof localStorage !== 'undefined' ? localStorage.getItem('firegun_hud_layout_v1') : null;
+    let layout: Record<string, { label: string; leftPct: number; topPct: number; scale: number; opacity: number }> = {
+      'touch-joystick-zone': { label: 'JOYSTICK', leftPct: 18, topPct: 80, scale: 1.0, opacity: 0.85 },
+      'touch-btn-fire': { label: 'FIRE', leftPct: 84, topPct: 82, scale: 1.1, opacity: 0.9 },
+      'touch-btn-ads': { label: 'ADS 瞄準', leftPct: 64, topPct: 78, scale: 1.0, opacity: 0.85 },
+      'touch-btn-reload': { label: 'RELOAD', leftPct: 62, topPct: 92, scale: 1.0, opacity: 0.85 },
+      'touch-btn-jump': { label: 'JUMP', leftPct: 88, topPct: 64, scale: 1.0, opacity: 0.85 },
+      'touch-btn-crouch': { label: 'CROUCH', leftPct: 86, topPct: 94, scale: 1.0, opacity: 0.85 },
+      'touch-btn-swap': { label: 'SWAP', leftPct: 74, topPct: 68, scale: 1.0, opacity: 0.85 },
+      'touch-btn-grenade': { label: 'GRENADE', leftPct: 54, topPct: 68, scale: 1.0, opacity: 0.85 },
+      'touch-btn-gyro-recenter': { label: 'RECENTER', leftPct: 94, topPct: 36, scale: 1.0, opacity: 0.85 },
+    };
+
+    if (savedLayoutStr) {
+      try {
+        const parsed = JSON.parse(savedLayoutStr);
+        for (const k in parsed) {
+          if (layout[k]) {
+            layout[k].leftPct = parsed[k].leftPct;
+            layout[k].topPct = parsed[k].topPct;
+            layout[k].scale = parsed[k].scale;
+            layout[k].opacity = parsed[k].opacity;
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    let activeKey = 'touch-btn-fire';
+
+    // Render viewport draggable nodes
+    const renderNodes = () => {
+      viewport.innerHTML = '<div class="editor-safe-area-guide">SAFE DRAG AREA</div>';
+      for (const [key, item] of Object.entries(layout)) {
+        const node = document.createElement('div');
+        node.className = `hud-editor-node ${key === activeKey ? 'selected' : ''}`;
+        node.id = `edit-node-${key}`;
+        node.textContent = item.label;
+        node.style.left = `${item.leftPct}%`;
+        node.style.top = `${item.topPct}%`;
+        const sizePx = Math.round(54 * item.scale);
+        node.style.width = `${sizePx}px`;
+        node.style.height = `${sizePx}px`;
+        node.style.opacity = `${item.opacity}`;
+
+        // Pointer drag event
+        let isDragging = false;
+        node.addEventListener('pointerdown', (e) => {
+          e.stopPropagation();
+          (e.target as HTMLElement).setPointerCapture(e.pointerId);
+          activeKey = key;
+          isDragging = true;
+          renderNodes();
+          syncInspector();
+        });
+
+        node.addEventListener('pointermove', (e) => {
+          if (!isDragging) return;
+          const rect = viewport.getBoundingClientRect();
+          const x = Math.max(8, Math.min(rect.width - 8, e.clientX - rect.left));
+          const y = Math.max(8, Math.min(rect.height - 8, e.clientY - rect.top));
+          item.leftPct = Number(((x / rect.width) * 100).toFixed(1));
+          item.topPct = Number(((y / rect.height) * 100).toFixed(1));
+          node.style.left = `${item.leftPct}%`;
+          node.style.top = `${item.topPct}%`;
+        });
+
+        const stopDrag = (e: PointerEvent) => {
+          if (isDragging) {
+            isDragging = false;
+            try {
+              (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+            } catch {
+              // ignore
+            }
+          }
+        };
+        node.addEventListener('pointerup', stopDrag);
+        node.addEventListener('pointercancel', stopDrag);
+
+        viewport.appendChild(node);
+      }
+    };
+
+    const syncInspector = () => {
+      const item = layout[activeKey];
+      if (!item) return;
+      const nameEl = document.getElementById('editor-selected-name');
+      const scaleSlider = document.getElementById('slider-elem-scale') as HTMLInputElement | null;
+      const scaleVal = document.getElementById('val-elem-scale');
+      const opacitySlider = document.getElementById('slider-elem-opacity') as HTMLInputElement | null;
+      const opacityVal = document.getElementById('val-elem-opacity');
+
+      if (nameEl) nameEl.textContent = `${item.label} (${activeKey.replace('touch-btn-', '').toUpperCase()})`;
+      if (scaleSlider) scaleSlider.value = String(Math.round(item.scale * 100));
+      if (scaleVal) scaleVal.textContent = `${Math.round(item.scale * 100)}%`;
+      if (opacitySlider) opacitySlider.value = String(Math.round(item.opacity * 100));
+      if (opacityVal) opacityVal.textContent = `${Math.round(item.opacity * 100)}%`;
+    };
+
+    renderNodes();
+    syncInspector();
+
+    // Inspector sliders
+    document.getElementById('slider-elem-scale')?.addEventListener('input', (e) => {
+      const val = Number((e.target as HTMLInputElement).value);
+      if (layout[activeKey]) {
+        layout[activeKey].scale = val / 100;
+        const vEl = document.getElementById('val-elem-scale');
+        if (vEl) vEl.textContent = `${val}%`;
+        const node = document.getElementById(`edit-node-${activeKey}`);
+        if (node) {
+          const sizePx = Math.round(54 * (val / 100));
+          node.style.width = `${sizePx}px`;
+          node.style.height = `${sizePx}px`;
+        }
+      }
+    });
+
+    document.getElementById('slider-elem-opacity')?.addEventListener('input', (e) => {
+      const val = Number((e.target as HTMLInputElement).value);
+      if (layout[activeKey]) {
+        layout[activeKey].opacity = val / 100;
+        const vEl = document.getElementById('val-elem-opacity');
+        if (vEl) vEl.textContent = `${val}%`;
+        const node = document.getElementById(`edit-node-${activeKey}`);
+        if (node) node.style.opacity = `${val / 100}`;
+      }
+    });
+
+    // Preset Buttons
+    document.getElementById('preset-2finger')?.addEventListener('click', () => {
+      document.querySelectorAll('.btn-preset').forEach((b) => b.classList.remove('active'));
+      document.getElementById('preset-2finger')?.classList.add('active');
+      layout['touch-joystick-zone'] = { label: 'JOYSTICK', leftPct: 18, topPct: 80, scale: 1.0, opacity: 0.85 };
+      layout['touch-btn-fire'] = { label: 'FIRE', leftPct: 84, topPct: 82, scale: 1.1, opacity: 0.9 };
+      layout['touch-btn-ads'] = { label: 'ADS 瞄準', leftPct: 64, topPct: 78, scale: 1.0, opacity: 0.85 };
+      layout['touch-btn-reload'] = { label: 'RELOAD', leftPct: 62, topPct: 92, scale: 1.0, opacity: 0.85 };
+      layout['touch-btn-jump'] = { label: 'JUMP', leftPct: 88, topPct: 64, scale: 1.0, opacity: 0.85 };
+      layout['touch-btn-crouch'] = { label: 'CROUCH', leftPct: 86, topPct: 94, scale: 1.0, opacity: 0.85 };
+      renderNodes();
+      syncInspector();
+    });
+
+    document.getElementById('preset-3finger')?.addEventListener('click', () => {
+      document.querySelectorAll('.btn-preset').forEach((b) => b.classList.remove('active'));
+      document.getElementById('preset-3finger')?.classList.add('active');
+      layout['touch-joystick-zone'] = { label: 'JOYSTICK', leftPct: 18, topPct: 80, scale: 1.0, opacity: 0.85 };
+      layout['touch-btn-fire'] = { label: 'FIRE', leftPct: 14, topPct: 24, scale: 1.25, opacity: 0.95 }; // Left Top Fire
+      layout['touch-btn-ads'] = { label: 'ADS 瞄準', leftPct: 82, topPct: 78, scale: 1.0, opacity: 0.85 };
+      layout['touch-btn-reload'] = { label: 'RELOAD', leftPct: 62, topPct: 88, scale: 1.0, opacity: 0.85 };
+      renderNodes();
+      syncInspector();
+    });
+
+    document.getElementById('preset-4finger')?.addEventListener('click', () => {
+      document.querySelectorAll('.btn-preset').forEach((b) => b.classList.remove('active'));
+      document.getElementById('preset-4finger')?.classList.add('active');
+      layout['touch-btn-fire'] = { label: 'FIRE', leftPct: 12, topPct: 18, scale: 1.2, opacity: 0.95 }; // Top-left
+      layout['touch-btn-ads'] = { label: 'ADS 瞄準', leftPct: 86, topPct: 18, scale: 1.1, opacity: 0.95 }; // Top-right
+      layout['touch-joystick-zone'] = { label: 'JOYSTICK', leftPct: 18, topPct: 80, scale: 1.0, opacity: 0.85 };
+      layout['touch-btn-reload'] = { label: 'RELOAD', leftPct: 60, topPct: 86, scale: 1.0, opacity: 0.85 };
+      renderNodes();
+      syncInspector();
+    });
+
+    // Gyro tuning controls
+    const gyroYaw = document.getElementById('slider-gyro-yaw') as HTMLInputElement | null;
+    const gyroPitch = document.getElementById('slider-gyro-pitch') as HTMLInputElement | null;
+    const gyroDead = document.getElementById('slider-gyro-deadzone') as HTMLInputElement | null;
+    const gyroInvert = document.getElementById('check-gyro-invert') as HTMLInputElement | null;
+    const gyroAssist = document.getElementById('check-gyro-assist') as HTMLInputElement | null;
+
+    if (gyroYaw) gyroYaw.value = String(Math.round(options.gyroConfig.yawSens * 10));
+    if (gyroPitch) gyroPitch.value = String(Math.round(options.gyroConfig.pitchSens * 10));
+    if (gyroDead) gyroDead.value = String(Math.round(options.gyroConfig.deadzone * 100));
+    if (gyroInvert) gyroInvert.checked = options.gyroConfig.invertPitch;
+    if (gyroAssist) gyroAssist.checked = options.gyroConfig.aimAssist;
+
+    gyroYaw?.addEventListener('input', (e) => {
+      const v = Number((e.target as HTMLInputElement).value) / 10;
+      options.gyroConfig.yawSens = v;
+      const el = document.getElementById('val-gyro-yaw');
+      if (el) el.textContent = `${v.toFixed(1)}x`;
+    });
+
+    gyroPitch?.addEventListener('input', (e) => {
+      const v = Number((e.target as HTMLInputElement).value) / 10;
+      options.gyroConfig.pitchSens = v;
+      const el = document.getElementById('val-gyro-pitch');
+      if (el) el.textContent = `${v.toFixed(1)}x`;
+    });
+
+    gyroDead?.addEventListener('input', (e) => {
+      const v = Number((e.target as HTMLInputElement).value) / 100;
+      options.gyroConfig.deadzone = v;
+      const el = document.getElementById('val-gyro-deadzone');
+      if (el) el.textContent = `${v.toFixed(2)}`;
+    });
+
+    gyroInvert?.addEventListener('change', (e) => {
+      options.gyroConfig.invertPitch = (e.target as HTMLInputElement).checked;
+    });
+
+    gyroAssist?.addEventListener('change', (e) => {
+      options.gyroConfig.aimAssist = (e.target as HTMLInputElement).checked;
+    });
+
+    // Tab switching in bottom bar
+    document.getElementById('tab-edit-element')?.addEventListener('click', () => {
+      document.getElementById('tab-edit-element')?.classList.add('active');
+      document.getElementById('tab-edit-gyro')?.classList.remove('active');
+      document.getElementById('panel-edit-element')?.classList.remove('hidden');
+      document.getElementById('panel-edit-gyro')?.classList.add('hidden');
+    });
+
+    document.getElementById('tab-edit-gyro')?.addEventListener('click', () => {
+      document.getElementById('tab-edit-gyro')?.classList.add('active');
+      document.getElementById('tab-edit-element')?.classList.remove('active');
+      document.getElementById('panel-edit-gyro')?.classList.remove('hidden');
+      document.getElementById('panel-edit-element')?.classList.add('hidden');
+    });
+
+    // Save and Apply
+    document.getElementById('btn-hud-editor-save')?.addEventListener('click', () => {
+      const cleanLayout: Record<string, { leftPct: number; topPct: number; scale: number; opacity: number }> = {};
+      for (const k in layout) {
+        cleanLayout[k] = {
+          leftPct: layout[k].leftPct,
+          topPct: layout[k].topPct,
+          scale: layout[k].scale,
+          opacity: layout[k].opacity,
+        };
+      }
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('firegun_hud_layout_v1', JSON.stringify(cleanLayout));
+          localStorage.setItem('firegun_gyro_config_v1', JSON.stringify(options.gyroConfig));
+        }
+      } catch {
+        // ignore
+      }
+      editor.classList.add('hidden');
+      options.onSave(cleanLayout, options.gyroConfig);
+    });
+
+    // Reset default
+    document.getElementById('btn-hud-editor-reset')?.addEventListener('click', () => {
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.removeItem('firegun_hud_layout_v1');
+          localStorage.removeItem('firegun_gyro_config_v1');
+        }
+      } catch {
+        // ignore
+      }
+      editor.classList.add('hidden');
+      options.onReset();
+    });
+
+    document.getElementById('btn-hud-editor-close')?.addEventListener('click', () => {
+      editor.classList.add('hidden');
+    });
+  }
 }
+

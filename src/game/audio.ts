@@ -295,6 +295,152 @@ export class TacticalRadioAudioEngine {
       setTimeout(() => this.processNextSpeech(), 150);
     }, approxDurationMs);
   }
+
+  /**
+   * Mechanical Gunsmith Ratchet / Click / Slide Sound (Web Audio synthesized)
+   */
+  public playMechanicalGunsmithClick(type: 'mount' | 'unmount' | 'slide' = 'mount'): void {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    if (type === 'mount') {
+      // Crisp metallic double-click
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(1800, now);
+      osc.frequency.exponentialRampToValueAtTime(420, now + 0.05);
+      gain.gain.setValueAtTime(0.35, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+      osc.connect(gain);
+      gain.connect(this.masterGain!);
+      osc.start(now);
+      osc.stop(now + 0.07);
+
+      // Follow-up latch
+      const osc2 = this.ctx.createOscillator();
+      const gain2 = this.ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(2400, now + 0.04);
+      osc2.frequency.exponentialRampToValueAtTime(800, now + 0.09);
+      gain2.gain.setValueAtTime(0.28, now + 0.04);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+      osc2.connect(gain2);
+      gain2.connect(this.masterGain!);
+      osc2.start(now + 0.04);
+      osc2.stop(now + 0.11);
+    } else {
+      // Quick detach metallic click
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(800, now);
+      osc.frequency.exponentialRampToValueAtTime(1600, now + 0.04);
+      gain.gain.setValueAtTime(0.25, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+      osc.connect(gain);
+      gain.connect(this.masterGain!);
+      osc.start(now);
+      osc.stop(now + 0.05);
+    }
+  }
+
+  /**
+   * Emergency Air-Raid Siren (Two-tone modulated wave)
+   */
+  public playEmergencySiren(durationSec = 6.0): void {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sawtooth';
+    // Frequency sweeps between 450Hz and 750Hz
+    for (let t = 0; t < durationSec; t += 1.8) {
+      osc.frequency.setValueAtTime(480, now + t);
+      osc.frequency.linearRampToValueAtTime(760, now + t + 0.9);
+      osc.frequency.linearRampToValueAtTime(480, now + t + 1.8);
+    }
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 1200;
+
+    gain.gain.setValueAtTime(0.05, now);
+    gain.gain.linearRampToValueAtTime(0.28, now + 0.8);
+    gain.gain.setValueAtTime(0.28, now + durationSec - 1.0);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + durationSec);
+
+    osc.connect(filter).connect(gain).connect(this.masterGain!);
+    osc.start(now);
+    osc.stop(now + durationSec);
+  }
+
+  /**
+   * Heavy Ballistic Shield Metal Ricochet / Deflection
+   */
+  public playHeavyShieldImpact(): void {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    // High resonant metallic ping
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(2800, now);
+    osc.frequency.exponentialRampToValueAtTime(350, now + 0.18);
+
+    gain.gain.setValueAtTime(0.55, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+    osc.connect(gain).connect(this.masterGain!);
+    osc.start(now);
+    osc.stop(now + 0.22);
+    this.playWhiteNoiseBurst(0.025, 0.2);
+  }
+
+  /**
+   * Juggernaut Shield Concussion / Stagger Breached
+   */
+  public playJuggernautStagger(): void {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    // Deep sub-bass crunch + ringing bell
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(140, now);
+    osc.frequency.exponentialRampToValueAtTime(45, now + 0.35);
+
+    gain.gain.setValueAtTime(0.7, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+
+    osc.connect(gain).connect(this.masterGain!);
+    osc.start(now);
+    osc.stop(now + 0.45);
+    this.playWhiteNoiseBurst(0.12, 0.45);
+  }
+
+  /**
+   * Green Extraction Smoke Flare Ignition Hiss
+   */
+  public playGreenSmokeIgnition(): void {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    // Pop followed by prolonged hiss
+    const popOsc = this.ctx.createOscillator();
+    const popGain = this.ctx.createGain();
+    popOsc.type = 'triangle';
+    popOsc.frequency.setValueAtTime(320, now);
+    popOsc.frequency.exponentialRampToValueAtTime(80, now + 0.08);
+    popGain.gain.setValueAtTime(0.4, now);
+    popGain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+    popOsc.connect(popGain).connect(this.masterGain!);
+    popOsc.start(now);
+    popOsc.stop(now + 0.09);
+
+    this.playWhiteNoiseBurst(1.8, 0.25);
+  }
 }
+
 
 export const tacticalRadioAudio = new TacticalRadioAudioEngine();

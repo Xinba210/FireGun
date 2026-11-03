@@ -260,6 +260,23 @@ async function main() {
     await page.waitForTimeout(120);
     await page.screenshot({ path: path.join(EVIDENCE_DIR, 'view_09_mission_complete.png') });
 
+    // Capture 12th Viewport: Goal A - 3D Interactive Gunsmith Workbench (AR-7 with Optics attachment cards)
+    await page.evaluate(() => {
+      window.__fpsApi.closeModals();
+      window.__fpsApi.equipWeapon(0);
+      window.__fpsApi.toggleLoadout(true);
+    });
+    await page.waitForTimeout(180);
+    await page.screenshot({ path: path.join(EVIDENCE_DIR, 'view_12_gunsmith_workbench.png') });
+
+    // Capture 13th Viewport: Goal B - Boss Encounter (PMC Juggernaut Goliath-01 with 1200 HP Boss Card)
+    await page.evaluate(() => {
+      window.__fpsApi.toggleLoadout(false);
+      window.__FIREGUN_TEST_API__?.triggerBossPhase();
+    });
+    await page.waitForTimeout(220);
+    await page.screenshot({ path: path.join(EVIDENCE_DIR, 'view_13_boss_encounter.png') });
+
     await ctx.close();
 
     // Capture 11th Viewport: Mobile Portrait (390x844 iPhone Viewport) Ergonomic HUD + Swipe-to-Look + Prominent Gyro & Auto-Fire Pill
@@ -284,6 +301,17 @@ async function main() {
     });
     await mobPage.waitForTimeout(150);
     await mobPage.screenshot({ path: path.join(EVIDENCE_DIR, 'view_11_mobile_portrait_hud.png') });
+
+    // Capture 14th Viewport: Goal C - Mobile Pro Touch HUD Editor & Advanced Gyro Calibration Overlay
+    await mobPage.evaluate(() => {
+      window.__FIREGUN_TEST_API__?.openHudEditor();
+    });
+    await mobPage.waitForTimeout(180);
+    await mobPage.screenshot({ path: path.join(EVIDENCE_DIR, 'view_14_hud_editor_mobile.png') });
+    await mobPage.evaluate(() => {
+      document.getElementById('btn-hud-editor-close')?.click();
+    });
+    await mobPage.waitForTimeout(80);
     await mobCtx.close();
 
     // Generate Side-by-Side A/B Comparisons
