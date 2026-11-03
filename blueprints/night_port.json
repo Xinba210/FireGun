@@ -16,15 +16,15 @@
   "cameras": {
     "hero": {
       "name": "CAM_HERO (Concept Overview Match, Pitch 26 deg)",
-      "position": [0.0, 14.5, 36.0],
-      "target": [0.0, 3.2, -12.0],
-      "fov": 46
+      "position": [0.0, 16.5, 36.5],
+      "target": [-3.0, 5.2, -16.0],
+      "fov": 52
     },
     "lane": {
       "name": "CAM_LANE (Combat Corridor Match)",
       "position": [-6.5, 2.1, 18.0],
-      "target": [-6.5, 2.4, -18.0],
-      "fov": 50
+      "target": [-6.8, 3.0, -18.0],
+      "fov": 52
     },
     "view1": {
       "name": "VIEW_01_DOCK_ENTRANCE",

@@ -802,9 +802,91 @@ body, html {
   background: rgba(30, 41, 59, 0.9);
   border: 1px solid rgba(250, 204, 21, 0.45);
   color: #fef08a;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 800;
-  padding: 1px 6px;
+  padding: 1px 5px;
+  border-radius: 2px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.stim-badge {
+  border-color: rgba(74, 222, 128, 0.55);
+  color: #86efac;
+}
+
+.light-badge {
+  border-color: rgba(148, 163, 184, 0.4);
+  color: #94a3b8;
+}
+
+.light-badge.active {
+  background: rgba(14, 116, 144, 0.85);
+  border-color: #38bdf8;
+  color: #e0f2fe;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+}
+
+.nvg-badge {
+  border-color: rgba(74, 222, 128, 0.4);
+  color: #86efac;
+}
+
+.nvg-badge.active {
+  background: rgba(20, 83, 45, 0.9);
+  border-color: #4ade80;
+  color: #dcfce7;
+  box-shadow: 0 0 10px rgba(74, 222, 128, 0.5);
+}
+
+/* [N] Dual-Tube Tactical Night-Vision Goggles (GPNVG-18) Overlay */
+.nvg-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(34, 197, 94, 0.16) 0%,
+    rgba(22, 163, 74, 0.28) 62%,
+    rgba(4, 24, 12, 0.78) 92%,
+    rgba(2, 10, 5, 0.96) 100%
+  );
+  mix-blend-mode: screen;
+  z-index: 2;
+}
+
+.nvg-scanlines {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.18) 0px,
+    rgba(0, 0, 0, 0.18) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+.nvg-tubes-mask {
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0 120px rgba(4, 18, 9, 0.92);
+  border: 2px solid rgba(74, 222, 128, 0.22);
+}
+
+.nvg-hud-tag {
+  position: absolute;
+  top: 66px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: Consolas, monospace;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: #4ade80;
+  background: rgba(6, 28, 14, 0.82);
+  border: 1px solid rgba(74, 222, 128, 0.45);
+  padding: 2px 12px;
   border-radius: 2px;
 }
 
@@ -900,4 +982,45 @@ body, html {
   padding: 10px 18px;
   font-size: 13px;
 }
+
+/* SG-12 Circular Shotgun Spread Reticle */
+.reticle-shotgun-ring {
+  position: absolute;
+  inset: -14px;
+  border-radius: 50%;
+  border: 1.8px dashed rgba(250, 204, 21, 0.85);
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.85);
+  pointer-events: none;
+  transition: transform 0.08s ease-out;
+}
+
+/* North Harbor Control Terminal Hack Box */
+.terminal-box {
+  position: absolute;
+  top: 69%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 260px;
+  background: rgba(8, 20, 28, 0.92);
+  border: 1.5px solid rgba(56, 189, 248, 0.65);
+  padding: 7px 12px;
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.7);
+}
+
+.terminal-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: #7dd3fc;
+  margin-bottom: 5px;
+  letter-spacing: 0.5px;
+}
+
+.terminal-bar-fill {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #0284c7, #38bdf8, #4ade80);
+  transition: width 0.08s linear;
+}
+
 

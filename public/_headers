@@ -1,0 +1,8 @@
+/assets/models/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/textures/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/audio/*
+  Cache-Control: public, max-age=31536000, immutable

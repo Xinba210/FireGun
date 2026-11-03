@@ -148,25 +148,26 @@ function generatePbrSet(name, size, evalPixel) {
 console.log('Generating high-detail PBR texture maps...');
 const TEX_SETS = {
   wet_concrete: generatePbrSet('wet_concrete', 256, (u, v) => {
-    const macro = fbm(u, v, 5, 4, 11);
-    const micro = fbm(u, v, 24, 3, 29);
-    const puddleField = fbm(u, v, 4, 4, 99);
-    // Smooth wet transition band instead of hard binary step
-    const wetness = Math.max(0, Math.min(1, (puddleField - 0.48) * 5.2));
-    const crackVal = Math.abs(fbm(u, v, 14, 3, 42) - 0.5);
-    const crack = crackVal < 0.014 ? 0.68 : 1.0;
-    const tireTrack = Math.sin(u * Math.PI * 16) > 0.85 ? 0.92 : 1.0;
-    const dryLuma = (0.19 + macro * 0.09 + micro * 0.05) * crack * tireTrack;
-    const base = dryLuma * (1.0 - wetness * 0.42);
-    const dryHeight = (0.35 + macro * 0.30 + micro * 0.18) * crack;
+    const macro = fbm(u, v, 4, 4, 11);
+    const micro = fbm(u, v, 28, 3, 29);
+    const asphaltGrain = fbm(u * 2.5, v * 2.5, 42, 2, 77);
+    const puddleField = fbm(u, v, 3, 4, 99);
+    // Smooth rain-slicked tarmac wetness transition without marbled cracks
+    const wetness = Math.max(0, Math.min(1, (puddleField - 0.50) * 4.5));
+    const crackVal = Math.abs(fbm(u, v, 10, 3, 42) - 0.5);
+    const crack = crackVal < 0.008 ? 0.90 : 1.0;
+    const tireTrack = Math.sin(u * Math.PI * 16) > 0.88 ? 0.95 : 1.0;
+    const dryLuma = (0.16 + macro * 0.05 + micro * 0.03 + asphaltGrain * 0.025) * crack * tireTrack;
+    const base = dryLuma * (1.0 - wetness * 0.36);
+    const dryHeight = (0.42 + macro * 0.16 + micro * 0.12 + asphaltGrain * 0.10) * crack;
     return {
       r: base * 0.92,
       g: base * 0.97,
       b: base * 1.08,
-      roughness: 0.68 - wetness * 0.56 - micro * 0.04,
-      metallic: 0.06 + wetness * 0.28,
+      roughness: 0.62 - wetness * 0.50 - micro * 0.03,
+      metallic: 0.08 + wetness * 0.26,
       height: dryHeight * (1.0 - wetness * 0.85) + 0.5 * (wetness * 0.85),
-      ao: crack * (0.9 + micro * 0.1),
+      ao: crack * (0.94 + micro * 0.06),
     };
   }),
   container_red: generatePbrSet('container_red', 256, (u, v) => {
@@ -512,6 +513,51 @@ function appendRotatedYBox(geom, cx, cy, cz, sx, sy, sz, angleRad = 0, uvScale =
   }
 }
 
+function appendJerseyBarrier(geom, cx, cz, len = 2.75, angleRad = 0, uvScale = 0.5) {
+  // Authentic sloped concrete Jersey Barrier cross-section profile:
+  // y=0.00 (half-width 0.42) -> y=0.22 (0.38) -> y=0.52 (0.20) -> y=1.02 (0.13)
+  const prof = [
+    [0.00, 0.42],
+    [0.22, 0.38],
+    [0.52, 0.20],
+    [1.02, 0.13],
+  ];
+  const hx = len / 2;
+  const ca = Math.cos(angleRad), sa = Math.sin(angleRad);
+  const rot = (x, y, z) => [cx + x * ca + z * sa, y, cz - x * sa + z * ca];
+  const rotN = (nx, ny, nz) => [nx * ca + nz * sa, ny, -nx * sa + nz * ca];
+
+  function addQuad(v0, v1, v2, v3, nx, ny, nz, uLen, vLen) {
+    const base = geom.positions.length / 3;
+    const rn = rotN(nx, ny, nz);
+    for (const v of [v0, v1, v2, v3]) {
+      const rp = rot(v[0], v[1], v[2]);
+      geom.positions.push(rp[0], rp[1], rp[2]);
+      geom.normals.push(rn[0], rn[1], rn[2]);
+    }
+    const uM = uLen * uvScale, vM = vLen * uvScale;
+    geom.uvs.push(0, 0, uM, 0, uM, vM, 0, vM);
+    geom.indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
+
+  for (let i = 0; i < prof.length - 1; i++) {
+    const [y0, z0] = prof[i];
+    const [y1, z1] = prof[i + 1];
+    const dy = y1 - y0, dz = z0 - z1;
+    const nl = Math.hypot(dy, dz) || 1;
+    const ny = dz / nl, nz = dy / nl;
+    // Front sloped face (+Z)
+    addQuad([-hx, y0, z0], [hx, y0, z0], [hx, y1, z1], [-hx, y1, z1], 0, ny, nz, len, nl);
+    // Back sloped face (-Z)
+    addQuad([hx, y0, -z0], [-hx, y0, -z0], [-hx, y1, -z1], [hx, y1, -z1], 0, ny, -nz, len, nl);
+    // Left & Right end caps
+    addQuad([hx, y0, z0], [hx, y0, -z0], [hx, y1, -z1], [hx, y1, z1], 1, 0, 0, z0 * 2, dy);
+    addQuad([-hx, y0, -z0], [-hx, y0, z0], [-hx, y1, z1], [-hx, y1, -z1], -1, 0, 0, z0 * 2, dy);
+  }
+  const [yTop, zTop] = prof[prof.length - 1];
+  addQuad([-hx, yTop, zTop], [hx, yTop, zTop], [hx, yTop, -zTop], [-hx, yTop, -zTop], 0, 1, 0, len, zTop * 2);
+}
+
 function appendCylinder(geom, cx, cy, cz, rTop, rBot, height, segs = 16, axis = 'y') {
   const half = height / 2;
   const base = geom.positions.length / 3;
@@ -666,22 +712,22 @@ function appendOrganicPuddleDisc(geom, cx, cy, cz, rx, rz, seed = 1, segs = 28) 
 function buildWeaponsPackGlb() {
   const b = new GlbBuilder();
   const matGunmetal = b.addPbrTextureMaterial('MI_Gunmetal_Anodized', TEX_SETS.gunmetal_pbr, {
-    normalScale: 0.28,
-    baseColorFactor: [0.68, 0.72, 0.78, 1],
-    roughnessFactor: 0.72,
-    metallicFactor: 0.88,
+    normalScale: 0.35,
+    baseColorFactor: [0.52, 0.56, 0.62, 1],
+    roughnessFactor: 0.44,
+    metallicFactor: 0.90,
   });
   const matDarkSteel = b.addPbrTextureMaterial('MI_Barrel_DarkSteel', TEX_SETS.gunmetal_pbr, {
-    normalScale: 0.22,
-    baseColorFactor: [0.42, 0.45, 0.50, 1],
-    roughnessFactor: 0.55,
-    metallicFactor: 0.92,
+    normalScale: 0.28,
+    baseColorFactor: [0.34, 0.38, 0.44, 1],
+    roughnessFactor: 0.36,
+    metallicFactor: 0.95,
   });
   const matPolymer = b.addPbrTextureMaterial('MI_Polymer_Grip', TEX_SETS.gunmetal_pbr, {
-    normalScale: 0.35,
-    baseColorFactor: [0.28, 0.30, 0.33, 1],
-    roughnessFactor: 1.0,
-    metallicFactor: 0.15,
+    normalScale: 0.40,
+    baseColorFactor: [0.22, 0.24, 0.27, 1],
+    roughnessFactor: 0.92,
+    metallicFactor: 0.14,
   });
   const matFdePolymer = b.addPbrTextureMaterial('MI_Polymer_FDE_Accent', TEX_SETS.tactical_camo, {
     normalScale: 0.25,
@@ -912,6 +958,7 @@ function buildWeaponsPackGlb() {
   const smgMetal = makeGeometryCollector();
   const smgSteel = makeGeometryCollector();
   const smgPoly = makeGeometryCollector();
+  const smgBrass = makeGeometryCollector();
   const smgLens = makeGeometryCollector();
   const smgRet = makeGeometryCollector();
   const smgLaser = makeGeometryCollector();
@@ -919,14 +966,24 @@ function buildWeaponsPackGlb() {
   // Compact CNC Upper/Lower Receiver & Flared 9mm Magwell
   appendBox(smgMetal, 0, 0.032, -0.02, 0.038, 0.044, 0.21, 0.8);
   appendBox(smgPoly, 0, -0.004, -0.015, 0.036, 0.034, 0.18, 0.8);
-  appendBox(smgMetal, 0, 0.042, -0.175, 0.034, 0.032, 0.14, 0.8); // Compact Quad-Rail Forend
+  // Ejection port, brass bolt carrier, non-reciprocating charging handle & trigger guard
+  appendBox(smgBrass, 0.020, 0.032, -0.025, 0.005, 0.016, 0.052, 0.5);
+  appendBox(smgBrass, 0, -0.176, -0.088, 0.024, 0.008, 0.038, 0.5); // Brass Magazine Floorplate
+  appendCylinder(smgSteel, -0.022, 0.042, -0.14, 0.006, 0.006, 0.024, 10, 'x'); // MP5-style cocking handle
+  appendBox(smgPoly, 0, -0.028, 0.008, 0.016, 0.005, 0.044, 0.5); // Trigger guard
+  appendBeam(smgBrass, 0, -0.010, 0.014, 0, -0.024, 0.008, 0.0035, 6); // Match trigger blade
+  // Ventilated M-LOK Quad-Rail Forend
+  appendBox(smgMetal, 0, 0.042, -0.175, 0.034, 0.032, 0.14, 0.8);
+  for (let z = -0.22; z <= -0.13; z += 0.03) {
+    appendBox(smgSteel, 0, 0.042, z, 0.036, 0.012, 0.014, 0.5); // Forend vent slots
+  }
   for (let z = -0.23; z <= 0.06; z += 0.016) {
     appendBox(smgMetal, 0, 0.056, z, 0.022, 0.005, 0.008, 0.5); // Top Picatinny Rail
   }
   // Integrated Knurled cylindrical Sound Suppressor (Silencer)
   appendCylinder(smgSteel, 0, 0.032, -0.34, 0.019, 0.019, 0.22, 16, 'z');
-  for (const sz of [-0.27, -0.34, -0.41]) {
-    appendCylinder(smgMetal, 0, 0.032, sz, 0.0205, 0.0205, 0.014, 16, 'z'); // Suppressor heat-dissipation rings
+  for (const sz of [-0.26, -0.30, -0.34, -0.38, -0.42]) {
+    appendCylinder(smgMetal, 0, 0.032, sz, 0.0208, 0.0208, 0.012, 16, 'z'); // Suppressor heat-dissipation rings
   }
   // Trijicon RMR Micro Reflex Sight on Riser Mount
   appendBox(smgMetal, 0, 0.066, -0.02, 0.030, 0.016, 0.044, 0.5);
@@ -945,11 +1002,15 @@ function buildWeaponsPackGlb() {
   appendCylinder(smgPoly, 0, -0.042, -0.20, 0.014, 0.013, 0.068, 12, 'y'); // Stubby vertical foregrip
   appendBeam(smgPoly, 0, -0.02, -0.065, 0, -0.175, -0.095, 0.014, 8); // Extended 45-rd curved mag
   appendBox(smgPoly, 0, -0.095, -0.078, 0.022, 0.155, 0.034, 0.5);
+  for (let yRib = -0.045; yRib >= -0.145; yRib -= 0.025) {
+    appendBox(smgSteel, 0, yRib, -0.078, 0.025, 0.005, 0.036, 0.5); // Mag witness window ribs
+  }
 
   const smgNode = b.addNode('SMG9_Tactical', [
     b.addMeshPrimitive('SMG9_Metal', smgMetal.positions, smgMetal.normals, smgMetal.uvs, smgMetal.indices, matGunmetal),
     b.addMeshPrimitive('SMG9_Steel', smgSteel.positions, smgSteel.normals, smgSteel.uvs, smgSteel.indices, matDarkSteel),
     b.addMeshPrimitive('SMG9_Polymer', smgPoly.positions, smgPoly.normals, smgPoly.uvs, smgPoly.indices, matPolymer),
+    b.addMeshPrimitive('SMG9_Brass', smgBrass.positions, smgBrass.normals, smgBrass.uvs, smgBrass.indices, matBrass),
     b.addMeshPrimitive('SMG9_Lens', smgLens.positions, smgLens.normals, smgLens.uvs, smgLens.indices, matGlass),
     b.addMeshPrimitive('SMG9_Reticle', smgRet.positions, smgRet.normals, smgRet.uvs, smgRet.indices, matReticle),
     b.addMeshPrimitive('SMG9_Laser', smgLaser.positions, smgLaser.normals, smgLaser.uvs, smgLaser.indices, matLaserGreen),
@@ -965,9 +1026,19 @@ function buildWeaponsPackGlb() {
   // Heavy Combat Receiver & Top Picatinny Rail + Ghost Ring Sight
   appendBox(sgMetal, 0, 0.030, -0.02, 0.042, 0.048, 0.24, 0.8);
   appendBox(sgSteel, 0.022, 0.032, -0.03, 0.004, 0.018, 0.075, 0.5); // Silver bolt carrier in ejection port
-  appendBox(sgMetal, 0, 0.060, 0.07, 0.026, 0.016, 0.024, 0.5);      // Ghost ring rear aperture
-  // 18.5" Heavy Breacher Barrel + Full-Length Under-Barrel Tube Magazine + Slotted Heat Shield
+  appendCylinder(sgBrass, 0.030, 0.032, -0.05, 0.005, 0.005, 0.018, 10, 'x'); // Oversized bolt handle
+  appendBox(sgPoly, 0, -0.018, 0.025, 0.018, 0.006, 0.048, 0.5); // Trigger guard
+  appendBeam(sgBrass, 0, -0.002, 0.032, 0, -0.015, 0.025, 0.0035, 6); // Trigger
+  for (let z = -0.11; z <= 0.06; z += 0.018) {
+    appendBox(sgMetal, 0, 0.056, z, 0.022, 0.005, 0.009, 0.5); // Receiver top Picatinny rail
+  }
+  appendBox(sgMetal, 0, 0.062, 0.075, 0.026, 0.016, 0.024, 0.5);      // Ghost ring rear aperture
+  appendBox(sgMetal, 0, 0.060, -0.55, 0.012, 0.022, 0.018, 0.5);      // High-profile front blade sight
+  // 18.5" Heavy Breacher Barrel + Ventilated Top Heat Shield + Full-Length Under-Barrel Tube Magazine
   appendCylinder(sgSteel, 0, 0.042, -0.35, 0.0135, 0.0145, 0.48, 16, 'z'); // Upper shotgun barrel
+  for (let z = -0.44; z <= -0.16; z += 0.035) {
+    appendBox(sgMetal, 0, 0.053, z, 0.030, 0.008, 0.020, 0.5); // Ventilated barrel heat shield ribs
+  }
   appendCylinder(sgMetal, 0, 0.014, -0.33, 0.0125, 0.0125, 0.44, 16, 'z'); // Lower 8-shell tube magazine
   appendBox(sgMetal, 0, 0.028, -0.48, 0.030, 0.038, 0.024, 0.5);           // Barrel/Mag clamp bracket
   appendCylinder(sgSteel, 0, 0.042, -0.60, 0.016, 0.015, 0.045, 14, 'z');  // Stand-off toothed Door Breacher Choke
@@ -1017,9 +1088,9 @@ function buildPortEnvironmentGlb() {
   const matSea = b.addSolidPbrMaterial('MI_Harbor_Sea', [0.02, 0.05, 0.09, 1], 0.08, 0.72);
   const matShipRed = b.addSolidPbrMaterial('MI_Ship_Waterline', [0.36, 0.11, 0.09, 1], 0.62, 0.35);
   const matShipBridge = b.addPbrTextureMaterial('MI_Ship_Superstructure', TEX_SETS.gunmetal_pbr, {
-    baseColorFactor: [0.95, 1.0, 1.05, 1],
-    roughnessFactor: 0.65,
-    metallicFactor: 0.35,
+    baseColorFactor: [0.76, 0.80, 0.85, 1],
+    roughnessFactor: 0.68,
+    metallicFactor: 0.32,
   });
   const matLitWindow = b.addSolidPbrMaterial('MI_Warm_Window_Emissive', [1.0, 0.82, 0.48, 1], 0.2, 0.0, [2.4, 1.55, 0.68]);
   const matFloodlight = b.addSolidPbrMaterial('MI_Sodium_Lamp', [1.0, 0.75, 0.35, 1], 0.1, 0.0, [3.2, 1.9, 0.65]);
@@ -1058,20 +1129,23 @@ function buildPortEnvironmentGlb() {
   appendBox(gSea, -42, -1.6, 0, 60, 0.4, 120, 0.08);
   // Seawall Coping & Yellow Hazard Stripes & Mooring Bollards + Hanging Bollard Chains
   appendBox(gConcrete, -23.5, 0.18, 0, 1.2, 0.36, 86, 0.25);
+  appendBox(gHazard, -22.75, 0.015, 0, 0.18, 0.018, 82, 0.5); // Continuous yellow quay safety line!
   for (let z = -38; z <= 38; z += 4) {
     appendBox(gHazard, -23.1, 0.37, z, 0.35, 0.02, 1.8, 1);
     // Rubber Cylindrical Dock Fenders along Quay Wall
     appendCylinder(gRubber, -24.18, -0.1, z, 0.32, 0.32, 1.4, 10, 'y');
   }
   const westBollardZs = [];
-  for (let z = -34; z <= 34; z += 8.5) {
+  for (let z = -34; z <= 34; z += 6.8) {
     westBollardZs.push(z);
     appendCylinder(gDarkSteel, -23.3, 0.55, z, 0.26, 0.32, 0.75, 12, 'y');
     appendCylinder(gDarkSteel, -23.3, 0.92, z, 0.36, 0.36, 0.12, 12, 'y');
   }
   for (let i = 0; i < westBollardZs.length - 1; i++) {
-    appendCatenaryChain(gDarkSteel, -23.3, 0.78, westBollardZs[i], -23.3, 0.78, westBollardZs[i + 1], 0.32, 7, 0.032);
+    appendCatenaryChain(gDarkSteel, -23.3, 0.78, westBollardZs[i], -23.3, 0.78, westBollardZs[i + 1], 0.32, 7, 0.035);
   }
+  // Connect last west bollard (z=34) to first south bollard (-20, 29.8) so foreground corner chain is continuous!
+  appendCatenaryChain(gDarkSteel, -23.3, 0.78, 27.2, -20.0, 0.74, 29.8, 0.28, 7, 0.036);
   // Foreground Southern Seawall Bollards & Heavy Chains (matching CAM_HERO bottom foreground!)
   const southBollardXs = [-20, -13, -6, 1, 8];
   appendBox(gConcrete, -6, 0.16, 29.8, 32, 0.32, 0.95, 0.25);
@@ -1098,68 +1172,74 @@ function buildPortEnvironmentGlb() {
     appendOrganicPuddleDisc(gPuddles, px, 0.014, pz, rx, rz, idx + 1, 28);
   });
 
-  // 2. Moored Cargo Ship ("MV ATLANTIC MARINER") along West Quay (x = -33)
-  appendBox(gShipRed, -33, -0.2, -8, 15.5, 2.8, 66, 0.12); // Lower waterline hull
-  appendBox(gSteel, -33, 3.8, -8, 16.0, 5.6, 68, 0.14); // Main rusted hull
+  // 2. Moored Cargo Ship ("MV ATLANTIC MARINER") along West Quay (x = -33, z = -44..+16)
+  //    Calibrated so Raked Bow (z = +8..+16), 3-Tier Container Deck (z = -24..+6), and Stern Bridge (z = -35) are all framed in CAM_HERO & CAM_LANE!
+  appendBox(gShipRed, -33, -0.2, -16, 15.5, 2.8, 56, 0.12); // Lower waterline hull
+  appendBox(gSteel, -33, 3.8, -16, 16.0, 5.6, 58, 0.14); // Main rusted hull
   // Hull structural rib strakes, bulwark rail, draft marks & raised hull nameplate
-  appendBox(gDarkSteel, -24.9, 6.65, -8, 0.35, 0.45, 68, 0.25);
-  appendBox(gDarkSteel, -24.95, 2.2, -8, 0.25, 0.3, 66, 0.25);
-  appendBox(gShipBridge, -26.6, 5.8, 26.5, 0.12, 0.55, 4.2, 0.5); // Raised white hull nameplate plaque
+  appendBox(gDarkSteel, -24.9, 6.65, -16, 0.35, 0.45, 58, 0.25);
+  appendBox(gDarkSteel, -24.95, 2.2, -16, 0.25, 0.3, 56, 0.25);
+  appendBox(gShipBridge, -25.1, 5.6, 10.5, 0.14, 0.62, 4.6, 0.5); // Raised white hull nameplate plaque near bow
   for (let dy = 0.2; dy <= 2.2; dy += 0.45) {
-    appendBox(gShipBridge, -25.15, dy, 23.5, 0.12, 0.14, 0.55, 0.5); // Hull draft waterline scale marks
+    appendBox(gShipBridge, -25.15, dy, 8.5, 0.12, 0.14, 0.55, 0.5); // Hull draft waterline scale marks
   }
-  // Raked Bow Forecastle + Tapered Prow + Mast & Bow Floodlight
-  appendBox(gSteel, -33, 5.4, 28.5, 12.6, 6.4, 10, 0.15);
-  appendBox(gSteel, -33, 5.8, 34.5, 7.8, 6.6, 6.5, 0.15);
-  appendBox(gSteel, -33, 6.2, 38.2, 3.6, 6.8, 4.0, 0.15);
-  appendCylinder(gDarkSteel, -33, 12.2, 35.5, 0.16, 0.28, 6.8, 10, 'y'); // Foremast
-  appendBox(gDarkSteel, -33, 13.8, 35.5, 2.6, 0.18, 0.18, 1); // Foremast yardarm
-  appendBox(gLamps, -33, 15.2, 35.5, 0.65, 0.45, 0.65, 1); // Bow mast beacon
-  // Heavy Mooring Hawsers (Ropes from Ship Bow/Stern to Quay Bollards)
-  appendCatenaryChain(gDarkSteel, -27.2, 6.2, 28.0, -23.3, 0.85, 25.5, 0.85, 8, 0.045);
-  appendCatenaryChain(gDarkSteel, -27.2, 6.2, 18.0, -23.3, 0.85, 17.0, 0.75, 8, 0.045);
+  // Raked Bow Forecastle + Tapered Prow + Mast & Bow Floodlight (z = +9..+17, clearly visible in CAM_HERO!)
+  appendBox(gSteel, -33, 5.4, 10.5, 12.6, 6.4, 8.0, 0.15);
+  appendBox(gSteel, -33, 5.8, 14.5, 7.8, 6.6, 5.2, 0.15);
+  appendBox(gSteel, -33, 6.2, 17.2, 3.6, 6.8, 3.4, 0.15);
+  appendCylinder(gDarkSteel, -33, 12.2, 15.0, 0.16, 0.28, 6.8, 10, 'y'); // Foremast
+  appendBox(gDarkSteel, -33, 13.8, 15.0, 2.6, 0.18, 0.18, 1); // Foremast yardarm
+  appendBox(gLamps, -33, 15.2, 15.0, 0.65, 0.45, 0.65, 1); // Bow mast beacon
+  // Heavy Mooring Hawsers (Ropes from Ship Bow/Midship/Stern to Quay Bollards)
+  appendCatenaryChain(gDarkSteel, -27.2, 6.2, 14.0, -23.3, 0.85, 17.0, 0.85, 8, 0.045);
+  appendCatenaryChain(gDarkSteel, -27.2, 6.2, 4.0, -23.3, 0.85, 8.5, 0.75, 8, 0.045);
   appendCatenaryChain(gDarkSteel, -25.2, 5.8, -16.0, -23.3, 0.85, -17.0, 0.65, 8, 0.045);
 
-  // Ship Deck Cargo Containers (Multi-stack)
-  appendBox(gContRed, -35.5, 7.9, -2, 3.2, 2.6, 12, 0.25);
-  appendBox(gContBlue, -30.5, 7.9, -2, 3.2, 2.6, 12, 0.25);
-  appendBox(gContGreen, -35.5, 10.5, -2, 3.2, 2.6, 12, 0.25);
-  appendBox(gContRed, -30.5, 10.5, -2, 3.2, 2.6, 12, 0.25);
-  appendBox(gContRed, -30.5, 7.9, 13, 3.2, 2.6, 12, 0.25);
-  appendBox(gContBlue, -35.5, 7.9, 13, 3.2, 2.6, 12, 0.25);
-  appendBox(gContGreen, -30.5, 10.5, 13, 3.2, 2.6, 12, 0.25);
-  // Multi-story Bridge Superstructure at Stern (z = -26)
-  appendBox(gShipBridge, -33, 9.2, -26, 14.2, 5.2, 13, 0.2);
-  appendBox(gShipBridge, -33, 13.4, -26.5, 12.4, 3.4, 10.5, 0.2);
-  appendBox(gShipBridge, -33, 16.4, -25.5, 13.8, 2.6, 7.5, 0.2); // Navigation Bridge Wings
-  appendBox(gDarkSteel, -33, 11.9, -19.2, 14.4, 0.18, 0.8, 0.3); // Exterior bridge catwalk
-  appendCylinder(gSteel, -33, 20.5, -28.5, 1.3, 1.6, 5.8, 14, 'y'); // Smokestack Funnel
-  appendCylinder(gHazard, -33, 21.8, -28.5, 1.36, 1.42, 1.2, 14, 'y'); // Funnel band
-  appendCylinder(gDarkSteel, -33, 21.5, -24.5, 0.18, 0.32, 8.0, 10, 'y'); // Radar Mast
-  appendBox(gDarkSteel, -33, 23.8, -24.5, 3.8, 0.22, 0.22, 1); // Radar Crossbar
+  // Ship Deck Cargo Containers (Multi-stack 3 tiers of Red/Green/Blue containers matching CAM_HERO & CAM_LANE!)
+  appendBox(gContRed, -35.5, 7.9, -18, 3.2, 2.6, 11, 0.25);
+  appendBox(gContBlue, -30.5, 7.9, -18, 3.2, 2.6, 11, 0.25);
+  appendBox(gContGreen, -35.5, 10.5, -18, 3.2, 2.6, 11, 0.25);
+  appendBox(gContRed, -30.5, 10.5, -18, 3.2, 2.6, 11, 0.25);
+  appendBox(gContBlue, -33.0, 13.1, -18, 3.2, 2.6, 11, 0.25);
+  appendBox(gContRed, -30.5, 7.9, -5, 3.2, 2.6, 11, 0.25);
+  appendBox(gContBlue, -35.5, 7.9, -5, 3.2, 2.6, 11, 0.25);
+  appendBox(gContGreen, -30.5, 10.5, -5, 3.2, 2.6, 11, 0.25);
+  appendBox(gContRed, -35.5, 10.5, -5, 3.2, 2.6, 11, 0.25);
+  appendBox(gContRed, -30.5, 13.1, -5, 3.2, 2.6, 11, 0.25);
+  appendBox(gContGreen, -30.5, 7.9, 5, 3.2, 2.6, 7.5, 0.25);
+  appendBox(gContBlue, -30.5, 10.5, 5, 3.2, 2.6, 7.5, 0.25);
+  // Multi-story Bridge Superstructure at Stern (z = -35.0, framed cleanly in upper-left horizon)
+  appendBox(gShipBridge, -33, 9.2, -35.0, 13.8, 5.0, 11.5, 0.2);
+  appendBox(gShipBridge, -33, 13.2, -35.5, 12.0, 3.2, 9.5, 0.2);
+  appendBox(gShipBridge, -33, 16.0, -34.5, 13.4, 2.4, 7.0, 0.2); // Navigation Bridge Wings
+  appendBox(gDarkSteel, -33, 11.7, -28.9, 14.0, 0.18, 0.8, 0.3); // Exterior bridge catwalk
+  appendCylinder(gSteel, -33, 20.0, -37.5, 1.3, 1.6, 5.6, 14, 'y'); // Smokestack Funnel
+  appendCylinder(gHazard, -33, 21.3, -37.5, 1.36, 1.42, 1.2, 14, 'y'); // Funnel band
+  appendCylinder(gDarkSteel, -33, 21.0, -33.5, 0.18, 0.32, 7.8, 10, 'y'); // Radar Mast
+  appendBox(gDarkSteel, -33, 23.3, -33.5, 3.8, 0.22, 0.22, 1); // Radar Crossbar
   // Illuminated Bridge Windows & Portholes
   for (let wx = -38; wx <= -28; wx += 2.5) {
-    appendBox(gWindows, wx, 9.5, -19.4, 1.2, 0.9, 0.1, 1);
-    appendBox(gWindows, wx, 13.5, -21.2, 1.2, 0.9, 0.1, 1);
-    appendBox(gWindows, wx, 16.5, -21.7, 1.5, 1.0, 0.1, 1);
+    appendBox(gWindows, wx, 9.5, -29.1, 1.2, 0.9, 0.1, 1);
+    appendBox(gWindows, wx, 13.3, -30.6, 1.2, 0.9, 0.1, 1);
+    appendBox(gWindows, wx, 16.1, -30.9, 1.5, 1.0, 0.1, 1);
   }
-  for (let wz = -24; wz <= -18; wz += 2.5) {
-    appendBox(gWindows, -25.8, 9.5, wz, 0.1, 0.9, 1.1, 1);
-    appendBox(gWindows, -26.7, 13.5, wz - 3, 0.1, 0.9, 1.1, 1);
+  for (let wz = -33.5; wz <= -29.5; wz += 2.0) {
+    appendBox(gWindows, -26.0, 9.5, wz, 0.1, 0.9, 1.1, 1);
+    appendBox(gWindows, -26.9, 13.3, wz - 2, 0.1, 0.9, 1.1, 1);
   }
   // Ship Starboard Lifeboat Davits, Orange Enclosed Lifeboat & Accommodation Ladder (Matching CAM_HERO)
-  appendBox(gDarkSteel, -25.6, 10.6, -16.2, 1.4, 1.8, 0.22, 0.5); // Forward davit arm
-  appendBox(gDarkSteel, -25.6, 10.6, -20.2, 1.4, 1.8, 0.22, 0.5); // Aft davit arm
-  appendBox(gExplosive, -25.2, 9.6, -18.2, 1.45, 1.05, 4.4, 0.4); // Bright orange enclosed lifeboat hull
-  appendBox(gWindows, -24.46, 9.85, -18.2, 0.08, 0.32, 2.2, 1);   // Lifeboat canopy viewport
-  appendBox(gLamps, -26.0, 17.8, -21.7, 0.85, 0.28, 0.45, 1);     // Bridge wing searchlight
+  appendBox(gDarkSteel, -25.6, 10.6, -24.2, 1.4, 1.8, 0.22, 0.5); // Forward davit arm
+  appendBox(gDarkSteel, -25.6, 10.6, -28.2, 1.4, 1.8, 0.22, 0.5); // Aft davit arm
+  appendBox(gExplosive, -25.2, 9.6, -26.2, 1.45, 1.05, 4.4, 0.4); // Bright orange enclosed lifeboat hull
+  appendBox(gWindows, -24.46, 9.85, -26.2, 0.08, 0.32, 2.2, 1);   // Lifeboat canopy viewport
+  appendBox(gLamps, -26.0, 17.8, -28.2, 0.85, 0.28, 0.45, 1);     // Bridge wing searchlight
   // Boarding Gangway Ramp connecting Dock (x = -23.5, z = -12) to Ship Deck (x = -25, y = 6.5) + Handrails
   appendBox(gSteel, -24.2, 3.2, -12, 2.2, 0.3, 12.5, 0.3);
   appendBeam(gDarkSteel, -23.2, 0.9, -5.8, -23.2, 6.8, -18.2, 0.045, 6);
   appendBeam(gDarkSteel, -25.2, 0.9, -5.8, -25.2, 6.8, -18.2, 0.045, 6);
 
-  // 3. Towering Port Gantry Crane straddling West Lane (x = -11.5 to -3.5, z = -18)
-  const craneZ = -18;
+  // 3. Towering Port Gantry Crane straddling West Lane (x = -11.5 to -3.5, z = -22)
+  const craneZ = -22;
   const zA = craneZ - 4.5, zB = craneZ + 4.5;
   for (const lx of [-11.5, -3.5]) {
     for (const lz of [zA, craneZ + 4.5]) {
@@ -1439,9 +1519,8 @@ function buildPortEnvironmentGlb() {
     [-8.5, 10.0, 1], [-8.5, -4.0, 1], [3.5, -14.0, 0], [15.5, -2.0, 0],
   ];
   for (const [bx, bz, rot] of barriers) {
-    // Tapered Jersey Barrier profile (wide base + narrower top wall)
-    appendBox(gConcrete, bx, 0.22, bz, rot ? 0.82 : 2.8, 0.44, rot ? 2.8 : 0.82, 0.5);
-    appendBox(gConcrete, bx, 0.72, bz, rot ? 0.46 : 2.76, 0.68, rot ? 2.76 : 0.46, 0.5);
+    // True sloped trapezoidal New Jersey Barrier profile!
+    appendJerseyBarrier(gConcrete, bx, bz, 2.8, rot ? Math.PI * 0.5 : 0, 0.5);
   }
   // Angled Defensive Concrete Jersey Barrier Semicircle & Supply Cache around South Foreground Fire Barrel (-3.2, 25.5) (Matching CAM_HERO!)
   for (const [bx, bz, ang] of [
@@ -1449,9 +1528,8 @@ function buildPortEnvironmentGlb() {
     [-3.4, 24.1, 0.08],
     [-0.8, 24.8, -0.38],
   ]) {
-    appendRotatedYBox(gConcrete, bx, 0.22, bz, 2.7, 0.44, 0.82, ang, 0.5);
-    appendRotatedYBox(gConcrete, bx, 0.72, bz, 2.66, 0.68, 0.46, ang, 0.5);
-    appendRotatedYBox(gHazard, bx, 0.96, bz, 2.68, 0.12, 0.48, ang, 0.5); // High-vis hazard stripe along barrier top
+    appendJerseyBarrier(gConcrete, bx, bz, 2.7, ang, 0.5);
+    appendRotatedYBox(gHazard, bx, 0.96, bz, 2.66, 0.08, 0.24, ang, 0.5); // High-vis hazard stripe along barrier top
   }
   // Foreground Palletized Supply Crates & Oil Drum Cluster at South Plaza (Matching CAM_HERO foreground!)
   appendRotatedYBox(gWood, -5.2, 0.08, 26.8, 1.5, 0.16, 1.4, 0.25, 0.5);
@@ -1510,8 +1588,12 @@ function buildPortEnvironmentGlb() {
     appendBox(gHazard, 9.8, 0.012, z, 0.16, 0.015, 2.1, 0.5);
   }
 
-  // 12. Distant Harbor Breakwater, Opposite Port Cranes & Illuminated Channel Buoys (North/West Horizon)
+  // 12. Distant Harbor Breakwater, Opposite Port Cranes, Distant Cargo Ship Silhouettes & Illuminated Channel Buoys (North/West Horizon)
   appendBox(gDarkSteel, -15, 1.2, -56, 110, 2.8, 3.5, 0.2); // Distant North Breakwater Wall
+  // Distant Cargo Ship Silhouette along North Horizon
+  appendBox(gDarkSteel, -28, 3.2, -62, 28.0, 4.5, 6.0, 0.2);
+  appendBox(gShipBridge, -36, 7.2, -62, 6.5, 5.0, 5.2, 0.2);
+  appendBox(gWindows, -36, 8.8, -59.3, 4.2, 0.8, 0.1, 1);
   for (const dcx of [-42, -18, 8]) {
     appendBox(gDarkSteel, dcx, 12.0, -56, 0.9, 22.0, 2.5, 0.2);
     appendBox(gDarkSteel, dcx - 4, 21.5, -56, 22.0, 0.9, 0.9, 0.2);
@@ -1523,6 +1605,14 @@ function buildPortEnvironmentGlb() {
     appendCylinder(gDarkSteel, bx, 0.1, bz, 0.18, 0.45, 1.4, 8, 'y');
     appendBox(gLamps, bx, 0.95, bz, 0.32, 0.32, 0.32, 1);
   }
+  // 13. North Harbor Master Control Terminal Objective Console at (-4.0, 0, -18.0)
+  appendBox(gConcrete, -4.0, 0.08, -18.0, 2.2, 0.16, 1.8, 0.5); // Terminal concrete pad
+  appendBox(gDarkSteel, -4.0, 0.72, -18.0, 1.25, 1.15, 0.85, 0.5); // Armored server cabinet base
+  appendBox(gHazard, -4.0, 1.28, -18.0, 1.30, 0.08, 0.90, 0.5); // Yellow hazard bumper trim
+  appendBox(gDarkSteel, -4.0, 1.56, -18.12, 1.15, 0.55, 0.45, 0.5); // Upper monitor hood
+  appendBox(gWindows, -4.0, 1.55, -17.88, 0.98, 0.42, 0.04, 1); // Illuminated tactical display screen
+  appendCylinder(gDarkSteel, -4.52, 2.35, -18.25, 0.035, 0.05, 2.1, 8, 'y'); // Comms telemetry mast
+  appendBox(gFire, -4.52, 3.45, -18.25, 0.16, 0.16, 0.16, 1); // Terminal mast beacon light
 
   const rootNode = b.addNode('NightPort_Environment', [
     b.addMeshPrimitive('Dock_Concrete', gConcrete.positions, gConcrete.normals, gConcrete.uvs, gConcrete.indices, matConcrete),
@@ -1630,11 +1720,13 @@ function buildTacticalSoldierGlb() {
   gltf.materials.push({
     name: 'MI_CC0_Skin_Hands_Forearms',
     pbrMetallicRoughness: {
-      baseColorFactor: [0.76, 0.56, 0.44, 1.0],
-      roughnessFactor: 0.62,
-      metallicFactor: 0.06,
+      baseColorFactor: [0.34, 0.30, 0.25, 1.0],
+      baseColorTexture: { index: camoAlbedoTex },
+      metallicRoughnessTexture: { index: camoOrmTex },
+      roughnessFactor: 0.78,
+      metallicFactor: 0.14,
     },
-    normalTexture: { index: gunNormalTex, scale: 0.18 },
+    normalTexture: { index: camoNormalTex, scale: 0.45 },
   });
   const matBalaclavaBoots = gltf.materials.length;
   gltf.materials.push({
@@ -1683,10 +1775,10 @@ function buildTacticalSoldierGlb() {
   // Note: Male_Ranger_Arms has 2 primitives: prim 0 = rolled sleeves/bracers (Camo), prim 1 = forearms & 5-finger hands (CC0 Skin)!
   // We split Arms into its own dedicated SkinnedMesh node ('Soldier_CC0_Arms') so First-Person view can show ONLY the CC0 arms + wristwatch while Third-Person shows the full body!
   const modularParts = [
-    { file: 'assets/source_cc0/qofficial/modular/Male_Ranger_Body.gltf', mats: [matPlateCarrier, matCamoUniform], isArms: false },
-    { file: 'assets/source_cc0/qofficial/modular/Male_Ranger_Arms.gltf', mats: [matCamoUniform, matSkinHands], isArms: true },
-    { file: 'assets/source_cc0/qofficial/modular/Male_Ranger_Legs.gltf', mats: [matCamoUniform, matCamoUniform], isArms: false },
-    { file: 'assets/source_cc0/qofficial/modular/Male_Ranger_Feet_Boots.gltf', mats: [matBalaclavaBoots, matCamoUniform], isArms: false },
+    { file: 'assets/source_cc0/qofficial/modular/Male_Ranger_Body.gltf', mats: [matPlateCarrier, matCamoUniform], isArms: false, onlyFirstMesh: true },
+    { file: 'assets/source_cc0/qofficial/modular/Male_Ranger_Arms.gltf', mats: [matCamoUniform, matSkinHands], isArms: true, onlyFirstMesh: false },
+    { file: 'assets/source_cc0/qofficial/modular/Male_Ranger_Legs.gltf', mats: [matCamoUniform, matCamoUniform], isArms: false, onlyFirstMesh: true },
+    { file: 'assets/source_cc0/qofficial/modular/Male_Ranger_Feet_Boots.gltf', mats: [matBalaclavaBoots, matCamoUniform], isArms: false, onlyFirstMesh: true },
   ];
 
   const graftedBodyPrims = [];
@@ -1707,7 +1799,8 @@ function buildTacticalSoldierGlb() {
       return newAccIdx;
     }
 
-    for (const m of partJson.meshes) {
+    const meshesToUse = part.onlyFirstMesh ? [partJson.meshes[0]] : partJson.meshes;
+    for (const m of meshesToUse) {
       m.primitives.forEach((p, pIdx) => {
         const newAttrs = {};
         for (const [k, v] of Object.entries(p.attributes)) {

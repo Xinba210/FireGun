@@ -221,6 +221,7 @@ async function main() {
     await page.evaluate(() => {
       window.__fpsApi.setAds(false);
       window.__fpsApi.equipWeapon(1); // SMG-9 Tactical Reload inside Warehouse
+      window.__fpsApi.toggleFlashlight(true); // Showcase [T] Tactical Weapon Flashlight inside dark warehouse!
       window.__fpsApi.setPlayerPose(16.5, 0.0, 2.5, 0.0, -0.05);
       window.__fpsApi.reload();
     });
@@ -229,6 +230,7 @@ async function main() {
 
     // Capture 10th Viewport: Third-Person Over-the-Shoulder Tactical Mode (CC0 65-Bone Operator)
     await page.evaluate(() => {
+      window.__fpsApi.toggleFlashlight(false);
       window.__fpsApi.equipWeapon(0);
       window.__fpsApi.setThirdPerson(true);
       window.__fpsApi.setPlayerPose(-6.2, 0.0, 21.5, 0.0, -0.02);
@@ -274,10 +276,10 @@ async function main() {
         browser,
         path.join(EVIDENCE_DIR, 'cam_hero_before.png'),
         path.join(EVIDENCE_DIR, 'cam_hero_render.png'),
-        'OPTIMIZATION CYCLE A/B — Before (277k Tris / No EnvMap) vs v0.6.0 (5 Weapons + Gyro Aim + Anisotropic Wet Puddles)',
+        'OPTIMIZATION CYCLE A/B — Before (277k Tris / No EnvMap) vs v0.9.0 (Full Ship Framing + Crane Cargo Drop + NVG + 3D Status Badges)',
         path.join(EVIDENCE_DIR, 'ab_optimization_before_after.png'),
         '[BEFORE] CYCLE 1 ENGINE RENDER (277,664 TRIS)',
-        '[AFTER] CYCLE 7 (v0.6.0) OPTIMIZED RENDER (5 WEAPONS + GYRO AIM + ANISOTROPIC WET PUDDLES)'
+        '[AFTER] CYCLE 10 (v0.9.0) OPTIMIZED RENDER (SHIP BOW FRAMING + CRANE CARGO DROP + ELITE AI)'
       );
     }
 
@@ -400,8 +402,16 @@ async function main() {
       if (step >= 2) await vidPage.evaluate(() => window.__fpsApi.fire());
     }
     await vidPage.keyboard.up('KeyW');
-    await vidPage.evaluate(() => window.__fpsApi.setThirdPerson(false));
-    await vidPage.waitForTimeout(250);
+    await vidPage.evaluate(() => {
+      window.__fpsApi.setThirdPerson(false);
+      window.__fpsApi.toggleNvg(true);
+      window.__fpsApi.inspectWeapon(0.45);
+      window.__fpsApi.dropCraneCargo();
+      window.__fpsApi.hackTerminal();
+    });
+    await vidPage.waitForTimeout(320);
+    await vidPage.evaluate(() => window.__fpsApi.toggleNvg(false));
+    await vidPage.waitForTimeout(150);
 
     const mp4Data = await vidPage.evaluate(() => window.__stopCanvasMp4());
     const perfDuringVideoCapture = await vidPage.evaluate(() => window.__fpsApi.getPerf());

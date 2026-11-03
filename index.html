@@ -23,8 +23,13 @@
       <div class="scope-code">PFT-08 // SR-9 OPTIC 8X</div>
     </div>
 
-    <!-- Damage / Hit Flash Vignette -->
+    <!-- Damage / Hit Flash Vignette & [N] Dual-Tube Tactical Night Vision Overlay -->
     <div id="damage-vignette"></div>
+    <div id="nvg-overlay" class="nvg-overlay hidden">
+      <div class="nvg-scanlines"></div>
+      <div class="nvg-tubes-mask"></div>
+      <div class="nvg-hud-tag">GPNVG-18 // WHITE-GREEN PHOSPHOR ACTIVE</div>
+    </div>
 
     <!-- Main Tactical HUD -->
     <div id="hud">
@@ -60,12 +65,13 @@
         <div id="killfeed" class="killfeed"></div>
       </div>
 
-      <!-- Center Reticle, Hitmarker, Directional Damage Arc & Reload / Kill Popups -->
+      <!-- Center Reticle, Hitmarker, Directional Damage Arc & Reload / Terminal / Kill Popups -->
       <div id="reticle-wrap" class="reticle-wrap">
         <div class="reticle-line ret-top"></div>
         <div class="reticle-line ret-bottom"></div>
         <div class="reticle-line ret-left"></div>
         <div class="reticle-line ret-right"></div>
+        <div id="reticle-shotgun-ring" class="reticle-shotgun-ring hidden"></div>
         <div id="hitmarker" class="hitmarker hidden"></div>
         <div id="damage-dir-arc" class="damage-dir-arc hidden"></div>
       </div>
@@ -73,6 +79,11 @@
       <div id="reload-box" class="reload-box hidden">
         <div class="reload-title">リロード中 // RELOADING</div>
         <div class="reload-bar-bg"><div id="reload-bar-fill" class="reload-bar-fill"></div></div>
+      </div>
+
+      <div id="terminal-box" class="terminal-box hidden">
+        <div id="terminal-title" class="terminal-title">⚡ [E] 奪還港務主控終端 // HACKING TERMINAL</div>
+        <div class="reload-bar-bg"><div id="terminal-bar-fill" class="terminal-bar-fill"></div></div>
       </div>
 
       <div id="kill-banner" class="kill-banner hidden">
@@ -98,7 +109,7 @@
         </div>
         <div class="stance-indicator">
           <span id="stance-text">STAND // 站立</span>
-          <span class="controls-hint">[WASD]移動 [Q/E]探頭 [C]蹲下 [B]射擊模式 [F]近戰 [G]手榴彈 [1-5]切槍 [Y]陀螺儀 [P]視角 [L]武器庫</span>
+          <span class="controls-hint">[WASD]移動 [Q/E]探頭 [C]蹲下 [N]夜視 [I]檢視 [T]手電筒 [X]強心針 [B]模式 [F]近戰 [G]手雷 [1-5]切槍 [Y]陀螺儀 [P]視角 [L]武器庫</span>
         </div>
       </div>
 
@@ -118,6 +129,9 @@
             <div class="tactical-gadget-row">
               <span class="hazard-stripe-mini"></span>
               <span id="grenade-badge" class="grenade-badge" title="[G] 投擲 M67 破片手榴彈">💣 [G] x3</span>
+              <span id="stim-badge" class="grenade-badge stim-badge" title="[X] 注射戰術強心針 (+45 HP)">💉 [X] x2</span>
+              <span id="flashlight-badge" class="grenade-badge light-badge" title="[T] 槍掛戰術手電筒與雷射指示器">🔦 [T] OFF</span>
+              <span id="nvg-badge" class="grenade-badge nvg-badge" title="[N] GPNVG-18 雙筒戰術夜視儀">🥽 [N] OFF</span>
             </div>
           </div>
           <div class="ammo-count-col">
@@ -142,6 +156,10 @@
         <div class="touch-action-cluster">
           <button id="touch-btn-lean-l" class="touch-btn touch-btn-sm">↖探頭</button>
           <button id="touch-btn-lean-r" class="touch-btn touch-btn-sm">探頭↗</button>
+          <button id="touch-btn-nvg" class="touch-btn touch-btn-sm">🥽夜視</button>
+          <button id="touch-btn-inspect" class="touch-btn touch-btn-sm">🔍檢視</button>
+          <button id="touch-btn-light" class="touch-btn touch-btn-sm">🔦電筒</button>
+          <button id="touch-btn-stim" class="touch-btn touch-btn-sm">💉強心</button>
           <button id="touch-btn-mode" class="touch-btn touch-btn-sm">模式</button>
           <button id="touch-btn-melee" class="touch-btn touch-btn-sm">👊近戰</button>
           <button id="touch-btn-grenade" class="touch-btn">💣手雷</button>

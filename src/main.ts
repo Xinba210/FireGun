@@ -152,19 +152,40 @@ const WEAPONS: WeaponSpec[] = [
 interface EnemyActor {
   id: string;
   name: string;
+  archetype: 'ASSAULT' | 'SNIPER' | 'BREACHER';
   root: THREE.Group;
   mixer: THREE.AnimationMixer;
   actions: Record<string, THREE.AnimationAction>;
   activeClip: string;
   hp: number;
   maxHp: number;
-  state: 'PATROL' | 'ALERT' | 'COMBAT' | 'HIT' | 'DEAD';
+  state: 'PATROL' | 'ALERT' | 'COMBAT' | 'COVER' | 'HIT' | 'DEAD';
   stateTimer: number;
   fireCooldown: number;
   patrolPoints: [number, number][];
   patrolIdx: number;
   baseY: number;
   muzzleFlash: THREE.Mesh;
+  laserLine?: THREE.Line;
+  statusSprite?: THREE.Sprite;
+  hpFillMesh?: THREE.Mesh;
+  hpBarGroup?: THREE.Group;
+}
+
+interface SuspendedCargoDrop {
+  group: THREE.Group;
+  shackleMesh: THREE.Mesh;
+  cableLine: THREE.Line;
+  state: 'SUSPENDED' | 'FALLING' | 'LANDED';
+  velY: number;
+  colliderAdded: boolean;
+}
+
+interface LootDrop {
+  mesh: THREE.Group;
+  position: THREE.Vector3;
+  age: number;
+  collected: boolean;
 }
 
 interface ExplosiveBarrel {
@@ -457,7 +478,7 @@ function buildAtmosphereAndLights() {
     [11.5, 11.0, 21.0, 38],
     [11.5, 11.0, 4.0, 38],
     [11.5, 11.0, -14.0, 38],
-    [-7.5, 19.5, -18.0, 46], // Gantry Crane Overhead Floodlight
+    [-7.5, 19.5, -22.0, 46], // Gantry Crane Overhead Floodlight
     [19.0, 8.0, -8.0, 34],    // Warehouse Interior Light
   ];
 
@@ -905,10 +926,11 @@ weaponMount.add(muzzleFlashMesh);
 
 const muzzleLight = new THREE.PointLight(0xff9928, 0, 14, 1.5);
 muzzleLight.position.set(0, 0.05, -0.68);
+muzzleLight.visible = false;
 weaponMount.add(muzzleLight);
 
-// Green Tactical Laser Sight Beam for SMG-9 (PEQ-15 Laser Module)
-const smgLaserBeamGeo = new THREE.CylinderGeometry(0.0022, 0.0035, 16.0, 6);
+// Green Tactical Laser Sight Beam & [T] Weapon-Mounted Tactical Spotlight
+const smgLaserBeamGeo = new THREE.CylinderGeometry(0.0018, 0.0028, 16.0, 6);
 smgLaserBeamGeo.rotateX(Math.PI / 2);
 smgLaserBeamGeo.translate(0, 0, -8.0);
 const smgLaserBeam = new THREE.Mesh(
@@ -916,14 +938,20 @@ const smgLaserBeam = new THREE.Mesh(
   new THREE.MeshBasicMaterial({
     color: 0x33ff66,
     transparent: true,
-    opacity: 0.45,
+    opacity: 0.42,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   })
 );
-smgLaserBeam.position.set(0.028, 0.032, -0.24);
-smgLaserBeam.visible = false;
+smgLaserBeam.position.set(0.024, 0.032, -0.24);
+smgLaserBeam.visible = true;
 weaponMount.add(smgLaserBeam);
+
+const tacticalFlashlight = new THREE.SpotLight(0xdff2ff, 0, 42, 0.40, 0.55, 1.35);
+tacticalFlashlight.position.set(0.02, 0.02, -0.35);
+tacticalFlashlight.target.position.set(0.0, 0.0, -14.0);
+tacticalFlashlight.visible = false;
+weaponMount.add(tacticalFlashlight.target);
 
 const weaponModels: Record<string, THREE.Object3D> = {};
 let activeWeaponIdx = 0;
@@ -935,23 +963,53 @@ const playerTpsActions: Record<string, THREE.AnimationAction> = {};
 let playerTpsActiveClip = '';
 const playerTpsWeapons: Record<string, THREE.Object3D> = {};
 
-// Loadout 3D Showcase Turntable Group + Dedicated Studio Backdrop & 3-Point Lights
+// Loadout 3D Showcase Turntable Group + Dedicated Studio Backdrop, Tactical Hologram Ring & Studio Lights
 const loadoutShowcaseGroup = new THREE.Group();
 loadoutShowcaseGroup.visible = false;
 const loadoutWeaponHolder = new THREE.Group();
 const loadoutBackdrop = new THREE.Mesh(
   new THREE.PlaneGeometry(3.8, 2.4),
-  new THREE.MeshBasicMaterial({ color: 0x080d14, transparent: true, opacity: 0.92, depthWrite: false })
+  new THREE.MeshBasicMaterial({ color: 0x060b13, transparent: true, opacity: 0.94, depthWrite: false })
 );
 loadoutBackdrop.position.set(-0.24, 0.02, -0.42);
-const loadoutKeyLight = new THREE.PointLight(0xffffff, 15.0, 5.5, 1.05);
-loadoutKeyLight.position.set(0.45, 0.55, 0.75);
-const loadoutRimLight = new THREE.PointLight(0xffb84d, 11.5, 5.5, 1.05);
-loadoutRimLight.position.set(-0.55, 0.35, -0.45);
-const loadoutFillLight = new THREE.PointLight(0x8ab8ff, 8.5, 4.8, 1.1);
-loadoutFillLight.position.set(0.0, -0.45, 0.65);
-loadoutShowcaseGroup.add(loadoutBackdrop, loadoutWeaponHolder, loadoutKeyLight, loadoutRimLight, loadoutFillLight);
-camera.add(loadoutShowcaseGroup);
+const loadoutPedestalRing = new THREE.Mesh(
+  new THREE.RingGeometry(0.32, 0.35, 48),
+  new THREE.MeshBasicMaterial({
+    color: 0x38bdf8,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.42,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  })
+);
+loadoutPedestalRing.rotation.x = Math.PI * 0.42;
+loadoutPedestalRing.position.set(0.0, -0.18, 0.0);
+const loadoutKeyLight = new THREE.DirectionalLight(0xfff6e5, 8.5);
+loadoutKeyLight.position.set(1.2, 1.4, 2.2);
+loadoutKeyLight.target = loadoutWeaponHolder;
+const loadoutRimLight = new THREE.DirectionalLight(0xffaa33, 6.2);
+loadoutRimLight.position.set(-1.5, 0.9, 0.6);
+loadoutRimLight.target = loadoutWeaponHolder;
+const loadoutFillLight = new THREE.DirectionalLight(0x78b4ff, 5.4);
+loadoutFillLight.position.set(0.2, -1.2, 1.8);
+loadoutFillLight.target = loadoutWeaponHolder;
+const loadoutFrontSpot = new THREE.PointLight(0xffffff, 18, 4.5, 1.2);
+loadoutFrontSpot.position.set(0.15, 0.22, 0.85);
+loadoutKeyLight.visible = false;
+loadoutRimLight.visible = false;
+loadoutFillLight.visible = false;
+loadoutFrontSpot.visible = false;
+loadoutShowcaseGroup.add(
+  loadoutBackdrop,
+  loadoutPedestalRing,
+  loadoutWeaponHolder,
+  loadoutKeyLight,
+  loadoutRimLight,
+  loadoutFillLight,
+  loadoutFrontSpot
+);
+// Only attach loadoutShowcaseGroup to camera when Loadout Modal is open so its 4 lights are not in the active scene graph during gameplay!
 
 // ---------------------------------------------------------------------------
 // World Collision Boxes & Interactive Entities
@@ -964,7 +1022,28 @@ const activeShells: ActiveShell[] = [];
 const activeTracers: ActiveTracer[] = [];
 const activeSmokePuffs: ActiveSmokePuff[] = [];
 const activeGrenades: ActiveGrenade[] = [];
+const activeLootDrops: LootDrop[] = [];
 const enemies: EnemyActor[] = [];
+
+// Pre-allocated Pool of 28 Bullet Impact Scorch Decals (0 dynamic geometry allocation!)
+const MAX_IMPACT_DECALS = 28;
+const impactDecalPool: THREE.Mesh[] = [];
+let nextDecalIdx = 0;
+const decalGeo = new THREE.CircleGeometry(0.058, 10);
+const decalMat = new THREE.MeshBasicMaterial({
+  color: 0x08090c,
+  transparent: true,
+  opacity: 0.85,
+  depthWrite: false,
+  polygonOffset: true,
+  polygonOffsetFactor: -2,
+});
+for (let i = 0; i < MAX_IMPACT_DECALS; i++) {
+  const dm = new THREE.Mesh(decalGeo, decalMat);
+  dm.visible = false;
+  scene.add(dm);
+  impactDecalPool.push(dm);
+}
 
 let soldierTemplateGltf: { scene: THREE.Group; animations: THREE.AnimationClip[] } | null = null;
 
@@ -1006,10 +1085,23 @@ function spawnExplosiveBarrels() {
   ];
   const geo = new THREE.CylinderGeometry(0.31, 0.31, 0.96, 16);
   const ribGeo = new THREE.CylinderGeometry(0.322, 0.322, 0.045, 16);
-  const bandGeo = new THREE.CylinderGeometry(0.316, 0.316, 0.18, 16);
-  const mat = new THREE.MeshStandardMaterial({ color: 0x9e1c16, roughness: 0.52, metalness: 0.58 });
-  const ribMat = new THREE.MeshStandardMaterial({ color: 0x1e2226, roughness: 0.65, metalness: 0.75 });
-  const bandMat = new THREE.MeshStandardMaterial({ color: 0xd49b1a, roughness: 0.48, metalness: 0.32 });
+  const bandGeo = new THREE.CylinderGeometry(0.316, 0.316, 0.14, 16);
+  const bungGeo = new THREE.CylinderGeometry(0.038, 0.042, 0.035, 10);
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x7e1812,
+    roughness: 0.64,
+    metalness: 0.52,
+    normalMap: sharedWaterNormals,
+    normalScale: new THREE.Vector2(0.18, 0.18),
+  });
+  const ribMat = new THREE.MeshStandardMaterial({ color: 0x16191d, roughness: 0.68, metalness: 0.78 });
+  const bandMat = new THREE.MeshStandardMaterial({
+    color: 0x9e6c14,
+    roughness: 0.72,
+    metalness: 0.25,
+    normalMap: sharedWaterNormals,
+    normalScale: new THREE.Vector2(0.12, 0.12),
+  });
   const wreckMat = new THREE.MeshStandardMaterial({ color: 0x181615, roughness: 0.88, metalness: 0.35 });
   const emberMat = new THREE.MeshBasicMaterial({ color: 0xff5511 });
   const scorchMat = new THREE.MeshBasicMaterial({
@@ -1031,7 +1123,9 @@ function spawnExplosiveBarrels() {
     const ribBot = new THREE.Mesh(ribGeo, ribMat);
     ribBot.position.y = -0.22;
     const hazBand = new THREE.Mesh(bandGeo, bandMat);
-    mesh.add(ribTop, ribBot, hazBand);
+    const bungCap = new THREE.Mesh(bungGeo, ribMat);
+    bungCap.position.set(0.14, 0.49, 0.08);
+    mesh.add(ribTop, ribBot, hazBand, bungCap);
     scene.add(mesh);
 
     // Pre-built Crumpled & Charred Barrel Wreck + Ground Scorch Crater + Persistent Wreck Flame
@@ -1084,6 +1178,68 @@ function spawnExplosiveBarrels() {
   });
 }
 spawnExplosiveBarrels();
+
+// Interactive Suspended Crane Cargo Container Drop Hazard at (-6.5, 8.8, -14.0) under Gantry Crane!
+let suspendedCargo: SuspendedCargoDrop | null = null;
+function spawnSuspendedCraneContainer() {
+  const group = new THREE.Group();
+  group.position.set(-6.5, 8.8, -14.0);
+
+  const contMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(2.44, 2.6, 6.1),
+    new THREE.MeshStandardMaterial({
+      color: 0x82221a,
+      roughness: 0.55,
+      metalness: 0.48,
+      normalMap: sharedWaterNormals,
+      normalScale: new THREE.Vector2(0.15, 0.15),
+    })
+  );
+  contMesh.position.y = 1.3;
+  contMesh.castShadow = true;
+  contMesh.receiveShadow = true;
+  group.add(contMesh);
+
+  // Glowing Orange Explosive Release Shackle at Top of Container (y = 2.85 local)
+  const shackleMesh = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.28, 0.28, 0.42, 12),
+    new THREE.MeshBasicMaterial({ color: 0xff6611 })
+  );
+  shackleMesh.position.y = 2.82;
+  group.add(shackleMesh);
+
+  const cableGeo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(-6.5, 21.8, -14.0),
+    new THREE.Vector3(-6.5, 11.6, -14.0),
+  ]);
+  const cableLine = new THREE.Line(
+    cableGeo,
+    new THREE.LineBasicMaterial({ color: 0x475569 })
+  );
+  scene.add(cableLine);
+  scene.add(group);
+
+  suspendedCargo = {
+    group,
+    shackleMesh,
+    cableLine,
+    state: 'SUSPENDED',
+    velY: 0,
+    colliderAdded: false,
+  };
+}
+spawnSuspendedCraneContainer();
+
+function releaseSuspendedCargoContainer() {
+  if (!suspendedCargo || suspendedCargo.state !== 'SUSPENDED') return;
+  suspendedCargo.state = 'FALLING';
+  suspendedCargo.velY = -2.5;
+  suspendedCargo.shackleMesh.visible = false;
+  suspendedCargo.cableLine.visible = false;
+  const shackleWorld = suspendedCargo.group.position.clone().add(new THREE.Vector3(0, 2.8, 0));
+  audioSys.play3D('assets/audio/impact_metal.wav', shackleWorld, player.pos, 8, 60, 1.0);
+  showKillBanner('CRANE CARGO RELEASED!');
+}
 
 // ---------------------------------------------------------------------------
 // Load GLB Assets (port_environment.glb, weapons_pack.glb, soldier_tactical_animated.glb)
@@ -1323,6 +1479,23 @@ function poseCharacterTwoHandRifleIk(
   const worldHandL = charQuat.clone().multiply(handGripQuat).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0.25, 0, 1.35)));
   setBoneWorldQuaternion(handR, worldHandR);
   setBoneWorldQuaternion(handL, worldHandL);
+
+  // Curl all 5 finger bone chains around the pistol grip (R) and foregrip (L) so characters never show open splayed fingers!
+  for (const side of ['r', 'l'] as const) {
+    const sign = side === 'r' ? 1 : -1;
+    for (const fName of ['index', 'middle', 'ring', 'pinky']) {
+      for (let j = 1; j <= 3; j++) {
+        const fBone = charRoot.getObjectByName(`${fName}_0${j}_${side}`);
+        if (fBone) {
+          fBone.rotation.set(0.0, 0.0, sign * -1.05);
+        }
+      }
+    }
+    const thumb2 = charRoot.getObjectByName(`thumb_02_${side}`);
+    const thumb3 = charRoot.getObjectByName(`thumb_03_${side}`);
+    if (thumb2) thumb2.rotation.set(0.35, 0, sign * -0.65);
+    if (thumb3) thumb3.rotation.set(0.25, 0, sign * -0.55);
+  }
 }
 
 // Lock First-Person CC0 65-bone hands onto the active viewmodel weapon (Right hand -> Pistol Grip, Left hand -> Under-barrel Foregrip)
@@ -1382,6 +1555,7 @@ function setupPlayerCc0ArmsAndThirdPerson() {
   // A) First-Person CC0 65-Bone Skinned Arms & 5-Finger Hands ('Soldier_CC0_Arms' + WristWatch)
   fpArmsHolder.clear();
   fpArmsRoot = SkeletonUtils.clone(soldierTemplateGltf.scene) as THREE.Group;
+  const toRemoveFromFp: THREE.Object3D[] = [];
   fpArmsRoot.traverse((obj) => {
     if ((obj as THREE.Mesh).isMesh) {
       const isArmsOrWatch =
@@ -1391,12 +1565,19 @@ function setupPlayerCc0ArmsAndThirdPerson() {
         obj.parent?.name === 'Soldier_CC0_Arms' ||
         obj.parent?.name?.includes('WristWatch') ||
         obj.parent?.name?.includes('WatchScreen');
-      obj.visible = Boolean(isArmsOrWatch);
-      obj.frustumCulled = false;
-      obj.castShadow = false;
-      obj.receiveShadow = true;
+      if (!isArmsOrWatch) {
+        toRemoveFromFp.push(obj);
+      } else {
+        obj.visible = true;
+        obj.frustumCulled = false;
+        obj.castShadow = false;
+        obj.receiveShadow = true;
+      }
     }
   });
+  for (const rem of toRemoveFromFp) {
+    rem.parent?.remove(rem);
+  }
 
   // Use UAL1 'Sword_Idle' / 'Punch_Jab' fist finger curl + position shoulders just behind the camera
   fpArmsMixer = new THREE.AnimationMixer(fpArmsRoot);
@@ -1474,26 +1655,67 @@ function playEnemyClip(enemy: EnemyActor, clipName: string, loop = true) {
   enemy.activeClip = clipName;
 }
 
+function createStatusBadgeMat(symbol: string, bgCol: string, borderCol: string) {
+  const c = document.createElement('canvas');
+  c.width = 64;
+  c.height = 64;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = bgCol;
+  ctx.beginPath();
+  ctx.arc(32, 32, 24, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = borderCol;
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 28px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(symbol, 32, 33);
+  const tex = new THREE.CanvasTexture(c);
+  return new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+}
+const statusMatCombat = createStatusBadgeMat('!', 'rgba(185, 28, 28, 0.88)', '#f87171');
+const statusMatCover = createStatusBadgeMat('🛡', 'rgba(3, 105, 161, 0.88)', '#38bdf8');
+const statusMatPatrol = createStatusBadgeMat('?', 'rgba(161, 98, 7, 0.85)', '#facc15');
+const enemyHpBgGeo = new THREE.PlaneGeometry(0.56, 0.065);
+const enemyHpFillGeo = new THREE.PlaneGeometry(0.52, 0.042);
+const enemyHpBgMat = new THREE.MeshBasicMaterial({ color: 0x090d14, transparent: true, opacity: 0.82, side: THREE.DoubleSide });
+const enemyHpFillMat = new THREE.MeshBasicMaterial({ color: 0xef4444, side: THREE.DoubleSide });
+
 function spawnEnemySquad() {
   if (!soldierTemplateGltf) return;
   // Clear existing
-  for (const e of enemies) scene.remove(e.root);
+  for (const e of enemies) {
+    if (e.laserLine) scene.remove(e.laserLine);
+    scene.remove(e.root);
+  }
   enemies.length = 0;
 
-  const squadSpawns: { name: string; pos: [number, number, number]; patrol: [number, number][]; clip: string }[] = [
-    { name: '武装兵 Alpha (West Dock)', pos: [-6.5, 0.0, 10.5], patrol: [[-6.5, 10.5], [-6.5, 1.5]], clip: 'Idle_Loop' },
-    { name: '武装兵 Bravo (Crane Guard)', pos: [-5.2, 0.0, -9.5], patrol: [[-5.2, -9.5], [-8.2, -16.0]], clip: 'Walk_Loop' },
-    { name: '武装兵 Charlie (Center Alley)', pos: [3.2, 0.0, 8.0], patrol: [[3.2, 8.0], [3.2, -2.0]], clip: 'Idle_Loop' },
-    { name: '武装兵 Delta (Overhead Catwalk)', pos: [6.2, 5.34, 4.0], patrol: [[6.2, 4.0], [6.2, -8.0]], clip: 'Idle_Loop' },
-    { name: '武装兵 Echo (Guard Post)', pos: [12.5, 0.0, 14.5], patrol: [[12.5, 14.5], [15.5, 8.5]], clip: 'Walk_Loop' },
-    { name: '武装兵 Foxtrot (Warehouse Bay)', pos: [16.5, 0.0, -5.5], patrol: [[16.5, -5.5], [20.5, -12.0]], clip: 'Crouch_Idle_Loop' },
-    { name: '武装兵 Golf (North Terminal)', pos: [0.5, 0.0, -19.5], patrol: [[0.5, -19.5], [-6.5, -21.0]], clip: 'Walk_Loop' },
-    { name: '武装兵 Commander (Ship Deck)', pos: [-26.5, 6.6, -12.0], patrol: [[-26.5, -12.0], [-26.5, -4.0]], clip: 'Idle_Loop' },
+  const squadSpawns: {
+    name: string;
+    archetype: 'ASSAULT' | 'SNIPER' | 'BREACHER';
+    hp: number;
+    pos: [number, number, number];
+    patrol: [number, number][];
+    clip: string;
+  }[] = [
+    { name: '突撃兵 Alpha (West Dock)', archetype: 'ASSAULT', hp: 100, pos: [-6.5, 0.0, 10.5], patrol: [[-6.5, 10.5], [-6.5, 1.5]], clip: 'Idle_Loop' },
+    { name: '突撃兵 Bravo (Crane Guard)', archetype: 'ASSAULT', hp: 100, pos: [-5.2, 0.0, -9.5], patrol: [[-5.2, -9.5], [-8.2, -16.0]], clip: 'Walk_Loop' },
+    { name: '突撃兵 Charlie (Center Alley)', archetype: 'ASSAULT', hp: 100, pos: [3.2, 0.0, 8.0], patrol: [[3.2, 8.0], [3.2, -2.0]], clip: 'Idle_Loop' },
+    { name: '狙撃兵 Delta (Catwalk Sniper 🎯)', archetype: 'SNIPER', hp: 90, pos: [6.2, 5.34, 4.0], patrol: [[6.2, 4.0], [6.2, -8.0]], clip: 'Idle_Loop' },
+    { name: '突撃兵 Echo (Guard Post)', archetype: 'ASSAULT', hp: 100, pos: [12.5, 0.0, 14.5], patrol: [[12.5, 14.5], [15.5, 8.5]], clip: 'Walk_Loop' },
+    { name: '重装兵 Foxtrot (Heavy Breacher 🛡)', archetype: 'BREACHER', hp: 145, pos: [16.5, 0.0, -5.5], patrol: [[16.5, -5.5], [20.5, -12.0]], clip: 'Crouch_Idle_Loop' },
+    { name: '狙撃兵 Golf (Terminal Overwatch 🎯)', archetype: 'SNIPER', hp: 95, pos: [0.5, 0.0, -19.5], patrol: [[0.5, -19.5], [-6.5, -21.0]], clip: 'Walk_Loop' },
+    { name: '重装隊長 Commander (Ship Deck 🛡)', archetype: 'BREACHER', hp: 160, pos: [-26.5, 6.6, -12.0], patrol: [[-26.5, -12.0], [-26.5, -4.0]], clip: 'Idle_Loop' },
   ];
 
   squadSpawns.forEach((sp, idx) => {
     const cloned = SkeletonUtils.clone(soldierTemplateGltf!.scene) as THREE.Group;
     cloned.position.set(sp.pos[0], sp.pos[1], sp.pos[2]);
+    if (sp.archetype === 'BREACHER') {
+      cloned.scale.set(1.06, 1.03, 1.06); // Bulky heavy armor silhouette
+    }
     cloned.traverse((obj) => {
       if ((obj as THREE.Mesh).isMesh) {
         obj.castShadow = true;
@@ -1515,17 +1737,50 @@ function spawnEnemySquad() {
     mf.position.set(-0.10, 1.38, 0.72);
     cloned.add(mf);
 
+    // 3D Tactical Status Badge & Overhead HP Bar
+    const statusSprite = new THREE.Sprite(idx % 2 === 0 ? statusMatCombat : statusMatPatrol);
+    statusSprite.position.set(0, 2.16, 0);
+    statusSprite.scale.set(0.28, 0.28, 1);
+    cloned.add(statusSprite);
+
+    const hpBarGroup = new THREE.Group();
+    hpBarGroup.position.set(0, 1.96, 0);
+    hpBarGroup.visible = false; // Shown when enemy takes damage
+    const hpBg = new THREE.Mesh(enemyHpBgGeo, enemyHpBgMat);
+    const hpFillMesh = new THREE.Mesh(enemyHpFillGeo, enemyHpFillMat);
+    hpFillMesh.position.z = 0.005;
+    hpBarGroup.add(hpBg, hpFillMesh);
+    cloned.add(hpBarGroup);
+
+    // Visible Red Laser Sight Beam for Elite Sniper Lookouts!
+    let laserLine: THREE.Line | undefined;
+    if (sp.archetype === 'SNIPER') {
+      const lGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(sp.pos[0], sp.pos[1] + 1.42, sp.pos[2]),
+        new THREE.Vector3(player.pos.x, player.pos.y + 1.2, player.pos.z),
+      ]);
+      const lMat = new THREE.LineBasicMaterial({
+        color: 0xff2222,
+        transparent: true,
+        opacity: 0.55,
+        blending: THREE.AdditiveBlending,
+      });
+      laserLine = new THREE.Line(lGeo, lMat);
+      scene.add(laserLine);
+    }
+
     scene.add(cloned);
 
     const actor: EnemyActor = {
       id: `enemy_${idx + 1}`,
       name: sp.name,
+      archetype: sp.archetype,
       root: cloned,
       mixer,
       actions,
       activeClip: '',
-      hp: 100,
-      maxHp: 100,
+      hp: sp.hp,
+      maxHp: sp.hp,
       state: idx % 2 === 0 ? 'COMBAT' : 'PATROL',
       stateTimer: idx * 0.7,
       fireCooldown: 1.2 + idx * 0.3,
@@ -1533,6 +1788,10 @@ function spawnEnemySquad() {
       patrolIdx: 0,
       baseY: sp.pos[1],
       muzzleFlash: mf,
+      laserLine,
+      statusSprite,
+      hpFillMesh,
+      hpBarGroup,
     };
     playEnemyClip(actor, sp.clip, true);
     // Advance mixer slightly so pose is immediately applied even in capture mode, then lock both hands onto the horizontal rifle via 2-Bone IK!
@@ -1569,6 +1828,11 @@ const player = {
   meleeTimer: 0,
   grenades: 3,
   maxGrenades: 3,
+  stims: 2,
+  maxStims: 2,
+  flashlightOn: false,
+  nvgOn: false,
+  inspectTimer: 0,
   recoilOffsetZ: 0,
   recoilPitch: 0,
   cameraShake: 0,
@@ -1581,6 +1845,8 @@ const player = {
   multiKillCount: 0,
   multiKillTimer: 0,
   damageTaken: 0,
+  terminalHacked: false,
+  terminalHackProgress: 0,
   startTime: performance.now(),
   fixedCameraKey: initialCamParam || null,
   thirdPerson: false,
@@ -1622,6 +1888,7 @@ function equipWeapon(idx: number) {
     document.getElementById(`slot-${i + 1}`)?.classList.toggle('active', i === idx);
   });
   smgLaserBeam.visible = Boolean(WEAPONS[idx].hasGreenLaser);
+  document.getElementById('reticle-shotgun-ring')?.classList.toggle('hidden', WEAPONS[idx].id !== 'sg12');
   if (player.ads) setAdsState(true);
   updateWeaponHud();
   updateLoadoutModal(idx);
@@ -1657,12 +1924,24 @@ function updateWeaponHud() {
   const modeEl = document.getElementById('fire-mode-badge');
   const ticksEl = document.getElementById('ammo-ticks');
   const grenEl = document.getElementById('grenade-badge');
+  const stimEl = document.getElementById('stim-badge');
+  const lightEl = document.getElementById('flashlight-badge');
+  const nvgEl = document.getElementById('nvg-badge');
   if (titleEl) titleEl.textContent = w.name;
   if (iconEl) iconEl.textContent = w.silhouette;
   if (magEl) magEl.textContent = String(w.mag).padStart(2, '0');
   if (resEl) resEl.textContent = String(w.reserve);
   if (modeEl) modeEl.textContent = w.fireMode;
   if (grenEl) grenEl.textContent = `💣 [G] x${player.grenades}`;
+  if (stimEl) stimEl.textContent = `💉 [X] x${player.stims}`;
+  if (lightEl) {
+    lightEl.textContent = `🔦 [T] ${player.flashlightOn ? 'ON' : 'OFF'}`;
+    lightEl.classList.toggle('active', player.flashlightOn);
+  }
+  if (nvgEl) {
+    nvgEl.textContent = `🥽 [N] ${player.nvgOn ? 'ON' : 'OFF'}`;
+    nvgEl.classList.toggle('active', player.nvgOn);
+  }
   if (ticksEl) {
     const count = Math.min(20, Math.ceil((w.mag / w.magSize) * 20));
     ticksEl.textContent = '|'.repeat(count) + '·'.repeat(20 - count);
@@ -1702,9 +1981,10 @@ function updateObjectiveHud() {
   const killed = total - alive;
   const objText = document.getElementById('objective-text');
   if (objText) {
+    const termTag = player.terminalHacked ? ' [終端已駭入⚡]' : '';
     objText.textContent =
       alive > 0
-        ? `目標：肅清碼頭武裝守軍並奪還港務主控終端 (${killed} / ${total})`
+        ? `目標：肅清碼頭武裝守軍並奪還港務主控終端 (${killed} / ${total})${termTag}`
         : '目標達成：港務主控終端已奪還！按 [M] 檢視作戰結算';
   }
 }
@@ -1921,12 +2201,26 @@ function triggerExplosionAt(pos: THREE.Vector3, radius = 7.5, maxDamage = 165) {
   } else if (blastKills === 2) {
     showKillBanner('DOUBLE KILL +150');
   }
+  if (suspendedCargo && suspendedCargo.state === 'SUSPENDED') {
+    const shackleWorld = new THREE.Vector3();
+    suspendedCargo.shackleMesh.getWorldPosition(shackleWorld);
+    if (shackleWorld.distanceTo(pos) <= radius + 4.5) {
+      releaseSuspendedCargoContainer();
+    }
+  }
 }
 
 function damageEnemy(enemy: EnemyActor, amount: number, isHeadshot: boolean, weaponLabel: string) {
   if (enemy.state === 'DEAD') return;
   enemy.hp -= amount;
   triggerHitmarker();
+
+  if (enemy.hpBarGroup && enemy.hpFillMesh) {
+    enemy.hpBarGroup.visible = true;
+    const pct = Math.max(0.02, enemy.hp / enemy.maxHp);
+    enemy.hpFillMesh.scale.x = pct;
+    enemy.hpFillMesh.position.x = -0.26 * (1 - pct);
+  }
 
   // Spawn 3D ballistic blood mist & armor spark burst at impact point
   const hitPos = enemy.root.position.clone().add(new THREE.Vector3(0, isHeadshot ? 1.62 : 1.08, 0));
@@ -1950,9 +2244,54 @@ function damageEnemy(enemy: EnemyActor, amount: number, isHeadshot: boolean, wea
   if (enemy.hp <= 0) {
     enemy.hp = 0;
     enemy.state = 'DEAD';
+    if (enemy.laserLine) enemy.laserLine.visible = false;
+    if (enemy.statusSprite) enemy.statusSprite.visible = false;
+    if (enemy.hpBarGroup) enemy.hpBarGroup.visible = false;
     playEnemyClip(enemy, 'Death01', false);
     player.kills++;
-    if (isHeadshot) player.headshots++;
+
+    // Spawn Lootable Tactical Supply Pack (+25 Armor & Ammo Resupply) at eliminated enemy position!
+    const lootGroup = new THREE.Group();
+    const packBox = new THREE.Mesh(
+      new THREE.BoxGeometry(0.42, 0.22, 0.32),
+      new THREE.MeshStandardMaterial({ color: 0x243447, roughness: 0.45, metalness: 0.65 })
+    );
+    const packGlow = new THREE.Mesh(
+      new THREE.BoxGeometry(0.44, 0.05, 0.14),
+      new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
+    );
+    packGlow.position.y = 0.12;
+    lootGroup.add(packBox, packGlow);
+    lootGroup.position.set(enemy.root.position.x, enemy.baseY + 0.16, enemy.root.position.z);
+    scene.add(lootGroup);
+    activeLootDrops.push({
+      mesh: lootGroup,
+      position: lootGroup.position.clone(),
+      age: 0,
+      collected: false,
+    });
+
+    if (isHeadshot) {
+      player.headshots++;
+      // Physical Ballistic Helmet Pop-Off on Headshot Kill!
+      const helmetNode = enemy.root.getObjectByName('Tactical_Helmet_Rigid');
+      const visorNode = enemy.root.getObjectByName('Tactical_Visor_Rigid');
+      if (helmetNode) helmetNode.visible = false;
+      if (visorNode) visorNode.visible = false;
+      const flyHelmet = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.11, 0.12, 0.13, 12),
+        new THREE.MeshStandardMaterial({ color: 0x3b4834, roughness: 0.45, metalness: 0.55 })
+      );
+      flyHelmet.position.copy(hitPos);
+      scene.add(flyHelmet);
+      activeShells.push({
+        mesh: flyHelmet,
+        vel: new THREE.Vector3((Math.random() - 0.5) * 3.2, 4.8 + Math.random() * 1.5, (Math.random() - 0.5) * 3.2),
+        rotVel: new THREE.Vector3(14, 19, 12),
+        age: -0.65, // Keep flying helmet alive for ~1.4 seconds
+      });
+      audioSys.play3D('assets/audio/impact_metal.wav', hitPos, player.pos, 8, 45, 0.95);
+    }
     player.multiKillCount++;
     player.multiKillTimer = 3.5;
 
@@ -1972,7 +2311,7 @@ function damageEnemy(enemy: EnemyActor, amount: number, isHeadshot: boolean, wea
     }
   } else {
     enemy.state = 'HIT';
-    enemy.stateTimer = 0.45;
+    enemy.stateTimer = 0.42;
     playEnemyClip(enemy, isHeadshot ? 'Hit_Head' : 'Hit_Chest', false);
   }
 }
@@ -2031,6 +2370,16 @@ function spawnEjectedShellAndTracer(camDir: THREE.Vector3, targetPoint: THREE.Ve
 
 function performSingleHitscanRay(rayDir: THREE.Vector3, w: WeaponSpec, isShotgun: boolean, ejectShell: boolean) {
   raycaster.set(camera.position, rayDir);
+
+  // 0. Check Suspended Crane Container Release Shackle!
+  if (suspendedCargo && suspendedCargo.state === 'SUSPENDED') {
+    const shackleHits = raycaster.intersectObject(suspendedCargo.shackleMesh, false);
+    if (shackleHits.length > 0 && shackleHits[0].distance < 95) {
+      spawnEjectedShellAndTracer(rayDir, shackleHits[0].point, isShotgun, ejectShell);
+      releaseSuspendedCargoContainer();
+      return true;
+    }
+  }
 
   // 1. Check Explosive Barrels
   for (const barrel of explosiveBarrels) {
@@ -2094,9 +2443,41 @@ function performSingleHitscanRay(rayDir: THREE.Vector3, w: WeaponSpec, isShotgun
     damageEnemy(bestEnemy, dmg, bestHeadshot, w.name);
     return true;
   } else {
-    const envTarget = camera.position.clone().addScaledVector(rayDir, 22);
+    let envTarget = camera.position.clone().addScaledVector(rayDir, 22);
+    // Raycast against ground plane (y = 0) if aiming downward, or place bullet impact decal & ricochet spark
+    if (rayDir.y < -0.02) {
+      const tGround = (0.015 - camera.position.y) / rayDir.y;
+      if (tGround > 0.5 && tGround < 32) {
+        envTarget = camera.position.clone().addScaledVector(rayDir, tGround);
+      }
+    }
     spawnEjectedShellAndTracer(rayDir, envTarget, isShotgun, ejectShell);
     if (ejectShell) {
+      // Place Pooled Bullet Impact Scorch Decal + Ricochet Spark Burst
+      const decal = impactDecalPool[nextDecalIdx];
+      nextDecalIdx = (nextDecalIdx + 1) % MAX_IMPACT_DECALS;
+      decal.position.copy(envTarget);
+      if (envTarget.y <= 0.06) {
+        decal.rotation.set(-Math.PI / 2, 0, Math.random() * Math.PI);
+      } else {
+        decal.lookAt(camera.position);
+      }
+      decal.visible = true;
+
+      const sparkMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.045, 6, 6),
+        new THREE.MeshBasicMaterial({
+          color: 0xffcc44,
+          transparent: true,
+          opacity: 0.95,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        })
+      );
+      sparkMesh.position.copy(envTarget);
+      scene.add(sparkMesh);
+      activeSmokePuffs.push({ mesh: sparkMesh, age: 0, maxAge: 0.22 });
+
       if (envTarget.y <= 0.15) {
         audioSys.play3D('assets/audio/impact_water.wav', envTarget, player.pos);
       } else {
@@ -2130,6 +2511,7 @@ function fireSingleRound(fromBurstQueue = false) {
   muzzleFlashMesh.material.opacity = 0.95;
   muzzleFlashMesh.rotation.z = Math.random() * Math.PI * 2;
   muzzleLight.intensity = 18.0;
+  muzzleLight.visible = true;
   audioSys.play2D(w.audioShot, 0.85);
   updateWeaponHud();
 
@@ -2260,6 +2642,52 @@ function triggerMeleeBash() {
   }
 }
 
+function toggleTacticalFlashlight() {
+  player.flashlightOn = !player.flashlightOn;
+  if (player.flashlightOn) {
+    weaponMount.add(tacticalFlashlight);
+  } else {
+    weaponMount.remove(tacticalFlashlight);
+  }
+  tacticalFlashlight.visible = player.flashlightOn;
+  tacticalFlashlight.intensity = player.flashlightOn ? 28 : 0;
+  smgLaserBeam.visible = player.flashlightOn || Boolean(WEAPONS[activeWeaponIdx].hasGreenLaser);
+  audioSys.play2D('assets/audio/fire_mode_click.wav', 0.8);
+  updateWeaponHud();
+}
+
+function toggleNvgMode(forceState?: boolean) {
+  player.nvgOn = forceState !== undefined ? forceState : !player.nvgOn;
+  document.getElementById('nvg-overlay')?.classList.toggle('hidden', !player.nvgOn);
+  renderer.toneMappingExposure = player.nvgOn ? 2.05 : 1.42;
+  scene.environmentIntensity = player.nvgOn ? 2.55 : 1.75;
+  audioSys.play2D('assets/audio/fire_mode_click.wav', 0.85);
+  updateWeaponHud();
+}
+
+function triggerWeaponInspect() {
+  if (player.reloading || player.ads || loadoutOpen || missionModalOpen) return;
+  player.inspectTimer = 1.85;
+  audioSys.play2D('assets/audio/fire_mode_click.wav', 0.7);
+}
+
+function useCombatMedStim() {
+  if (player.stims <= 0 || player.hp >= player.maxHp || loadoutOpen || missionModalOpen) return;
+  player.stims--;
+  player.hp = Math.min(player.maxHp, player.hp + 45);
+  audioSys.play2D('assets/audio/reload.wav', 0.85);
+  showKillBanner('MED-STIM INJECTED +45 HP');
+  updateStatusHud();
+  updateWeaponHud();
+  const vig = document.getElementById('damage-vignette');
+  if (vig) {
+    vig.style.boxShadow = 'inset 0 0 95px rgba(56, 189, 248, 0.45)';
+    setTimeout(() => {
+      vig.style.boxShadow = 'inset 0 0 110px rgba(220, 25, 20, 0)';
+    }, 320);
+  }
+}
+
 let damageArcTimeout: ReturnType<typeof setTimeout> | null = null;
 function showDirectionalDamageArc(attackerPos: THREE.Vector3) {
   const arcEl = document.getElementById('damage-dir-arc');
@@ -2313,11 +2741,19 @@ function updateLoadoutModal(idx: number) {
   if (weaponModels[w.id]) {
     const preview = weaponModels[w.id].clone(true);
     preview.visible = true;
-    preview.scale.setScalar(1.45);
-    preview.rotation.set(0.08, Math.PI * 0.46, 0.04);
+    preview.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const m = obj as THREE.Mesh;
+        m.castShadow = false;
+        m.receiveShadow = false;
+      }
+    });
+    // Rotate +0.42 * Math.PI so the barrel points left-forward (-X) matching standard tactical weapon sheets, catching bright studio key/front lights!
+    preview.scale.setScalar(1.52);
+    preview.rotation.set(0.14, Math.PI * 0.42, -0.05);
     loadoutWeaponHolder.add(preview);
   }
-  loadoutShowcaseGroup.position.set(0.24, -0.02, -0.98);
+  loadoutShowcaseGroup.position.set(0.24, -0.02, -0.94);
 }
 
 function toggleLoadoutModal(force?: boolean) {
@@ -2327,9 +2763,16 @@ function toggleLoadoutModal(force?: boolean) {
   fpRig.visible = !player.thirdPerson && !loadoutOpen && !missionModalOpen && !player.fixedCameraKey;
   if (playerTpsRoot) playerTpsRoot.visible = player.thirdPerson && !loadoutOpen && !missionModalOpen;
   loadoutShowcaseGroup.visible = loadoutOpen;
+  loadoutKeyLight.visible = loadoutOpen;
+  loadoutRimLight.visible = loadoutOpen;
+  loadoutFillLight.visible = loadoutOpen;
+  loadoutFrontSpot.visible = loadoutOpen;
   if (loadoutOpen) {
+    camera.add(loadoutShowcaseGroup);
     updateLoadoutModal(activeWeaponIdx);
     if (document.pointerLockElement) document.exitPointerLock();
+  } else {
+    camera.remove(loadoutShowcaseGroup);
   }
 }
 
@@ -2362,6 +2805,7 @@ function openMissionCompleteModal() {
 // ---------------------------------------------------------------------------
 const gyroController = {
   enabled: false,
+  aimAssist: true,
   sensitivity: 1.0,
   calibrated: false,
   baseAlpha: 0,
@@ -2372,6 +2816,46 @@ const gyroController = {
   lastGamma: 0,
   hasSample: false,
 };
+
+// Gyroscope Aim Assist: Slowdown & Subtle Target Magnetism when aiming near an enemy soldier
+function applyGyroAimAssistToDelta(rawYawDelta: number, rawPitchDelta: number): [number, number] {
+  if (!gyroController.aimAssist) return [rawYawDelta, rawPitchDelta];
+  const camDir = new THREE.Vector3();
+  camera.getWorldDirection(camDir);
+  let bestDot = 0.965; // ~15 deg cone
+  let bestEnemyPos: THREE.Vector3 | null = null;
+  for (const e of enemies) {
+    if (e.state === 'DEAD') continue;
+    const chestPos = e.root.position.clone().add(new THREE.Vector3(0, 1.25, 0));
+    const toE = chestPos.clone().sub(camera.position);
+    const dist = toE.length();
+    if (dist > 45 || dist < 1.0) continue;
+    const dot = toE.normalize().dot(camDir);
+    if (dot > bestDot) {
+      bestDot = dot;
+      bestEnemyPos = chestPos;
+    }
+  }
+  if (!bestEnemyPos) return [rawYawDelta, rawPitchDelta];
+
+  // Slow down sensitivity by 35% inside the target cone + apply gentle pull toward enemy center
+  const slowdown = 0.65;
+  const dx = bestEnemyPos.x - camera.position.x;
+  const dz = bestEnemyPos.z - camera.position.z;
+  const dy = bestEnemyPos.y - camera.position.y;
+  const horizDist = Math.hypot(dx, dz) || 1;
+  const targetYaw = Math.atan2(-dx, -dz);
+  const targetPitch = Math.atan2(dy, horizDist);
+  let yawDiff = targetYaw - player.yaw;
+  while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+  while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+  const pitchDiff = targetPitch - player.pitch;
+
+  return [
+    rawYawDelta * slowdown + yawDiff * 0.08,
+    rawPitchDelta * slowdown + pitchDiff * 0.08,
+  ];
+}
 
 function updateGyroHudButtons() {
   const toggleBtn = document.getElementById('btn-gyro-toggle');
@@ -2455,8 +2939,9 @@ window.addEventListener('deviceorientation', (ev) => {
   }
 
   const radScale = (Math.PI / 180) * gyroController.sensitivity * (player.ads ? 0.58 : 0.95);
-  player.yaw += yawDegDelta * radScale;
-  player.pitch = Math.max(-1.35, Math.min(1.35, player.pitch + pitchDegDelta * radScale));
+  const [adjYaw, adjPitch] = applyGyroAimAssistToDelta(yawDegDelta * radScale, pitchDegDelta * radScale);
+  player.yaw += adjYaw;
+  player.pitch = Math.max(-1.35, Math.min(1.35, player.pitch + adjPitch));
 });
 
 // Also support high-frequency gyroscope angular velocity (`devicemotion.rotationRate`) on mobile devices
@@ -2467,8 +2952,9 @@ window.addEventListener('devicemotion', (ev) => {
   const betaRate = ev.rotationRate.beta || 0;
   const dtMotion = (ev.interval || 16) / 1000;
   const radScale = (Math.PI / 180) * gyroController.sensitivity * (player.ads ? 0.55 : 0.85);
-  player.yaw += betaRate * dtMotion * radScale;
-  player.pitch = Math.max(-1.35, Math.min(1.35, player.pitch + alphaRate * dtMotion * radScale));
+  const [adjYaw, adjPitch] = applyGyroAimAssistToDelta(betaRate * dtMotion * radScale, alphaRate * dtMotion * radScale);
+  player.yaw += adjYaw;
+  player.pitch = Math.max(-1.35, Math.min(1.35, player.pitch + adjPitch));
 });
 
 document.getElementById('btn-gyro-toggle')?.addEventListener('click', (e) => {
@@ -2569,6 +3055,34 @@ document.getElementById('touch-btn-lean-r')?.addEventListener('click', (e) => {
   player.leanTarget = player.leanTarget > 0.5 ? 0 : 1;
   updateStatusHud();
 });
+document.getElementById('touch-btn-light')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleTacticalFlashlight();
+});
+document.getElementById('touch-btn-nvg')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleNvgMode();
+});
+document.getElementById('touch-btn-inspect')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  triggerWeaponInspect();
+});
+document.getElementById('touch-btn-stim')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  useCombatMedStim();
+});
+document.getElementById('flashlight-badge')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleTacticalFlashlight();
+});
+document.getElementById('nvg-badge')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleNvgMode();
+});
+document.getElementById('stim-badge')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  useCombatMedStim();
+});
 
 for (let s = 1; s <= 5; s++) {
   document.getElementById(`slot-${s}`)?.addEventListener('click', (e) => {
@@ -2592,6 +3106,10 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyB') cycleFireMode();
   if (e.code === 'KeyG') throwFragGrenade();
   if (e.code === 'KeyF') triggerMeleeBash();
+  if (e.code === 'KeyT') toggleTacticalFlashlight();
+  if (e.code === 'KeyN') toggleNvgMode();
+  if (e.code === 'KeyI') triggerWeaponInspect();
+  if (e.code === 'KeyX') useCombatMedStim();
   if (e.code === 'KeyY') toggleGyroAiming();
   if (e.code === 'KeyQ') {
     player.leanTarget = -1;
@@ -2773,15 +3291,46 @@ function renderMinimap() {
   mmCtx.arc(tx(-4.0), tz(-18.0), 4.5, 0, Math.PI * 2);
   mmCtx.fill();
 
+  // Loot Supply Drops on Minimap (Cyan Diamond)
+  for (const ld of activeLootDrops) {
+    if (ld.collected) continue;
+    mmCtx.fillStyle = '#38bdf8';
+    mmCtx.fillRect(tx(ld.position.x) - 2.5, tz(ld.position.z) - 2.5, 5, 5);
+  }
+
+  // Suspended / Dropped Crane Cargo Container on Minimap (Amber Hazard)
+  if (suspendedCargo) {
+    mmCtx.strokeStyle = suspendedCargo.state === 'SUSPENDED' ? '#f97316' : '#94a3b8';
+    mmCtx.lineWidth = 1.4;
+    mmCtx.strokeRect(
+      tx(suspendedCargo.group.position.x - 1.25),
+      tz(suspendedCargo.group.position.z - 3.0),
+      2.5 * scale,
+      6.0 * scale
+    );
+  }
+
   // Enemy Blips
   for (const e of enemies) {
     if (e.state === 'DEAD') continue;
-    mmCtx.fillStyle = '#ef4444';
+    mmCtx.fillStyle = e.archetype === 'SNIPER' ? '#f43f5e' : e.archetype === 'BREACHER' ? '#fb923c' : '#ef4444';
     mmCtx.beginPath();
     mmCtx.arc(tx(e.root.position.x), tz(e.root.position.z), 3.6, 0, Math.PI * 2);
     mmCtx.fill();
   }
 
+  mmCtx.restore();
+
+  // Player Real-Time FOV Vision Cone (Facing North on Minimap)
+  mmCtx.save();
+  mmCtx.translate(w / 2, h / 2);
+  mmCtx.fillStyle = player.nvgOn ? 'rgba(74, 222, 128, 0.22)' : 'rgba(250, 204, 21, 0.16)';
+  mmCtx.beginPath();
+  mmCtx.moveTo(0, 0);
+  const coneHalfRad = ((camera.fov || 60) * 0.5 * Math.PI) / 180;
+  mmCtx.arc(0, 0, 44, -Math.PI / 2 - coneHalfRad, -Math.PI / 2 + coneHalfRad);
+  mmCtx.closePath();
+  mmCtx.fill();
   mmCtx.restore();
 
   // Player Arrow at Center
@@ -2832,6 +3381,8 @@ function applyNamedCamera(camKey: string | null) {
 // ---------------------------------------------------------------------------
 const frameTimesMs: number[] = [];
 let lastPerfHudUpdate = 0;
+let mainPassDrawCalls = 0;
+let mainPassTriangles = 0;
 
 function getPerfSummary() {
   const sorted = [...frameTimesMs].sort((a, b) => a - b);
@@ -2843,8 +3394,8 @@ function getPerfSummary() {
   return {
     avgFps: Number((1000 / Math.max(0.1, avgMs)).toFixed(1)),
     p95FrameTimeMs: Number(p95Ms.toFixed(2)),
-    drawCalls: renderer.info.render.calls,
-    triangles: renderer.info.render.triangles,
+    drawCalls: mainPassDrawCalls || renderer.info.render.calls,
+    triangles: mainPassTriangles || renderer.info.render.triangles,
     geometries: renderer.info.memory.geometries,
     textures: renderer.info.memory.textures,
     gpuRenderer: String(gpuRenderer),
@@ -3078,13 +3629,57 @@ function stepSimulation(dt: number, elapsedSec: number) {
         document.getElementById('reload-box')?.classList.add('hidden');
         updateWeaponHud();
       }
+    } else if (player.inspectTimer > 0) {
+      player.inspectTimer = Math.max(0, player.inspectTimer - dt);
+      const iPct = 1 - player.inspectTimer / 2.2;
+      const tiltWave = Math.sin(iPct * Math.PI * 2);
+      const liftWave = Math.sin(iPct * Math.PI);
+      weaponMount.rotation.x = 0.22 * liftWave;
+      weaponMount.rotation.y = 0.52 * tiltWave;
+      weaponMount.rotation.z = 0.38 * tiltWave;
+      if (player.inspectTimer <= 0) {
+        weaponMount.rotation.set(0, 0, 0);
+      }
     } else {
       weaponMount.rotation.x = weaponMount.rotation.x * 0.85 + meleePitch * 0.25;
+      weaponMount.rotation.y *= 0.85;
       weaponMount.rotation.z *= 0.85;
     }
 
     // Solve Two-Handed Rifle IK for First-Person CC0 Arms against active weapon grip & foregrip
     updateFirstPersonCc0HandsIk();
+
+    // Dynamic Reticle Spread Expansion based on Movement, ADS & Weapon Recoil
+    const retWrap = document.getElementById('reticle-wrap');
+    if (retWrap) {
+      const spreadScale = player.ads ? 0.72 : 1.0 + (isMoving ? 0.22 : 0) + player.recoilOffsetZ * 3.2;
+      retWrap.style.transform = `translate(-50%, -50%) scale(${spreadScale.toFixed(2)})`;
+    }
+
+    // North Harbor Master Control Terminal Objective Interaction at (-4.0, 0, -18.0)
+    const distToTerminal = Math.hypot(player.pos.x - -4.0, player.pos.z - -18.0);
+    const termBox = document.getElementById('terminal-box');
+    const termFill = document.getElementById('terminal-bar-fill');
+    const termTitle = document.getElementById('terminal-title');
+    if (distToTerminal <= 4.2 && !player.terminalHacked) {
+      termBox?.classList.remove('hidden');
+      if (keys['KeyE'] || distToTerminal <= 2.6) {
+        player.terminalHackProgress = Math.min(1.0, player.terminalHackProgress + dt * 0.55);
+        if (termFill) termFill.style.width = `${(player.terminalHackProgress * 100).toFixed(0)}%`;
+        if (termTitle) termTitle.textContent = `⚡ 正在駭入奪還港務主控終端... ${Math.round(player.terminalHackProgress * 100)}%`;
+        if (player.terminalHackProgress >= 1.0) {
+          player.terminalHacked = true;
+          audioSys.play2D('assets/audio/fire_mode_click.wav', 0.95);
+          showKillBanner('TERMINAL SECURED +250');
+          updateObjectiveHud();
+          setTimeout(() => termBox?.classList.add('hidden'), 1400);
+        }
+      } else {
+        if (termTitle) termTitle.textContent = '⚡ [E] 按住駭入奪還港務主控終端 // HOLD [E] TO HACK';
+      }
+    } else if (!player.terminalHacked) {
+      termBox?.classList.add('hidden');
+    }
 
     // Auto-fire for AR-7 / SMG-9 & 3-Round Burst Queue
     if (player.burstRemaining > 0) {
@@ -3129,6 +3724,7 @@ function stepSimulation(dt: number, elapsedSec: number) {
   }
   if (muzzleLight.intensity > 0) {
     muzzleLight.intensity = Math.max(0, muzzleLight.intensity - dt * 220);
+    if (muzzleLight.intensity <= 0) muzzleLight.visible = false;
   }
   if (player.multiKillTimer > 0) {
     player.multiKillTimer -= dt;
@@ -3238,8 +3834,65 @@ function stepSimulation(dt: number, elapsedSec: number) {
       continue;
     }
     sp.mesh.scale.setScalar(1 + p * 3.6);
-    sp.mesh.position.y += dt * 0.9;
+    if (sp.mesh.position.y > 0) sp.mesh.position.y += dt * 0.9;
     (sp.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.52 * (1 - p));
+  }
+
+  // 3c. Lootable Tactical Supply Drops (Auto-collect when player walks within 2.2m!)
+  for (let i = activeLootDrops.length - 1; i >= 0; i--) {
+    const ld = activeLootDrops[i];
+    if (ld.collected) continue;
+    ld.age += dt;
+    ld.mesh.rotation.y += dt * 2.2;
+    ld.mesh.position.y = ld.position.y + Math.sin(ld.age * 4.5) * 0.06;
+    if (player.pos.distanceTo(ld.position) <= 2.25) {
+      ld.collected = true;
+      scene.remove(ld.mesh);
+      activeLootDrops.splice(i, 1);
+      player.armor = Math.min(player.maxArmor, player.armor + 25);
+      WEAPONS[activeWeaponIdx].reserve += WEAPONS[activeWeaponIdx].magSize;
+      audioSys.play2D('assets/audio/fire_mode_click.wav', 0.85);
+      showKillBanner('RESUPPLY +25 ARMOR & AMMO');
+      updateStatusHud();
+      updateWeaponHud();
+    }
+  }
+
+  // 3d. Interactive Suspended Crane Container Falling Physics & Impact Crush
+  if (suspendedCargo && suspendedCargo.state === 'FALLING') {
+    suspendedCargo.velY -= 22.0 * dt;
+    suspendedCargo.group.position.y += suspendedCargo.velY * dt;
+    if (suspendedCargo.group.position.y <= 0) {
+      suspendedCargo.group.position.y = 0;
+      suspendedCargo.velY = 0;
+      suspendedCargo.state = 'LANDED';
+      player.cameraShake = Math.max(player.cameraShake, 0.72);
+      audioSys.play3D('assets/audio/rl7_explosion.wav', suspendedCargo.group.position, player.pos, 10, 85, 1.1);
+      // Register new permanent cover AABB collider where the container landed
+      colliders.push(
+        new THREE.Box3(
+          new THREE.Vector3(suspendedCargo.group.position.x - 1.28, 0, suspendedCargo.group.position.z - 3.05),
+          new THREE.Vector3(suspendedCargo.group.position.x + 1.28, 2.65, suspendedCargo.group.position.z + 3.05)
+        )
+      );
+      // Crush or blast any enemy underneath the falling 20ft container
+      for (const e of enemies) {
+        if (e.state === 'DEAD') continue;
+        const d = e.root.position.distanceTo(suspendedCargo.group.position);
+        if (d <= 5.5) {
+          damageEnemy(e, 220, false, 'CRANE DROP');
+        }
+      }
+    }
+  }
+
+  // 3e. Dynamic Night Storm Lightning Flash (Live gameplay only; deterministic in ?capture mode!)
+  if (!captureMode) {
+    const stormPhase = elapsedSec % 21.0;
+    const isFlash = (stormPhase > 19.2 && stormPhase < 19.32) || (stormPhase > 19.42 && stormPhase < 19.48);
+    renderer.toneMappingExposure = player.nvgOn ? 2.05 : isFlash ? 2.15 : 1.42;
+  } else {
+    renderer.toneMappingExposure = player.nvgOn ? 2.05 : 1.42;
   }
 
   // 4. Active Explosions Update (Multi-Stage Fireball + Blast Light + Ballistic Shrapnel -> Plume -> Shockwave)
@@ -3281,10 +3934,10 @@ function stepSimulation(dt: number, elapsedSec: number) {
     }
   }
 
-  // 5. Update Enemy Tactical Soldiers & CC0 Skeletal Animations
+  // 5. Update Enemy Tactical Soldiers & CC0 Skeletal Animations (with Distance LOD Throttling & Cover AI!)
   if (!captureMode) {
-    for (const e of enemies) {
-      e.mixer.update(dt);
+    for (let eIdx = 0; eIdx < enemies.length; eIdx++) {
+      const e = enemies[eIdx];
       // Foot Lock / Ground Clamp
       e.root.position.y = e.baseY;
       if ((e.muzzleFlash.material as THREE.MeshBasicMaterial).opacity > 0) {
@@ -3293,7 +3946,10 @@ function stepSimulation(dt: number, elapsedSec: number) {
           (e.muzzleFlash.material as THREE.MeshBasicMaterial).opacity - dt * 12
         );
       }
-      if (e.state === 'DEAD') continue;
+      if (e.state === 'DEAD') {
+        e.mixer.update(dt);
+        continue;
+      }
 
       const toPlayer = new THREE.Vector3(
         player.pos.x - e.root.position.x,
@@ -3302,13 +3958,42 @@ function stepSimulation(dt: number, elapsedSec: number) {
       );
       const dist = toPlayer.length();
 
+      // Update Elite Sniper Visible Red Laser Sight Beam toward Player (throttled every 2nd frame for GPU performance)
+      if (e.laserLine && reflectionFrameTick % 2 === 0) {
+        const posAttr = e.laserLine.geometry.getAttribute('position') as THREE.BufferAttribute;
+        if (posAttr) {
+          posAttr.setXYZ(0, e.root.position.x, e.root.position.y + 1.42, e.root.position.z);
+          posAttr.setXYZ(1, player.pos.x, player.pos.y + 1.15, player.pos.z);
+          posAttr.needsUpdate = true;
+        }
+      }
+
+      // Update 3D Overhead Tactical Status Badge & HP Bar Billboard Orientation
+      if (e.statusSprite) {
+        e.statusSprite.material =
+          e.state === 'COVER' ? statusMatCover : e.state === 'PATROL' ? statusMatPatrol : statusMatCombat;
+      }
+      if (e.hpBarGroup && e.hpBarGroup.visible) {
+        e.hpBarGroup.lookAt(camera.position);
+      }
+
+      // Distance LOD throttling: update full skeletal mixer + 2-Bone IK at 1/2 rate when enemy is > 28m away
+      const lodSkip = dist > 28 && (reflectionFrameTick + eIdx) % 2 !== 0;
+      if (!lodSkip) {
+        e.mixer.update(dist > 28 ? dt * 2 : dt);
+      }
+
       if (e.state === 'HIT') {
         e.stateTimer -= dt;
         if (e.stateTimer <= 0) {
-          e.state = 'COMBAT';
-          playEnemyClip(e, 'Idle_Loop', true);
+          // Enter tactical crouch-cover if damaged below 65 HP!
+          e.state = e.hp <= 65 ? 'COVER' : 'COMBAT';
+          e.stateTimer = e.state === 'COVER' ? 2.4 : 0;
+          playEnemyClip(e, e.state === 'COVER' ? 'Crouch_Idle_Loop' : 'Idle_Loop', true);
         }
-        poseCharacterTwoHandRifleIk(e.root, undefined, e.baseY > 2.5 ? -0.22 : 0.0, 0, 0);
+        if (!lodSkip) {
+          poseCharacterTwoHandRifleIk(e.root, undefined, e.baseY > 2.5 ? -0.22 : 0.0, 0, 0);
+        }
         continue;
       }
 
@@ -3325,14 +4010,26 @@ function stepSimulation(dt: number, elapsedSec: number) {
           e.root.rotation.y = Math.atan2(dx, dz);
           playEnemyClip(e, 'Walk_Loop', true);
         }
-        poseCharacterTwoHandRifleIk(e.root, undefined, -0.06, 0, 0);
+        if (!lodSkip) {
+          poseCharacterTwoHandRifleIk(e.root, undefined, -0.06, 0, 0);
+        }
         if (dist < 22) {
           e.state = 'COMBAT';
         }
-      } else if (e.state === 'COMBAT') {
+      } else if (e.state === 'COMBAT' || e.state === 'COVER') {
         e.root.rotation.y = Math.atan2(toPlayer.x, toPlayer.z);
-        playEnemyClip(e, 'Idle_Loop', true);
-        poseCharacterTwoHandRifleIk(e.root, undefined, e.baseY > 2.5 ? -0.22 : 0.0, 0, 0);
+        if (e.state === 'COVER') {
+          e.stateTimer -= dt;
+          playEnemyClip(e, 'Crouch_Idle_Loop', true);
+          if (e.stateTimer <= 0) {
+            e.state = 'COMBAT';
+          }
+        } else {
+          playEnemyClip(e, 'Idle_Loop', true);
+        }
+        if (!lodSkip) {
+          poseCharacterTwoHandRifleIk(e.root, undefined, e.baseY > 2.5 ? -0.22 : 0.0, 0, 0);
+        }
         e.fireCooldown -= dt;
         if (e.fireCooldown <= 0 && dist < 34) {
           e.fireCooldown = 1.45 + Math.random() * 0.8;
@@ -3386,6 +4083,9 @@ function stepSimulation(dt: number, elapsedSec: number) {
 }
 
 function renderSceneWithWater(forceReflection = true) {
+  const prevAutoReset = renderer.info.autoReset;
+  renderer.info.autoReset = false;
+
   if (forceReflection) {
     renderer.shadowMap.needsUpdate = true;
     updateGroundPlanarReflection();
@@ -3394,7 +4094,27 @@ function renderSceneWithWater(forceReflection = true) {
     if (reflectionFrameTick % 4 === 0) renderer.shadowMap.needsUpdate = true;
     if (reflectionFrameTick % 2 === 0) updateGroundPlanarReflection();
   }
+
+  // Note: Water.js runs an internal mirror render inside onBeforeRender which calls renderer.render() and resets renderer.info.
+  // To avoid running a redundant full-scene mirror pass on every frame AND measure exact main-camera Draw Calls,
+  // we allow Water.js mirror pass once every 4 frames (before resetting info), then render the main camera pass cleanly!
+  const prevSeaBeforeRender = harborSeaWater ? harborSeaWater.onBeforeRender : null;
+  if (harborSeaWater) {
+    if (forceReflection || reflectionFrameTick % 4 === 0) {
+      // Trigger sea mirror render now so it doesn't run inside the main camera pass
+      harborSeaWater.onBeforeRender(renderer, scene, camera, harborSeaWater.geometry, harborSeaWater.material as THREE.Material, null as unknown as THREE.Group);
+    }
+    harborSeaWater.onBeforeRender = () => {};
+  }
+
+  renderer.info.reset();
   renderer.render(scene, camera);
+  if (harborSeaWater && prevSeaBeforeRender) {
+    harborSeaWater.onBeforeRender = prevSeaBeforeRender;
+  }
+  mainPassDrawCalls = renderer.info.render.calls;
+  mainPassTriangles = renderer.info.render.triangles;
+  renderer.info.autoReset = prevAutoReset;
 }
 
 function animate(now: number) {
@@ -3490,10 +4210,18 @@ window.addEventListener('resize', () => {
     gyroController.enabled = enabled;
     updateGyroHudButtons();
     if (enabled && (yawDeltaRad !== 0 || pitchDeltaRad !== 0)) {
-      player.yaw += yawDeltaRad;
-      player.pitch = Math.max(-1.35, Math.min(1.35, player.pitch + pitchDeltaRad));
+      const [adjYaw, adjPitch] = applyGyroAimAssistToDelta(yawDeltaRad, pitchDeltaRad);
+      player.yaw += adjYaw;
+      player.pitch = Math.max(-1.35, Math.min(1.35, player.pitch + adjPitch));
     }
     stepSimulation(0.032, 1.5);
+    renderSceneWithWater();
+  },
+  hackTerminal: () => {
+    player.terminalHackProgress = 1.0;
+    player.terminalHacked = true;
+    updateObjectiveHud();
+    showKillBanner('TERMINAL SECURED +250');
     renderSceneWithWater();
   },
   reload: () => {
@@ -3501,6 +4229,38 @@ window.addEventListener('resize', () => {
     w.mag = Math.max(1, w.mag - 5);
     startReload();
     stepSimulation(0.35, 1.5);
+    renderSceneWithWater();
+  },
+  toggleFlashlight: (on?: boolean) => {
+    player.flashlightOn = on !== undefined ? on : !player.flashlightOn;
+    if (player.flashlightOn) {
+      weaponMount.add(tacticalFlashlight);
+    } else {
+      weaponMount.remove(tacticalFlashlight);
+    }
+    tacticalFlashlight.visible = player.flashlightOn;
+    tacticalFlashlight.intensity = player.flashlightOn ? 28 : 0;
+    smgLaserBeam.visible = player.flashlightOn || Boolean(WEAPONS[activeWeaponIdx].hasGreenLaser);
+    updateWeaponHud();
+    renderSceneWithWater();
+  },
+  useStim: () => {
+    useCombatMedStim();
+    renderSceneWithWater();
+  },
+  toggleNvg: (on?: boolean) => {
+    toggleNvgMode(on);
+    renderSceneWithWater();
+  },
+  inspectWeapon: (advanceSec = 0.55) => {
+    triggerWeaponInspect();
+    stepSimulation(advanceSec, 1.5);
+    renderSceneWithWater();
+  },
+  dropCraneCargo: () => {
+    releaseSuspendedCargoContainer();
+    stepSimulation(0.45, 1.5);
+    stepSimulation(0.45, 1.95);
     renderSceneWithWater();
   },
   toggleLoadout: (open: boolean) => {
@@ -3519,6 +4279,10 @@ window.addEventListener('resize', () => {
     fpRig.visible = true;
     renderSceneWithWater();
   },
+  resetPerf: () => {
+    frameTimesMs.length = 0;
+    lastTime = performance.now();
+  },
   getPerf: () => getPerfSummary(),
   getState: () => ({
     playerPos: player.pos.toArray(),
@@ -3532,6 +4296,7 @@ window.addEventListener('resize', () => {
     grenades: player.grenades,
     leanAmount: player.leanAmount,
     gyroEnabled: gyroController.enabled,
+    terminalHacked: player.terminalHacked,
     enemiesAlive: enemies.filter((e) => e.state !== 'DEAD').length,
     enemiesTotal: enemies.length,
     kills: player.kills,

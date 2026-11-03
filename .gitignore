@@ -3,5 +3,6 @@ dist/
 .blender_user/
 .blender_temp/
 assets/source_cc0/
+docs/evidence/v0.1.0/page@*.webm
 *.log
 .DS_Store
