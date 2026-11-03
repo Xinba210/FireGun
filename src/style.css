@@ -1581,12 +1581,42 @@ body, html {
   gap: 8px;
 }
 
+.preload-badge-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .preload-badge-title {
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 2px;
   color: #94a3b8;
   font-family: Consolas, monospace;
+}
+
+.preload-version-pill {
+  background: rgba(245, 158, 11, 0.22);
+  border: 1px solid #fbbf24;
+  color: #facc15;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 1px;
+  font-family: Consolas, monospace;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.35);
+  animation: pulse-dot 1.5s infinite;
+}
+
+.preload-footer-ver {
+  font-size: 10px;
+  color: #64748b;
+  font-family: Consolas, monospace;
+  letter-spacing: 1.5px;
+  text-align: right;
+  margin-top: -2px;
 }
 
 .preload-stage-row {

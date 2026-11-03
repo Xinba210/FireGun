@@ -204,12 +204,16 @@ export class GameScreensManager {
         </div>
 
         <div class="preload-content-center">
-          <div class="preload-badge-title">OPERATION MIDNIGHT RECON // WARMING ENGINE [v1.6.1]</div>
+          <div class="preload-badge-row">
+            <span class="preload-badge-title">OPERATION MIDNIGHT RECON // WARMING ENGINE</span>
+            <span class="preload-version-pill">BUILD v1.6.1</span>
+          </div>
           <div class="preload-stage-row">
-            <span id="preload-stage-label" class="preload-stage-label">STEP 1/7 · DOWNLOADING ASSETS...</span>
+            <span id="preload-stage-label" class="preload-stage-label">[v1.6.1] STEP 1/7 · DOWNLOADING ASSETS...</span>
             <span id="preload-stage-pct" class="preload-stage-pct">0%</span>
           </div>
           <div id="preload-stage-hint" class="preload-stage-hint">${TACTICAL_TIPS[0]}</div>
+          <div class="preload-footer-ver">FIREGUN TACTICAL ENGINE · CLIENT v1.6.1-REL</div>
         </div>
       `;
       document.body.appendChild(pScreen);
@@ -522,7 +526,7 @@ export class GameScreensManager {
   public updatePreload(status: PreloadStatus) {
     this.targetPct = Math.min(100, Math.max(0, status.percent));
     if (this.preloadLabel) {
-      this.preloadLabel.textContent = `STEP ${status.step}/${status.totalSteps} · ${status.label}`;
+      this.preloadLabel.textContent = `[v1.6.1] STEP ${status.step}/${status.totalSteps} · ${status.label}`;
     }
     if (this.preloadHint && status.hint) {
       this.preloadHint.textContent = status.hint;
