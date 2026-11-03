@@ -1,37 +1,37 @@
 {
-  "timestamp": "2026-11-03T09:32:43.881Z",
+  "timestamp": "2026-11-03T10:12:55.356Z",
   "version": "0.1.0",
   "branch": "feat/v0.1.0-night-port-vertical-slice",
   "status": "PASS",
   "viewport": "1376x768 (screenshots) / 1280x720 (video)",
   "videoRecorderMime": "video/mp4;codecs=avc1",
   "performance": {
-    "avgFps": 10.5,
-    "p95FrameTimeMs": 121.6,
-    "first5SecMaxFrameTimeMs": 121.6,
-    "drawCalls": 301,
-    "triangles": 211502,
-    "geometries": 122,
+    "avgFps": 9.7,
+    "p95FrameTimeMs": 151.3,
+    "first5SecMaxFrameTimeMs": 151.3,
+    "drawCalls": 313,
+    "triangles": 211838,
+    "geometries": 133,
     "textures": 112,
     "gpuRenderer": "ANGLE (AMD, AMD Radeon(TM) 610M (0x0000164E) Direct3D11 vs_5_0 ps_5_0, D3D11)",
     "isSoftwareRenderer": false
   },
   "performanceDuringDualVideoEncode": {
-    "avgFps": 5.5,
-    "p95FrameTimeMs": 437.5,
-    "first5SecMaxFrameTimeMs": 370.5,
-    "drawCalls": 302,
-    "triangles": 210494,
-    "geometries": 194,
+    "avgFps": 10.2,
+    "p95FrameTimeMs": 230.6,
+    "first5SecMaxFrameTimeMs": 230.6,
+    "drawCalls": 290,
+    "triangles": 210856,
+    "geometries": 174,
     "textures": 113,
     "gpuRenderer": "ANGLE (AMD, AMD Radeon(TM) 610M (0x0000164E) Direct3D11 vs_5_0 ps_5_0, D3D11)",
     "isSoftwareRenderer": false
   },
   "gameplayState": {
     "playerPos": [
-      -6.54712485819617,
+      -6.535145856833531,
       0,
-      16.14407126429086
+      16.74294147028406
     ],
     "yaw": 0.02,
     "pitch": -0.08,

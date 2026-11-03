@@ -762,21 +762,57 @@ function createStealthHelicopter() {
   cabinLight.position.set(0, 0.2, 0.5);
   group.add(cabinLight);
 
+  // Nose-Mounted Tactical FLIR Searchlight Beam pointing downward
+  const searchLight = new THREE.SpotLight(0xfff5ea, 12.0, 52, Math.PI / 5, 0.45);
+  searchLight.position.set(0, -0.6, -3.8);
+  const searchTarget = new THREE.Object3D();
+  searchTarget.position.set(0, -14, -18);
+  group.add(searchTarget);
+  searchLight.target = searchTarget;
+  group.add(searchLight);
+
+  // Wingtip Navigation Strobes (Red on Left, Green on Right)
+  const leftStrobe = new THREE.PointLight(0xff2222, 2.5, 12);
+  leftStrobe.position.set(-1.8, 0.2, 0.2);
+  const rightStrobe = new THREE.PointLight(0x22c55e, 2.5, 12);
+  rightStrobe.position.set(1.8, 0.2, 0.2);
+  group.add(leftStrobe, rightStrobe);
+
   return {
     group,
     mainRotor,
     tailRotor,
     cabinLight,
-    update(dt: number, pos: THREE.Vector3, rotY: number, lightColor: THREE.Color) {
+    searchLight,
+    update(dt: number, pos: THREE.Vector3, rotY: number, pitch: number, lightColor: THREE.Color) {
       group.position.copy(pos);
       group.rotation.y = rotY;
+      group.rotation.x = pitch;
       mainRotor.rotation.y += dt * 44;
       tailRotor.rotation.x += dt * 48;
       cabinLight.color.copy(lightColor);
+      const strobeOn = Math.sin(performance.now() * 0.008) > 0.15;
+      leftStrobe.intensity = strobeOn ? 2.5 : 0.2;
+      rightStrobe.intensity = strobeOn ? 2.5 : 0.2;
     },
   };
 }
 let stealthHeli: ReturnType<typeof createStealthHelicopter> | null = null;
+let operationStarted = false;
+
+function launchInfiltrationCutscene() {
+  operationStarted = true;
+  screensMgr.hidePortal();
+  if (stealthHeli) stealthHeli.group.visible = true;
+  infiltrationDirector.play(() => {
+    if (playerTpsRoot) playerTpsRoot.visible = false;
+    fpRig.visible = true;
+    if (stealthHeli) stealthHeli.group.visible = false;
+    audioSys.play2D('assets/audio/radio_chatter.wav', 0.85);
+    audioSys.play2D('assets/audio/fire_mode_click.wav', 0.85);
+    showKillBanner('TACTICAL INSERTION CONFIRMED // FREE TO ENGAGE');
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Tactical Props (Jersey Barriers, Mooring Bollards, Ammo Crates & Caution Markings)
@@ -1734,15 +1770,21 @@ async function loadAllAssets() {
 
   setTimeout(() => {
     screensMgr.hidePreload();
-    if (!captureMode && !initialCamParam) {
-      infiltrationDirector.play(() => {
-        if (playerTpsRoot) playerTpsRoot.visible = false;
-        fpRig.visible = true;
-        if (stealthHeli) stealthHeli.group.visible = false;
-        audioSys.play2D('assets/audio/radio_chatter.wav', 0.85);
-        audioSys.play2D('assets/audio/fire_mode_click.wav', 0.85);
-        showKillBanner('TACTICAL INSERTION CONFIRMED // FREE TO ENGAGE');
-      });
+    if (isAutomatedQa) {
+      operationStarted = true;
+      if (!captureMode && !initialCamParam) {
+        launchInfiltrationCutscene();
+      }
+    } else {
+      screensMgr.showPortal(
+        () => {
+          launchInfiltrationCutscene();
+        },
+        () => {
+          operationStarted = true;
+          toggleLoadoutModal(true);
+        }
+      );
     }
   }, 450);
 
@@ -4425,12 +4467,32 @@ function stepSimulation(dt: number, elapsedSec: number) {
     // Dynamic Thunderstorm Lightning & Distant Thunder Engine
     updateLightningAndThunder(dt, moonLight);
 
-    if (infiltrationDirector && infiltrationDirector.active) {
+    if (!operationStarted && !isAutomatedQa) {
+      // Live 3D Title Screen Cinematic Orbit along the harbor
+      const tTitle = performance.now() * 0.00035;
+      camera.position.set(
+        -14.5 + Math.sin(tTitle * 0.8) * 4.2,
+        5.8 + Math.cos(tTitle * 0.5) * 0.8,
+        28.0 - (tTitle * 5.0) % 22.0
+      );
+      camera.lookAt(-4.5, 2.2, 10.0);
+      camera.fov = 65;
+      camera.updateProjectionMatrix();
+      fpRig.visible = false;
+      if (playerTpsRoot) playerTpsRoot.visible = false;
+      if (stealthHeli) stealthHeli.group.visible = false;
+    } else if (infiltrationDirector && infiltrationDirector.active) {
       infiltrationDirector.update(dt, player.pos);
       fpRig.visible = false;
       if (playerTpsRoot) playerTpsRoot.visible = false;
       if (stealthHeli) {
-        stealthHeli.update(dt, infiltrationDirector.helicopterPos, infiltrationDirector.helicopterRotY, infiltrationDirector.cabinLightColor);
+        stealthHeli.update(
+          dt,
+          infiltrationDirector.helicopterPos,
+          infiltrationDirector.helicopterRotY,
+          infiltrationDirector.helicopterPitch,
+          infiltrationDirector.cabinLightColor
+        );
         stealthHeli.group.visible = true;
       }
     } else if (player.thirdPerson) {
@@ -5286,21 +5348,5 @@ const startOperationPipeline = () => {
 
 const isAutomatedQa = captureMode || Boolean(navigator.webdriver) || Boolean(initialCamParam) || Boolean(initialUiParam);
 
-if (isAutomatedQa) {
-  // Headless automated QA mode / direct camera inspector: launch immediately
-  startOperationPipeline();
-} else {
-  // Mainstream AAA Tactical Experience: present Title Portal first!
-  screensMgr.showPortal(
-    () => {
-      startOperationPipeline();
-    },
-    () => {
-      // Gunsmith tab clicked on title screen
-      startOperationPipeline();
-      setTimeout(() => {
-        toggleLoadoutModal(true);
-      }, 500);
-    }
-  );
-}
+// Boot immediately: warm up engine and assets, then present live 3D portal or direct QA harness
+startOperationPipeline();

@@ -16,7 +16,7 @@ export class InfiltrationDirector {
   private camera: THREE.PerspectiveCamera;
   private isPlaying = false;
   private elapsedSec = 0;
-  private totalDurationSec = 6.5;
+  private totalDurationSec = 6.6;
   private onCompleteCallback: (() => void) | null = null;
   private onFrameCallback: ((t: number) => void) | null = null;
 
@@ -32,6 +32,7 @@ export class InfiltrationDirector {
   // Helicopter motion state
   public helicopterPos = new THREE.Vector3(-15, 14, 52);
   public helicopterRotY = 0;
+  public helicopterPitch = 0.08;
   public cabinLightColor = new THREE.Color('#ff2222');
 
   constructor(camera: THREE.PerspectiveCamera) {
@@ -63,7 +64,7 @@ export class InfiltrationDirector {
         <div class="cutscene-letterbox cutscene-letterbox-bottom">
           <div class="cutscene-radio-sub" id="cutscene-radio">
             <span class="radio-speaker" id="cutscene-radio-speaker">[PILOT]</span>
-            <span class="radio-text" id="cutscene-radio-text">"Holding at 25 feet. Weather is masking our rotor footprint."</span>
+            <span class="radio-text" id="cutscene-radio-text">"Holding 35 feet off the deck. West container berm LZ in sight."</span>
           </div>
           <button id="btn-skip-cutscene" class="btn-skip-cutscene">SKIP [SPACE / TAP]</button>
         </div>
@@ -97,51 +98,52 @@ export class InfiltrationDirector {
 
   private setupKeyframes() {
     this.keyframes = [
-      // Act 1: Stealth helicopter skimming ocean waves through squall
+      // Act 1 (0.0s ~ 2.2s): Third-person tracking shot framing the stealth helicopter
+      // Camera is offset to the rear-left of the chopper, pointing directly at the chopper as it flies toward the port!
       {
         timeSec: 0.0,
-        pos: new THREE.Vector3(-18.0, 11.5, 46.0),
-        target: new THREE.Vector3(-8.0, 4.0, 26.0),
-        fov: 72,
+        pos: new THREE.Vector3(-21.0, 16.5, 62.0),
+        target: new THREE.Vector3(-14.0, 13.5, 48.0), // Look directly at helicopter!
+        fov: 65,
         camLabel: 'INFIL-BIRD // LOW-ALTITUDE RADAR EVASION',
         radioSpeaker: '[PILOT]',
-        radioText: '"Holding 25 feet off the deck. West container berm blind spot in sight."',
+        radioText: '"Holding 35 feet off the deck. West container berm LZ in sight."',
         cabinLight: 'red',
       },
-      // Act 2: Cabin interior POV looking out open cargo door at rain & harbor
+      // Act 2 (2.2s ~ 3.6s): Low ground-up angle watching the helicopter flare and hover over containers
       {
-        timeSec: 1.8,
-        pos: new THREE.Vector3(-7.8, 5.0, 29.5),
-        target: new THREE.Vector3(-6.5, 1.5, 23.0),
-        fov: 65,
-        camLabel: 'CABIN JUMP STATION // RED LIGHT ACTIVE',
+        timeSec: 2.2,
+        pos: new THREE.Vector3(-11.5, 2.2, 19.5),
+        target: new THREE.Vector3(-6.5, 5.5, 25.5), // Looking UP at the hovering helicopter!
+        fov: 68,
+        camLabel: 'DROP ZONE // BLINDSPOT APPROACH',
         radioSpeaker: '[GHOST]',
-        radioText: '"Check weapons. Dropping in behind the shipping containers. Pure stealth."',
+        radioText: '"Red light is on. Check weapons. Low-hover insert in 5 seconds."',
         cabinLight: 'red',
       },
-      // Act 3: Helicopter hovers low in container blindspot; green light kicks on!
+      // Act 3 (3.6s ~ 4.8s): Low hover right behind container wall; green jump light activates!
       {
-        timeSec: 3.5,
-        pos: new THREE.Vector3(-6.8, 3.6, 25.4),
-        target: new THREE.Vector3(-6.5, 1.2, 21.0),
+        timeSec: 3.6,
+        pos: new THREE.Vector3(-10.2, 2.6, 25.2),
+        target: new THREE.Vector3(-6.5, 3.2, 24.5), // Looking directly at the side cargo door!
         fov: 62,
         camLabel: 'DROP ZONE CONFIRMED // GREEN LIGHT ENGAGED',
         radioSpeaker: '[GHOST]',
         radioText: '"Green light! Go, go, go! Disembark!"',
         cabinLight: 'green',
       },
-      // Act 4: Player jumps down to wet tarmac (camera drops with landing impulse)
+      // Act 4 (4.8s ~ 5.6s): Touchdown impact & helicopter climbing out
       {
         timeSec: 4.8,
-        pos: new THREE.Vector3(-6.5, 1.82, 24.2),
-        target: new THREE.Vector3(-6.5, 1.5, 14.0),
-        fov: 60,
+        pos: new THREE.Vector3(-6.5, 1.72, 24.0),
+        target: new THREE.Vector3(-6.5, 5.5, 21.0), // Looking slightly up watching helicopter pull up!
+        fov: 62,
         camLabel: 'TOUCHDOWN // INSERTION FOOTPRINT ZERO',
         radioSpeaker: '[PILOT]',
-        radioText: '"Package delivered. Infil-Bird RTB to carrier."',
+        radioText: '"Boots on deck. Infil-Bird RTB to carrier. Good hunting!"',
         cabinLight: 'off',
       },
-      // Act 5: Slide cocking & Visor sync
+      // Act 5 (5.6s ~ 6.6s): Level out to 1st-person FPS horizon, weapon ready
       {
         timeSec: 5.6,
         pos: new THREE.Vector3(-6.5, 1.72, 24.0),
@@ -149,18 +151,17 @@ export class InfiltrationDirector {
         fov: 60,
         camLabel: 'SYSTEM READY // WEAPONS HOT',
         radioSpeaker: '[COMMAND]',
-        radioText: '"Boots on the ground. Weapons free, execute Operation Cold Harbor!"',
+        radioText: '"Weapons free. Execute Operation Cold Harbor!"',
         cabinLight: 'off',
       },
-      // Final Ready Keyframe
       {
-        timeSec: 6.5,
+        timeSec: 6.6,
         pos: new THREE.Vector3(-6.5, 1.72, 24.0),
         target: new THREE.Vector3(-6.5, 1.72, 8.0),
         fov: 60,
         camLabel: 'SYSTEM READY // WEAPONS HOT',
         radioSpeaker: '[COMMAND]',
-        radioText: '"Weapons free. Move out."',
+        radioText: '"Move out."',
         cabinLight: 'off',
       },
     ];
@@ -178,7 +179,7 @@ export class InfiltrationDirector {
       this.bootTextEl.classList.add('hidden');
     }
     tacticalRadioAudio.initAudio();
-    tacticalRadioAudio.startHelicopterAudio(0.38);
+    tacticalRadioAudio.startHelicopterAudio(0.42);
   }
 
   public update(deltaSec: number, targetSpawnPos: THREE.Vector3): boolean {
@@ -196,32 +197,47 @@ export class InfiltrationDirector {
       this.clockEl.textContent = `02:40:${String(12 + Math.floor(t)).padStart(2, '0')}:${String(ms).padStart(2, '0')}`;
     }
 
-    // Update helicopter position along insertion glide-path
-    if (t < 3.8) {
-      const p = t / 3.8;
+    // Update helicopter position along insertion flight path
+    if (t < 2.2) {
+      // Act 1: Gliding across water toward harbor
+      const p = t / 2.2;
       this.helicopterPos.set(
-        THREE.MathUtils.lerp(-18, -6.5, p),
-        THREE.MathUtils.lerp(12, 4.2, p),
-        THREE.MathUtils.lerp(48, 24.5, p)
+        THREE.MathUtils.lerp(-16.0, -10.0, p),
+        THREE.MathUtils.lerp(14.0, 7.5, p),
+        THREE.MathUtils.lerp(52.0, 32.0, p)
       );
-      this.helicopterRotY = -0.15 * (1 - p);
-    } else if (t < 4.8) {
-      // Low hover flare
-      this.helicopterPos.set(-6.5, 3.8 + Math.sin(t * 8) * 0.08, 24.5);
-    } else {
-      // Helicopter pulls up and banks away into the stormy night sky
-      const p = (t - 4.8) / 1.7;
+      this.helicopterRotY = -0.25 * (1 - p);
+      this.helicopterPitch = 0.08; // nose slightly down while flying forward
+    } else if (t < 3.6) {
+      // Act 2: Flare and hover over drop zone behind containers
+      const p = (t - 2.2) / 1.4;
       this.helicopterPos.set(
-        -6.5 + p * 24,
-        3.8 + p * 22,
-        24.5 - p * 38
+        THREE.MathUtils.lerp(-10.0, -6.5, p),
+        THREE.MathUtils.lerp(7.5, 3.5, p),
+        THREE.MathUtils.lerp(32.0, 24.5, p)
+      );
+      this.helicopterRotY = 0;
+      this.helicopterPitch = -0.06 * (1 - p); // flare nose up to brake!
+    } else if (t < 4.8) {
+      // Act 3: Low-hover insertion hold (gentle bob)
+      this.helicopterPos.set(-6.5, 3.2 + Math.sin(t * 7) * 0.06, 24.5);
+      this.helicopterRotY = 0;
+      this.helicopterPitch = 0;
+    } else {
+      // Act 4 & 5: Helicopter lifts off, pitches nose down, and roars away over crane into the night!
+      const p = (t - 4.8) / 1.8;
+      this.helicopterPos.set(
+        -6.5 + p * 28.0,
+        3.2 + p * 32.0,
+        24.5 - p * 42.0
       );
       this.helicopterRotY = p * 0.45;
-      tacticalRadioAudio.setHelicopterVolume(Math.max(0.01, 0.38 * (1 - p)));
+      this.helicopterPitch = 0.15; // nose down accelerating forward!
+      tacticalRadioAudio.setHelicopterVolume(Math.max(0.01, 0.42 * (1 - p)));
     }
 
-    // Show HUD boot lines during the final weapon rack (t >= 5.2s)
-    if (t >= 5.2 && this.bootTextEl && this.bootTextEl.classList.contains('hidden')) {
+    // Show HUD boot lines during the final weapon rack (t >= 5.4s)
+    if (t >= 5.4 && this.bootTextEl && this.bootTextEl.classList.contains('hidden')) {
       this.bootTextEl.classList.remove('hidden');
     }
 
@@ -310,9 +326,6 @@ export class InfiltrationDirector {
     return this.elapsedSec;
   }
 
-  /**
-   * NEVER display 3rd person full mesh in first person!
-   */
   public get showProtagonistMesh(): boolean {
     return false;
   }
