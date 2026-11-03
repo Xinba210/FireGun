@@ -2299,11 +2299,17 @@ function pushKillfeed(weaponName: string, victimName: string, headshot: boolean)
   if (!feed) return;
   const item = document.createElement('div');
   item.className = 'killfeed-item';
-  item.innerHTML = `<span class="kf-killer">あなた</span><span class="kf-weapon">[${weaponName}${headshot ? ' 🎯' : ''}]</span><span class="kf-victim">${victimName}</span>`;
+  item.innerHTML = `<span class="kf-killer">YOU</span><span class="kf-weapon">[${weaponName}${headshot ? ' 🎯' : ''}]</span><span class="kf-victim">${victimName}</span>`;
   feed.prepend(item);
-  while (feed.children.length > 4) {
+  const isMobilePortrait = window.innerWidth <= 768;
+  const maxItems = isMobilePortrait ? 1 : 4;
+  while (feed.children.length > maxItems) {
     feed.removeChild(feed.lastChild!);
   }
+  setTimeout(() => {
+    item.style.opacity = '0';
+    setTimeout(() => item.remove(), 250);
+  }, isMobilePortrait ? 2000 : 3500);
 }
 
 function triggerHitmarker() {
@@ -3120,7 +3126,7 @@ function openMissionCompleteModal() {
 // ---------------------------------------------------------------------------
 const gyroController = {
   enabled: false,
-  aimAssist: true,
+  aimAssist: false, // Default OFF to ensure 100% deterministic control without phantom pulling
   sensitivity: 2.2,
   yawMult: 1.0,
   pitchMult: 0.95,
@@ -3136,44 +3142,30 @@ const gyroController = {
   hasSample: false,
 };
 
-// Gyroscope Aim Assist: Slowdown & Subtle Target Magnetism when aiming near an enemy soldier
+// Gyroscope Aim Assist: Pure friction slowdown (0.85x) on target. Absolutely ZERO magnetic camera pull/yaw displacement!
 function applyGyroAimAssistToDelta(rawYawDelta: number, rawPitchDelta: number): [number, number] {
   if (!gyroController.aimAssist) return [rawYawDelta, rawPitchDelta];
   const camDir = new THREE.Vector3();
   camera.getWorldDirection(camDir);
-  let bestDot = 0.965; // ~15 deg cone
-  let bestEnemyPos: THREE.Vector3 | null = null;
+  let bestDot = 0.988; // Strict ~9 deg cone directly on crosshair
+  let hasTargetInCrosshair = false;
   for (const e of enemies) {
     if (e.state === 'DEAD') continue;
     const chestPos = e.root.position.clone().add(new THREE.Vector3(0, 1.25, 0));
-    const toE = chestPos.clone().sub(camera.position);
+    const toE = chestPos.sub(camera.position);
     const dist = toE.length();
     if (dist > 45 || dist < 1.0) continue;
     const dot = toE.normalize().dot(camDir);
     if (dot > bestDot) {
-      bestDot = dot;
-      bestEnemyPos = chestPos;
+      hasTargetInCrosshair = true;
+      break;
     }
   }
-  if (!bestEnemyPos) return [rawYawDelta, rawPitchDelta];
+  if (!hasTargetInCrosshair) return [rawYawDelta, rawPitchDelta];
 
-  // Slow down sensitivity by 35% inside the target cone + apply gentle pull toward enemy center
-  const slowdown = 0.65;
-  const dx = bestEnemyPos.x - camera.position.x;
-  const dz = bestEnemyPos.z - camera.position.z;
-  const dy = bestEnemyPos.y - camera.position.y;
-  const horizDist = Math.hypot(dx, dz) || 1;
-  const targetYaw = Math.atan2(-dx, -dz);
-  const targetPitch = Math.atan2(dy, horizDist);
-  let yawDiff = targetYaw - player.yaw;
-  while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
-  while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
-  const pitchDiff = targetPitch - player.pitch;
-
-  return [
-    rawYawDelta * slowdown + yawDiff * 0.08,
-    rawPitchDelta * slowdown + pitchDiff * 0.08,
-  ];
+  // Pure friction slowdown (0.85x) so player doesn't overshoot. NO target pulling!
+  const slowdown = 0.85;
+  return [rawYawDelta * slowdown, rawPitchDelta * slowdown];
 }
 
 function updateGyroHudButtons() {
@@ -3374,9 +3366,9 @@ function applyTouchLookDelta(dxPx: number, dyPx: number) {
   }
   if (missionModalOpen || player.fixedCameraKey) return;
   const baseSens = player.ads ? (WEAPONS[activeWeaponIdx].id === 'sr9' ? 0.0014 : 0.0026) : 0.0046;
-  const [adjYaw, adjPitch] = applyGyroAimAssistToDelta(-dxPx * baseSens, -dyPx * baseSens);
-  player.yaw += adjYaw;
-  player.pitch = Math.max(-1.35, Math.min(1.35, player.pitch + adjPitch));
+  // 1:1 direct finger tracking with zero phantom magnetism pulling
+  player.yaw += -dxPx * baseSens;
+  player.pitch = Math.max(-1.35, Math.min(1.35, player.pitch - dyPx * baseSens));
   const hintEl = document.getElementById('touch-look-hint');
   if (hintEl) hintEl.style.opacity = '0';
 }
