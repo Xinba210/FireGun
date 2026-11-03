@@ -1830,12 +1830,12 @@ function spawnEnemySquad() {
     patrol: [number, number][];
     clip: string;
   }[] = [
-    { name: '突撃兵 Alpha (West Dock)', archetype: 'ASSAULT', hp: 100, pos: [-6.5, 0.0, 10.5], patrol: [[-6.5, 10.5], [-6.5, 1.5]], clip: 'Idle_Loop' },
+    { name: '突撃兵 Alpha (West Dock)', archetype: 'ASSAULT', hp: 100, pos: [-6.5, 0.0, 2.0], patrol: [[-6.5, 2.0], [-6.5, -6.0]], clip: 'Walk_Loop' },
     { name: '突撃兵 Bravo (Crane Guard)', archetype: 'ASSAULT', hp: 100, pos: [-5.2, 0.0, -9.5], patrol: [[-5.2, -9.5], [-8.2, -16.0]], clip: 'Walk_Loop' },
-    { name: '突撃兵 Charlie (Center Alley)', archetype: 'ASSAULT', hp: 100, pos: [3.2, 0.0, 8.0], patrol: [[3.2, 8.0], [3.2, -2.0]], clip: 'Idle_Loop' },
-    { name: '狙撃兵 Delta (Catwalk Sniper 🎯)', archetype: 'SNIPER', hp: 90, pos: [6.2, 5.34, 4.0], patrol: [[6.2, 4.0], [6.2, -8.0]], clip: 'Idle_Loop' },
-    { name: '突撃兵 Echo (Guard Post)', archetype: 'ASSAULT', hp: 100, pos: [12.5, 0.0, 14.5], patrol: [[12.5, 14.5], [15.5, 8.5]], clip: 'Walk_Loop' },
-    { name: '重装兵 Foxtrot (Heavy Breacher 🛡)', archetype: 'BREACHER', hp: 145, pos: [16.5, 0.0, -5.5], patrol: [[16.5, -5.5], [20.5, -12.0]], clip: 'Crouch_Idle_Loop' },
+    { name: '突撃兵 Charlie (Center Alley)', archetype: 'ASSAULT', hp: 100, pos: [3.2, 0.0, -2.0], patrol: [[3.2, -2.0], [3.2, -10.0]], clip: 'Idle_Loop' },
+    { name: '狙撃兵 Delta (Catwalk Sniper 🎯)', archetype: 'SNIPER', hp: 90, pos: [6.2, 5.34, -5.0], patrol: [[6.2, -5.0], [6.2, -14.0]], clip: 'Idle_Loop' },
+    { name: '突撃兵 Echo (Guard Post)', archetype: 'ASSAULT', hp: 100, pos: [14.5, 0.0, 6.0], patrol: [[14.5, 6.0], [14.5, -4.0]], clip: 'Walk_Loop' },
+    { name: '重装兵 Foxtrot (Heavy Breacher 🛡)', archetype: 'BREACHER', hp: 145, pos: [16.5, 0.0, -6.5], patrol: [[16.5, -6.5], [20.5, -14.0]], clip: 'Crouch_Idle_Loop' },
     { name: '狙撃兵 Golf (Terminal Overwatch 🎯)', archetype: 'SNIPER', hp: 95, pos: [0.5, 0.0, -19.5], patrol: [[0.5, -19.5], [-6.5, -21.0]], clip: 'Walk_Loop' },
     { name: '重装隊長 Commander (Ship Deck 🛡)', archetype: 'BREACHER', hp: 160, pos: [-26.5, 6.6, -12.0], patrol: [[-26.5, -12.0], [-26.5, -4.0]], clip: 'Idle_Loop' },
   ];
@@ -1867,8 +1867,8 @@ function spawnEnemySquad() {
     mf.position.set(-0.10, 1.38, 0.72);
     cloned.add(mf);
 
-    // 3D Tactical Status Badge & Overhead HP Bar
-    const statusSprite = new THREE.Sprite(idx % 2 === 0 ? statusMatCombat : statusMatPatrol);
+    // 3D Tactical Status Badge & Overhead HP Bar - all start in PATROL state!
+    const statusSprite = new THREE.Sprite(statusMatPatrol);
     statusSprite.position.set(0, 2.16, 0);
     statusSprite.scale.set(0.28, 0.28, 1);
     cloned.add(statusSprite);
@@ -1882,12 +1882,12 @@ function spawnEnemySquad() {
     hpBarGroup.add(hpBg, hpFillMesh);
     cloned.add(hpBarGroup);
 
-    // Visible Red Laser Sight Beam for Elite Sniper Lookouts!
+    // Visible Red Laser Sight Beam for Elite Sniper Lookouts (points forward along patrol, not at player at spawn!)
     let laserLine: THREE.Line | undefined;
     if (sp.archetype === 'SNIPER') {
       const lGeo = new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(sp.pos[0], sp.pos[1] + 1.42, sp.pos[2]),
-        new THREE.Vector3(player.pos.x, player.pos.y + 1.2, player.pos.z),
+        new THREE.Vector3(sp.pos[0], sp.pos[1] + 1.42, sp.pos[2] - 16.0),
       ]);
       const lMat = new THREE.LineBasicMaterial({
         color: 0xff2222,
@@ -1911,7 +1911,7 @@ function spawnEnemySquad() {
       activeClip: '',
       hp: sp.hp,
       maxHp: sp.hp,
-      state: idx % 2 === 0 ? 'COMBAT' : 'PATROL',
+      state: 'PATROL',
       stateTimer: idx * 0.7,
       fireCooldown: 1.2 + idx * 0.3,
       patrolPoints: sp.patrol,
@@ -4123,6 +4123,11 @@ function stepSimulation(dt: number, elapsedSec: number) {
     if (infiltrationDirector && infiltrationDirector.active) {
       infiltrationDirector.update(dt, player.pos);
       fpRig.visible = false;
+      if (playerTpsRoot) {
+        playerTpsRoot.visible = infiltrationDirector.currentElapsed >= 4.2;
+        if (playerTpsMixer) playerTpsMixer.update(dt);
+        poseCharacterTwoHandRifleIk(playerTpsRoot, playerTpsWeaponMount || undefined, 0, 0, 0);
+      }
     } else if (player.thirdPerson) {
       // Over-the-Shoulder Third-Person Tactical Camera
       const camBack = player.ads ? 1.38 : 2.38;
@@ -4532,12 +4537,18 @@ function stepSimulation(dt: number, elapsedSec: number) {
       );
       const dist = toPlayer.length();
 
-      // Update Elite Sniper Visible Red Laser Sight Beam toward Player (throttled every 2nd frame for GPU performance)
+      // Update Elite Sniper Visible Red Laser Sight Beam (sweeps forward on patrol; locks onto player ONLY when alert/in combat!)
       if (e.laserLine && reflectionFrameTick % 2 === 0) {
         const posAttr = e.laserLine.geometry.getAttribute('position') as THREE.BufferAttribute;
         if (posAttr) {
           posAttr.setXYZ(0, e.root.position.x, e.root.position.y + 1.42, e.root.position.z);
-          posAttr.setXYZ(1, player.pos.x, player.pos.y + 1.15, player.pos.z);
+          if (e.state === 'COMBAT') {
+            posAttr.setXYZ(1, player.pos.x, player.pos.y + 1.15, player.pos.z);
+          } else {
+            const fx = Math.sin(e.root.rotation.y) * 18.0;
+            const fz = Math.cos(e.root.rotation.y) * 18.0;
+            posAttr.setXYZ(1, e.root.position.x + fx, e.root.position.y + 1.25, e.root.position.z + fz);
+          }
           posAttr.needsUpdate = true;
         }
       }
@@ -4587,8 +4598,24 @@ function stepSimulation(dt: number, elapsedSec: number) {
         if (!lodSkip) {
           poseCharacterTwoHandRifleIk(e.root, undefined, -0.06, 0, 0);
         }
-        if (dist < 22) {
-          e.state = 'COMBAT';
+        // Realistic enemy line-of-sight & proximity detection:
+        // 1. If player is in covered LZ staging zone (player.pos.z > 20.0), heavy shipping containers completely block line of sight
+        // 2. Vision cone: enemy must face player (dotSight > 0.52, ~60 deg cone) and dist < 18m
+        // 3. Proximity footstep sound alert: dist < 4.0m (or 2.5m if crouching)
+        const inStagingArea = player.pos.z > 20.0;
+        if (!inStagingArea) {
+          const enemyFacing = new THREE.Vector3(Math.sin(e.root.rotation.y), 0, Math.cos(e.root.rotation.y));
+          const toPlayerNorm = toPlayer.clone().normalize();
+          const dotSight = enemyFacing.dot(toPlayerNorm);
+          const hasVisual = dotSight > 0.52 && dist < (player.crouching ? 11.0 : 18.0);
+          const hasCloseProximity = dist < (player.crouching ? 2.5 : 4.0);
+
+          if (hasVisual || hasCloseProximity) {
+            e.state = 'COMBAT';
+            e.fireCooldown = 0.9 + Math.random() * 0.5; // Reaction pause before opening fire!
+            audioSys.play2D('assets/audio/fire_mode_click.wav', 0.6);
+            showKillBanner(`ALERT: ${e.name.split(' ')[0]} SPOTTED TARGET!`);
+          }
         }
       } else if (e.state === 'COMBAT' || e.state === 'COVER') {
         e.root.rotation.y = Math.atan2(toPlayer.x, toPlayer.z);

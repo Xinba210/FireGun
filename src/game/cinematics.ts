@@ -5,16 +5,25 @@ export interface InfiltrationCameraKeyframe {
   pos: THREE.Vector3;
   target: THREE.Vector3;
   fov: number;
+  camLabel?: string;
+  radioText?: string;
+  radioSpeaker?: string;
 }
 
 export class InfiltrationDirector {
   private camera: THREE.PerspectiveCamera;
   private isPlaying = false;
   private elapsedSec = 0;
-  private totalDurationSec = 3.8;
+  private totalDurationSec = 6.2;
   private onCompleteCallback: (() => void) | null = null;
+  private onFrameCallback: ((t: number) => void) | null = null;
+
   private cutsceneOverlay: HTMLElement | null = null;
+  private camLabelEl: HTMLElement | null = null;
+  private radioSpeakerEl: HTMLElement | null = null;
+  private radioTextEl: HTMLElement | null = null;
   private bootTextEl: HTMLElement | null = null;
+  private clockEl: HTMLElement | null = null;
   private keyframes: InfiltrationCameraKeyframe[] = [];
 
   constructor(camera: THREE.PerspectiveCamera) {
@@ -33,28 +42,34 @@ export class InfiltrationDirector {
       overlay.innerHTML = `
         <div class="cutscene-vignette"></div>
         <div class="cutscene-letterbox cutscene-letterbox-top">
-          <span class="cutscene-rec-dot"></span>
-          <span class="cutscene-rec-label">REC // SATELLITE TACTICAL FEED · OP-MIDNIGHT</span>
-          <span class="cutscene-timestamp" id="cutscene-clock">02:41:35:12</span>
+          <div class="cutscene-rec-chip">
+            <span class="cutscene-rec-dot"></span>
+            <span id="cutscene-cam-label" class="cutscene-rec-label">RECON CAM 01 // CRANE TOWER OVERLOOK</span>
+          </div>
+          <span class="cutscene-timestamp" id="cutscene-clock">02:40:12:04</span>
         </div>
         <div class="cutscene-letterbox cutscene-letterbox-bottom">
           <div class="cutscene-radio-sub" id="cutscene-radio">
-            <span class="radio-speaker">[HQ RADIO]</span>
-            <span class="radio-text">"Striker-1 on deck. Insertion confirmed. You are cleared hot."</span>
+            <span class="radio-speaker" id="cutscene-radio-speaker">[COMMAND]</span>
+            <span class="radio-text" id="cutscene-radio-text">"SAT-RECON live. Storm is masking our insertion footprint."</span>
           </div>
           <button id="btn-skip-cutscene" class="btn-skip-cutscene">SKIP [SPACE / TAP]</button>
         </div>
         <div class="cutscene-hud-boot hidden" id="cutscene-hud-boot">
-          <div class="boot-line">INITIALIZING TACTICAL VISOR FIRMWARE v4.19...</div>
-          <div class="boot-line">NEURAL SENSORS: ONLINE</div>
-          <div class="boot-line">OPTICAL RECON: CALIBRATED (60 FOV)</div>
-          <div class="boot-line boot-green">WEAPON SYSTEMS: UNLOCKED — ENGAGE AT WILL</div>
+          <div class="boot-line">TACTICAL VISOR FIRMWARE v4.19 ENGAGED...</div>
+          <div class="boot-line">OPTICS: ONLINE // BALLISTICS: SYNCED</div>
+          <div class="boot-line">SQUAD LINK: ACTIVE (GHOST & ROACH ON SIX)</div>
+          <div class="boot-line boot-green">WEAPONS FREE — YOU ARE GREEN TO ENGAGE</div>
         </div>
       `;
       document.body.appendChild(overlay);
     }
     this.cutsceneOverlay = overlay;
+    this.camLabelEl = document.getElementById('cutscene-cam-label');
+    this.radioSpeakerEl = document.getElementById('cutscene-radio-speaker');
+    this.radioTextEl = document.getElementById('cutscene-radio-text');
     this.bootTextEl = document.getElementById('cutscene-hud-boot');
+    this.clockEl = document.getElementById('cutscene-clock');
 
     document.getElementById('btn-skip-cutscene')?.addEventListener('click', () => {
       this.skip();
@@ -69,37 +84,74 @@ export class InfiltrationDirector {
 
   private setupKeyframes() {
     this.keyframes = [
+      // Act 1: High Crane Tower Overlook
       {
         timeSec: 0.0,
-        pos: new THREE.Vector3(-15, 22.0, 32),
-        target: new THREE.Vector3(-6, 2.0, 10),
-        fov: 75,
+        pos: new THREE.Vector3(-14.0, 26.0, 18.0),
+        target: new THREE.Vector3(-4.0, 4.0, -14.0),
+        fov: 72,
+        camLabel: 'RECON CAM 01 // CRANE TOWER OVERLOOK',
+        radioSpeaker: '[COMMAND]',
+        radioText: '"SAT-RECON live. Storm is masking our insertion footprint."',
       },
+      // Act 2: Cargo Ship Antonov Quay
       {
-        timeSec: 1.4,
-        pos: new THREE.Vector3(-10, 8.5, 24),
-        target: new THREE.Vector3(-6.5, 1.7, 14),
-        fov: 68,
-      },
-      {
-        timeSec: 2.6,
-        pos: new THREE.Vector3(-7.5, 2.4, 18),
-        target: new THREE.Vector3(-6.5, 1.72, 10),
+        timeSec: 1.8,
+        pos: new THREE.Vector3(-18.5, 4.2, 10.0),
+        target: new THREE.Vector3(-24.0, 6.5, -12.0),
         fov: 64,
+        camLabel: 'RECON CAM 02 // CARGO QUAY · ANTONOV BERTH 4',
+        radioSpeaker: '[GHOST]',
+        radioText: '"Vessel moored at Berth 4. Sentry patrols on perimeter."',
       },
+      // Act 3: Catwalk Alley & Inner Yard Corridor
       {
-        timeSec: 3.8,
-        pos: new THREE.Vector3(-6.5, 1.72, 16),
-        target: new THREE.Vector3(-6.5, 1.72, 0),
+        timeSec: 3.2,
+        pos: new THREE.Vector3(4.5, 5.8, 6.0),
+        target: new THREE.Vector3(-4.5, 2.0, 16.0),
+        fov: 62,
+        camLabel: 'RECON CAM 03 // CATWALK ALLEY · ALPHA LANE',
+        radioSpeaker: '[ROACH]',
+        radioText: '"Alley clear. Terminal security in standby mode."',
+      },
+      // Act 4: Zoom down and focus on Protagonist & Squad at covered LZ!
+      {
+        timeSec: 4.5,
+        pos: new THREE.Vector3(-6.5, 2.35, 27.8),
+        target: new THREE.Vector3(-6.5, 1.45, 24.0),
+        fov: 66,
+        camLabel: 'STRIKER-1 // OPERATOR INFILTRATION CONFIRMED',
+        radioSpeaker: '[COMMAND]',
+        radioText: '"Striker-1, you are green to execute. Secure the terminal and munitions."',
+      },
+      // Act 5: Smooth push into Protagonist Helmet Visor
+      {
+        timeSec: 5.6,
+        pos: new THREE.Vector3(-6.5, 1.76, 25.0),
+        target: new THREE.Vector3(-6.5, 1.72, 12.0),
+        fov: 62,
+        camLabel: 'OPTICAL LINK // VISOR SYNC COMPLETE',
+        radioSpeaker: '[STRIKER-1]',
+        radioText: '"Copy, Command. Moving in."',
+      },
+      // Final Ready Keyframe
+      {
+        timeSec: 6.2,
+        pos: new THREE.Vector3(-6.5, 1.72, 24.0),
+        target: new THREE.Vector3(-6.5, 1.72, 8.0),
         fov: 60,
+        camLabel: 'SYSTEM READY // WEAPONS HOT',
+        radioSpeaker: '[STRIKER-1]',
+        radioText: '"Weapons hot. Engaging on my mark."',
       },
     ];
   }
 
-  public play(onComplete: () => void) {
+  public play(onComplete: () => void, onFrame?: (t: number) => void) {
     this.isPlaying = true;
     this.elapsedSec = 0;
     this.onCompleteCallback = onComplete;
+    this.onFrameCallback = onFrame || null;
     if (this.cutsceneOverlay) {
       this.cutsceneOverlay.classList.remove('hidden');
     }
@@ -111,19 +163,29 @@ export class InfiltrationDirector {
   public update(deltaSec: number, targetSpawnPos: THREE.Vector3): boolean {
     if (!this.isPlaying) return false;
     this.elapsedSec += deltaSec;
+    const t = this.elapsedSec;
 
-    // Update HUD Boot sequence at 2.4s
-    if (this.elapsedSec >= 2.4 && this.bootTextEl && this.bootTextEl.classList.contains('hidden')) {
+    if (this.onFrameCallback) {
+      this.onFrameCallback(t);
+    }
+
+    // Update real-time military timestamp
+    if (this.clockEl) {
+      const ms = Math.floor((t * 100) % 100);
+      this.clockEl.textContent = `02:40:${String(12 + Math.floor(t)).padStart(2, '0')}:${String(ms).padStart(2, '0')}`;
+    }
+
+    // Show HUD boot lines during the final helmet push (t >= 4.8s)
+    if (t >= 4.8 && this.bootTextEl && this.bootTextEl.classList.contains('hidden')) {
       this.bootTextEl.classList.remove('hidden');
     }
 
-    if (this.elapsedSec >= this.totalDurationSec) {
+    if (t >= this.totalDurationSec) {
       this.finish(targetSpawnPos);
       return false;
     }
 
-    // Interpolate keyframes
-    const t = this.elapsedSec;
+    // Find current active keyframe segment
     let k0 = this.keyframes[0];
     let k1 = this.keyframes[1];
     for (let i = 0; i < this.keyframes.length - 1; i++) {
@@ -132,6 +194,17 @@ export class InfiltrationDirector {
         k1 = this.keyframes[i + 1];
         break;
       }
+    }
+
+    // Update camera label & radio text on segment change
+    if (k0.camLabel && this.camLabelEl && this.camLabelEl.textContent !== k0.camLabel) {
+      this.camLabelEl.textContent = k0.camLabel;
+    }
+    if (k0.radioSpeaker && this.radioSpeakerEl && this.radioSpeakerEl.textContent !== k0.radioSpeaker) {
+      this.radioSpeakerEl.textContent = k0.radioSpeaker;
+    }
+    if (k0.radioText && this.radioTextEl && this.radioTextEl.textContent !== k0.radioText) {
+      this.radioTextEl.textContent = k0.radioText;
     }
 
     const duration = Math.max(0.001, k1.timeSec - k0.timeSec);
@@ -150,7 +223,7 @@ export class InfiltrationDirector {
 
   public skip() {
     if (!this.isPlaying) return;
-    this.finish(new THREE.Vector3(-6.5, 1.72, 16));
+    this.finish(new THREE.Vector3(-6.5, 1.72, 24.0));
   }
 
   private finish(spawnPos: THREE.Vector3) {
@@ -165,10 +238,15 @@ export class InfiltrationDirector {
 
     const cb = this.onCompleteCallback;
     this.onCompleteCallback = null;
+    this.onFrameCallback = null;
     cb?.();
   }
 
   public get active(): boolean {
     return this.isPlaying;
+  }
+
+  public get currentElapsed(): number {
+    return this.elapsedSec;
   }
 }

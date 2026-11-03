@@ -79,4 +79,23 @@ describe('7-Step Preload Warmup Pipeline & Frame Time Gate', () => {
     const result = await timeoutPromise;
     expect(result).toBe('timeout');
   });
+
+  it('verifies safe infiltration staging distance between player spawn and enemy patrols (>= 20m)', () => {
+    const playerSpawn = [-6.5, 0.0, 24.0];
+    const enemySpawns = [
+      [-6.5, 0.0, 2.0], // Alpha
+      [-5.2, 0.0, -9.5], // Bravo
+      [3.2, 0.0, -2.0], // Charlie
+      [6.2, 5.34, -5.0], // Delta
+      [14.5, 0.0, 6.0], // Echo
+      [16.5, 0.0, -6.5], // Foxtrot
+      [0.5, 0.0, -19.5], // Golf
+      [-26.5, 6.6, -12.0], // Commander
+    ];
+
+    for (const esp of enemySpawns) {
+      const dist = Math.hypot(playerSpawn[0] - esp[0], playerSpawn[2] - esp[2]);
+      expect(dist).toBeGreaterThanOrEqual(20.0);
+    }
+  });
 });
