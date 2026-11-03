@@ -112,33 +112,112 @@ body, html {
 }
 
 .compass-heading {
-  color: #facc15;
-  font-size: 14px;
-  font-weight: 800;
-  padding: 1px 8px;
-  border-top: 2px solid #facc15;
+  color: #0f172a;
+  background: #facc15;
+  font-size: 13px;
+  font-weight: 900;
+  padding: 1px 7px;
+  border-radius: 2px;
 }
 
 .objective-banner {
   margin-top: 6px;
   display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 14px;
-  background: rgba(12, 18, 28, 0.82);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 6px 12px;
+  background: rgba(12, 18, 28, 0.84);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-left: 3px solid #facc15;
-  font-size: 12.5px;
+  font-size: 12px;
   color: #f8fafc;
+  text-align: left;
+}
+
+.obj-stage-header {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.obj-stage-title {
+  color: #facc15;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.6px;
+}
+
+.mode-pill-btn {
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid rgba(250, 204, 21, 0.55);
+  color: #fef08a;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.obj-body-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.35;
 }
 
 .obj-diamond {
   color: #facc15;
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .obj-dist {
-  color: #facc15;
+  color: #cbd5e1;
   font-weight: 700;
+}
+
+/* 3D Projected World-Space Floating Objective Diamond (◇ 40 m) */
+.world-obj-marker {
+  position: absolute;
+  top: 48%;
+  left: 53%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.world-obj-diamond {
+  width: 22px;
+  height: 22px;
+  border: 2.2px solid #facc15;
+  background: rgba(15, 20, 28, 0.55);
+  transform: rotate(45deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 10px rgba(250, 204, 21, 0.55);
+}
+
+.world-obj-dot {
+  width: 5px;
+  height: 5px;
+  background: #facc15;
+  border-radius: 50%;
+}
+
+.world-obj-dist {
+  font-size: 11.5px;
+  font-weight: 900;
+  color: #facc15;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95);
+  letter-spacing: 0.4px;
 }
 
 /* Top-Right Killfeed & Perf */
@@ -380,13 +459,37 @@ body, html {
 }
 
 .ammo-card {
+  position: relative;
   width: 285px;
   background: rgba(10, 14, 20, 0.9);
   border: 1px solid rgba(255, 255, 255, 0.18);
-  padding: 10px 14px;
+  padding: 10px 14px 14px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  overflow: hidden;
+}
+
+.ammo-card-hazard-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 5px;
+  background: repeating-linear-gradient(
+    -45deg,
+    #eab308,
+    #eab308 6px,
+    #0f172a 6px,
+    #0f172a 12px
+  );
+}
+
+.slot-grenade-tab {
+  border-color: rgba(250, 204, 21, 0.45);
+}
+.slot-grenade-tab .slot-name {
+  color: #facc15;
 }
 
 .weapon-silhouette {
@@ -923,7 +1026,7 @@ body, html {
   padding: 4px 9px;
 }
 
-/* Mobile Touch & Gyroscope Controls Overlay */
+/* Mobile Touch & Gyroscope Controls Overlay (Ultra-Clean Circular SVG Icons) */
 .mobile-touch-controls {
   display: none;
   position: absolute;
@@ -943,330 +1046,431 @@ body, html {
 
 .touch-look-hint {
   position: absolute;
-  top: 22%;
-  right: 18px;
-  background: rgba(10, 16, 26, 0.65);
-  border: 1px dashed rgba(250, 204, 21, 0.45);
+  top: 31%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(10, 16, 26, 0.55);
+  border: 1px solid rgba(250, 204, 21, 0.35);
   color: rgba(254, 240, 138, 0.85);
-  padding: 4px 10px;
+  padding: 3px 10px;
   border-radius: 12px;
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 700;
   pointer-events: none;
   transition: opacity 0.4s ease;
+  white-space: nowrap;
 }
 
+/* Subtle Translucent Floating Joystick on Bottom-Left */
 .touch-joystick-zone {
   position: absolute;
-  bottom: 128px;
-  left: 24px;
-  width: 114px;
-  height: 114px;
+  bottom: 42px;
+  left: 20px;
+  width: 108px;
+  height: 108px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(15, 23, 42, 0.52) 0%, rgba(15, 23, 42, 0.25) 100%);
-  border: 2px solid rgba(255, 255, 255, 0.28);
+  background: radial-gradient(circle, rgba(15, 23, 42, 0.28) 0%, rgba(15, 23, 42, 0.08) 100%);
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
   pointer-events: auto;
   touch-action: none;
-}
-
-.joy-sprint-tag {
-  position: absolute;
-  top: -18px;
-  left: 50%;
-  transform: translateX(-50%);
-  white-space: nowrap;
-  font-size: 9.5px;
-  font-weight: 800;
-  color: rgba(250, 204, 21, 0.82);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
-  pointer-events: none;
 }
 
 .touch-joystick-knob {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 44px;
-  height: 44px;
-  margin-left: -22px;
-  margin-top: -22px;
+  width: 38px;
+  height: 38px;
+  margin-left: -19px;
+  margin-top: -19px;
   border-radius: 50%;
-  background: rgba(250, 204, 21, 0.82);
-  border: 2px solid #fef08a;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+  background: rgba(255, 255, 255, 0.35);
+  border: 1.5px solid rgba(255, 255, 255, 0.65);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
 }
 
-.touch-action-cluster {
-  position: absolute;
-  bottom: 126px;
-  right: 18px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-  pointer-events: auto;
-  touch-action: none;
-}
-
-.touch-sub-row,
-.touch-main-row {
+/* Base Circular Translucent Icon Button (Matches Reference Screenshot!) */
+.touch-circle-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(14, 19, 27, 0.48);
+  border: 1.6px solid rgba(255, 255, 255, 0.45);
+  color: #f8fafc;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: none;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+  transition: transform 0.08s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.touch-circle-btn:active {
+  transform: scale(0.93);
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.touch-circle-btn.active {
+  background: rgba(20, 83, 45, 0.78);
+  border-color: #4ade80;
+  color: #dcfce7;
+  box-shadow: 0 0 12px rgba(74, 222, 128, 0.45);
+}
+
+/* Left-Hand Secondary Circular Fire Button (Mid-Left, Red Border) */
+.touch-fire-left {
+  position: absolute;
+  top: 53%;
+  left: 26px;
+  width: 64px;
+  height: 64px;
+  transform: translateY(-50%);
+  background: rgba(20, 14, 16, 0.52);
+  border: 2px solid rgba(239, 68, 68, 0.78);
+  box-shadow: 0 0 14px rgba(220, 38, 38, 0.32);
+}
+
+/* Mid-Right Vertical Utility Icon Stack (NVG, TPS, Gyroscope, More Drawer) */
+.touch-mid-right-stack {
+  position: absolute;
+  top: 37%;
+  right: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: auto;
+}
+
+.touch-util-circle {
+  width: 44px;
+  height: 44px;
+}
+
+/* Bottom-Right Ergonomic Circular Action Arc (Zero Text Clutter!) */
+.touch-arc-cluster {
+  position: absolute;
+  bottom: 14px;
+  right: 12px;
+  width: 224px;
+  height: 236px;
+  pointer-events: none;
+}
+
+/* Main Right-Hand Fire Circle (Large Red-Bordered Circle) */
+.arc-btn-fire {
+  position: absolute;
+  bottom: 34px;
+  right: 18px;
+  width: 82px;
+  height: 82px;
+  background: rgba(28, 14, 16, 0.56);
+  border: 2.2px solid rgba(239, 68, 68, 0.85);
+  box-shadow: 0 0 16px rgba(220, 38, 38, 0.38);
+}
+
+/* Scope / ADS Target Circle (Left-Above Main Fire) */
+.arc-btn-ads {
+  position: absolute;
+  bottom: 92px;
+  right: 112px;
+  width: 58px;
+  height: 58px;
+}
+.arc-btn-ads.active {
+  background: rgba(14, 116, 144, 0.82);
+  border-color: #38bdf8;
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.55);
+}
+
+/* Reload Circle (Bottom-Left of Main Fire) */
+.arc-btn-reload {
+  position: absolute;
+  bottom: 16px;
+  right: 108px;
+  width: 52px;
+  height: 52px;
+}
+
+/* Crouch Circle (Bottom-Right Corner) */
+.arc-btn-crouch {
+  position: absolute;
+  bottom: 2px;
+  right: 6px;
+  width: 48px;
+  height: 48px;
+}
+
+/* Jump Circle (Above Main Fire on Right Edge) */
+.arc-btn-jump {
+  position: absolute;
+  bottom: 128px;
+  right: 8px;
+  width: 52px;
+  height: 52px;
+}
+
+/* Weapon Swap Circle (Top-Center of Arc) */
+.arc-btn-swap {
+  position: absolute;
+  bottom: 166px;
+  right: 68px;
+  width: 52px;
+  height: 52px;
+}
+
+/* Grenade Circle (Top-Left of Arc) */
+.arc-btn-grenade {
+  position: absolute;
+  bottom: 164px;
+  right: 138px;
+  width: 50px;
+  height: 50px;
 }
 
 .touch-btn {
-  background: rgba(15, 23, 42, 0.78);
-  border: 1.5px solid rgba(255, 255, 255, 0.32);
+  background: rgba(15, 23, 42, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.28);
   color: #f8fafc;
-  border-radius: 20px;
-  padding: 8px 13px;
-  font-size: 12px;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
   font-weight: 800;
   cursor: pointer;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
   touch-action: none;
 }
 
-.touch-btn-drawer {
-  background: rgba(30, 41, 59, 0.88);
-  border-color: #eab308;
-  color: #fef08a;
+.touch-btn-sm {
+  padding: 6px 8px;
+  font-size: 10.5px;
 }
 
-.touch-btn-drawer.active {
+.touch-mode-btn.active {
   background: rgba(234, 179, 8, 0.92);
+  border-color: #fef08a;
   color: #0f172a;
 }
 
-.touch-btn-stim-quick {
-  border-color: rgba(74, 222, 128, 0.65);
-  color: #86efac;
-}
-
-.touch-btn-sm {
-  padding: 7px 10px;
-  font-size: 11px;
-  border-radius: 8px;
-}
-
-.touch-btn-ads {
-  border-color: #38bdf8;
-  background: rgba(12, 74, 110, 0.78);
-  color: #bae6fd;
-  padding: 12px 16px;
-  font-size: 13px;
-  border-radius: 26px;
-}
-
-.touch-btn-ads.active {
-  background: rgba(2, 132, 199, 0.92);
-  color: #ffffff;
-  box-shadow: 0 0 12px rgba(56, 189, 248, 0.5);
-}
-
-.touch-btn-fire {
-  background: rgba(185, 28, 28, 0.85);
-  border: 2px solid #f87171;
-  color: #fef2f2;
-  padding: 15px 22px;
-  font-size: 14px;
-  border-radius: 30px;
-  box-shadow: 0 0 14px rgba(220, 38, 38, 0.45);
-}
-
-/* Collapsible Secondary Tactical Gadget Drawer */
+/* Collapsible Secondary Tactical Gadget & Mode Drawer */
 .touch-tactical-drawer {
   position: absolute;
-  bottom: 242px;
-  right: 18px;
-  width: 248px;
-  background: rgba(9, 14, 23, 0.94);
+  top: 36%;
+  right: 66px;
+  width: 244px;
+  background: rgba(9, 14, 23, 0.95);
   border: 1.5px solid rgba(250, 204, 21, 0.55);
-  border-radius: 12px;
+  border-radius: 10px;
   padding: 10px;
   pointer-events: auto;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.78);
-  z-index: 15;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.82);
+  z-index: 18;
 }
 
 .drawer-title {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 800;
   color: #facc15;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   text-align: center;
   border-bottom: 1px solid rgba(255, 255, 255, 0.14);
-  padding-bottom: 4px;
+  padding-bottom: 3px;
+}
+
+.drawer-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 5px;
 }
 
 .drawer-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
+  gap: 5px;
 }
 
 /* -------------------------------------------------------------------------
-   Responsive Layout Adaptation: Mobile Portrait, Mobile Landscape & Tablet
+   Responsive Layout Adaptation: Top-Half Docked Mobile HUD (Matches Reference!)
    ------------------------------------------------------------------------- */
 @media (max-width: 920px), (pointer: coarse) {
-  /* Hide long desktop keyboard shortcut hints on mobile & tablet! */
-  .controls-hint {
-    display: none !important;
-  }
-  .tactical-gadget-row {
+  .controls-hint,
+  .tactical-gadget-row,
+  .stance-indicator,
+  .weapon-silhouette,
+  .ammo-ticks {
     display: none !important;
   }
 }
 
-@media (max-width: 680px) {
-  /* Compact Top-Left Minimap (92x92) so it never collides with center compass/gyro */
+@media (max-width: 768px) {
+  /* 1. Top-Left Stack: Minimap (104x104) -> Objective Box -> HP & Armor Card */
   .hud-minimap-card {
     top: 10px;
     left: 10px;
-    width: 96px;
+    width: 104px;
+    border-radius: 2px;
   }
   #minimap-canvas {
-    width: 96px;
-    height: 96px;
+    width: 104px;
+    height: 104px;
   }
   .minimap-footer {
-    padding: 2px 5px;
-    font-size: 9px;
+    padding: 0;
+    height: 6px;
   }
-  .hazard-stripe-mini {
-    width: 24px;
-    height: 5px;
-  }
-
-  /* Compact Top-Center Compass, Objective & Prominent Gyro Bar */
-  .hud-compass-wrap {
-    top: 8px;
-    left: 114px;
-    right: 8px;
-    transform: none;
-    text-align: left;
-  }
-  .compass-strip {
+  #minimap-grid-label {
     display: none;
   }
-  .objective-banner {
-    margin-top: 0;
-    padding: 3px 8px;
-    font-size: 10.5px;
+  .hazard-stripe-mini {
     width: 100%;
-    justify-content: space-between;
+    height: 6px;
   }
-  .top-tactical-bar {
-    margin-top: 5px;
-    justify-content: flex-start;
-    gap: 4px;
+
+  /* Objective Box docked directly below Minimap on Top-Left! */
+  .hud-compass-wrap {
+    position: absolute;
+    top: 10px;
+    left: 0;
+    right: 0;
+    transform: none;
+    pointer-events: none;
   }
-  .gyro-btn {
-    padding: 4px 8px;
+  .compass-strip {
+    position: absolute;
+    top: 0;
+    right: 10px;
+    padding: 2px 8px;
+    gap: 8px;
     font-size: 10.5px;
+    background: rgba(10, 15, 24, 0.65);
+    border-radius: 2px;
   }
-
-  /* Move Killfeed below minimap & hide verbose perf-badge unless inspected */
-  .hud-top-right {
-    top: 124px;
+  .objective-banner {
+    position: absolute;
+    top: 112px;
     left: 10px;
-    right: auto;
-    align-items: flex-start;
+    width: 186px;
+    margin-top: 0;
+    padding: 5px 8px;
+    font-size: 10.5px;
+    background: rgba(12, 16, 22, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-left: 2.5px solid #facc15;
   }
-  .perf-badge {
-    font-size: 9.5px;
-    padding: 2px 6px;
-  }
-  .killfeed-item {
+  .obj-stage-title {
     font-size: 10px;
-    padding: 2px 7px;
-    gap: 5px;
   }
-  .nvg-hud-tag {
-    top: 98px;
-    font-size: 9.5px;
+  .mode-pill-btn {
+    font-size: 9px;
+    padding: 1px 4px;
+  }
+  .obj-diamond {
+    display: none;
+  }
+  /* Hide top pill bar on portrait mobile because Gyro/NVG/TPS are clean circular icons on right edge! */
+  .top-tactical-bar {
+    display: none !important;
   }
 
-  /* Compact Bottom Status (Left) & Weapon/Ammo Bar (Right) with Zero Overlap! */
+  /* HP & Armor Card docked directly below Objective Box on Top-Left! */
   .hud-status-card {
-    bottom: 10px;
+    top: 192px;
+    bottom: auto;
     left: 10px;
-    width: 152px;
-    padding: 6px 8px;
+    width: 172px;
+    padding: 6px 9px;
+    background: rgba(12, 16, 22, 0.76);
+    border: 1px solid rgba(255, 255, 255, 0.14);
   }
   .status-row {
     margin-bottom: 3px;
-    gap: 5px;
+    gap: 6px;
+  }
+  .status-row:last-of-type {
+    margin-bottom: 0;
   }
   .status-num {
-    width: 28px;
-    font-size: 14px;
+    width: 30px;
+    font-size: 15px;
   }
   .armor-num {
-    font-size: 13px;
+    font-size: 15px;
+    color: #e2e8f0;
   }
   .status-unit {
-    display: none;
-  }
-  .stance-indicator {
-    display: none;
+    font-size: 9px;
+    width: 34px;
   }
 
+  /* 2. Top-Right Stack: Weapon Slots + Active Ammo Card docked below Compass! */
   .hud-weapon-wrap {
-    bottom: 10px;
+    top: 40px;
+    bottom: auto;
     right: 10px;
-    gap: 4px;
+    gap: 5px;
   }
   .weapon-slots {
     gap: 3px;
   }
   .weapon-slot {
     padding: 3px 5px;
-    font-size: 9.5px;
-    gap: 3px;
+    font-size: 9px;
+    gap: 2px;
+    background: rgba(14, 18, 26, 0.78);
+  }
+  /* Show 3 primary slots + G x3 on narrow portrait screens so it fits cleanly on the right */
+  #slot-4,
+  #slot-5 {
+    display: none;
   }
   .ammo-card {
-    width: 196px;
-    padding: 6px 9px;
-  }
-  .weapon-silhouette {
-    font-size: 15px;
+    width: 176px;
+    padding: 6px 10px 11px;
+    background: rgba(14, 18, 26, 0.82);
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
   }
   .weapon-title {
-    font-size: 9.5px;
-    margin: 1px 0;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #cbd5e1;
+    margin: 0;
+  }
+  .ammo-count-col {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
   }
   .ammo-mag {
     font-size: 22px;
   }
-  .ammo-sep, .ammo-reserve {
-    font-size: 12px;
+  .ammo-sep,
+  .ammo-reserve {
+    font-size: 15px;
   }
-  .ammo-ticks {
-    display: none;
+  .fire-mode-badge {
+    border: none;
+    color: #cbd5e1;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 0;
   }
 
-  /* Position Joystick & Ergonomic Action Cluster clearly above the 76px bottom bar! */
-  .touch-joystick-zone {
-    bottom: 94px;
-    left: 16px;
-    width: 104px;
-    height: 104px;
+  /* Hide verbose perf badge on mobile portrait; keep killfeed compact below status card */
+  .perf-badge {
+    display: none !important;
   }
-  .touch-action-cluster {
-    bottom: 94px;
-    right: 12px;
+  .hud-top-right {
+    top: 256px;
+    left: 10px;
+    right: auto;
+    align-items: flex-start;
   }
-  .touch-tactical-drawer {
-    bottom: 204px;
-    right: 12px;
-    width: 236px;
-  }
-  .touch-look-hint {
-    top: 155px;
-    right: 10px;
+  .killfeed-item {
     font-size: 9.5px;
+    padding: 2px 6px;
+    gap: 4px;
   }
 }
 
@@ -1309,5 +1513,486 @@ body, html {
   background: linear-gradient(90deg, #0284c7, #38bdf8, #4ade80);
   transition: width 0.08s linear;
 }
+
+/* =========================================================================
+   1. Preload Warmup Screen (Ultra-Fine Golden Loading Line & Stage Feedback)
+   ========================================================================= */
+.screen-preload-overlay {
+  position: fixed;
+  inset: 0;
+  background: #060910;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding-bottom: 72px;
+  transition: opacity 0.45s ease;
+}
+
+.preload-bg-silhouette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 38%, rgba(26, 42, 66, 0.4) 0%, rgba(6, 9, 16, 0.95) 75%),
+              linear-gradient(180deg, transparent 40%, rgba(6, 9, 16, 0.9) 100%);
+  background-size: cover;
+  pointer-events: none;
+}
+
+.preload-line-track {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2.5px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.preload-line-fill {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #ca8a04, #facc15, #fef08a);
+  box-shadow: 0 0 12px #facc15;
+  transition: width 0.16s ease-out;
+}
+
+.preload-content-center {
+  position: relative;
+  z-index: 2;
+  margin: 0 auto;
+  width: 90%;
+  max-width: 580px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.preload-badge-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #94a3b8;
+  font-family: Consolas, monospace;
+}
+
+.preload-stage-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  padding-bottom: 6px;
+}
+
+.preload-stage-label {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #f8fafc;
+  letter-spacing: 0.5px;
+}
+
+.preload-stage-pct {
+  font-size: 18px;
+  font-weight: 900;
+  color: #facc15;
+  font-family: Consolas, monospace;
+}
+
+.preload-stage-hint {
+  font-size: 11.5px;
+  color: #cbd5e1;
+  line-height: 1.45;
+  min-height: 34px;
+}
+
+/* =========================================================================
+   2. Title Screen Overlay (Midnight Rain Hero & Deploy Flash)
+   ========================================================================= */
+.screen-title-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 7, 14, 0.72);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.title-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, transparent 35%, rgba(3, 6, 12, 0.88) 100%);
+  pointer-events: none;
+}
+
+.title-hero-block {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  max-width: 640px;
+  padding: 24px;
+}
+
+.title-sub-code {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  color: #facc15;
+  margin-bottom: 6px;
+}
+
+.title-main-h1 {
+  font-size: 48px;
+  font-weight: 900;
+  letter-spacing: 4px;
+  color: #f8fafc;
+  line-height: 1.1;
+  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
+}
+
+.title-hazard-bar {
+  margin: 14px auto 16px;
+  width: 140px;
+  height: 6px;
+  background: repeating-linear-gradient(
+    -45deg,
+    #eab308,
+    #eab308 6px,
+    #0f172a 6px,
+    #0f172a 12px
+  );
+}
+
+.title-desc-p {
+  font-size: 13px;
+  color: #cbd5e1;
+  letter-spacing: 1.5px;
+  margin-bottom: 32px;
+}
+
+.btn-deploy-start {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: #eab308;
+  color: #0f172a;
+  border: none;
+  padding: 14px 44px;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  cursor: pointer;
+  box-shadow: 0 0 24px rgba(234, 179, 8, 0.45);
+  transition: transform 0.12s ease, background 0.15s ease;
+}
+
+.btn-deploy-start:hover {
+  background: #facc15;
+  transform: scale(1.03);
+}
+
+.title-deploy-hint {
+  margin-top: 14px;
+  font-size: 10.5px;
+  color: #94a3b8;
+  letter-spacing: 1px;
+}
+
+.full-white-flash {
+  position: fixed;
+  inset: 0;
+  background: #ffffff;
+  z-index: 999;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s ease-out;
+}
+
+/* =========================================================================
+   3. Tactical Pause Menu & Records Overlay
+   ========================================================================= */
+.screen-pause-overlay,
+.screen-records-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 10, 18, 0.85);
+  backdrop-filter: blur(8px);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pause-card,
+.records-card {
+  width: 90%;
+  max-width: 440px;
+  background: rgba(12, 16, 24, 0.94);
+  border: 1.5px solid rgba(250, 204, 21, 0.45);
+  padding: 24px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.85);
+}
+
+.pause-header,
+.records-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  padding-bottom: 12px;
+  margin-bottom: 18px;
+}
+
+.pause-title,
+.records-h2 {
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 1.2px;
+  color: #facc15;
+}
+
+.pause-code {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.pause-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.btn-pause-act {
+  background: rgba(20, 28, 42, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #f8fafc;
+  padding: 12px 18px;
+  font-size: 13.5px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.btn-pause-act:hover {
+  background: rgba(30, 42, 64, 0.95);
+  border-color: #facc15;
+  color: #fef08a;
+}
+
+.btn-pause-primary {
+  background: rgba(234, 179, 8, 0.9);
+  color: #0f172a;
+  border-color: #fef08a;
+}
+
+.btn-pause-primary:hover {
+  background: #facc15;
+  color: #0f172a;
+}
+
+.btn-pause-danger:hover {
+  border-color: #ef4444;
+  color: #fca5a5;
+}
+
+.pause-footer-tip {
+  margin-top: 14px;
+  font-size: 11px;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.records-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.rec-stat-box {
+  background: rgba(18, 24, 36, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rec-label {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.rec-val {
+  font-size: 20px;
+  font-weight: 900;
+  color: #facc15;
+  font-family: Consolas, monospace;
+}
+
+.btn-records-x {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+/* =========================================================================
+   4. Squad HUD Widget & Command Wheel Modal (0.3x Bullet Time)
+   ========================================================================= */
+.squad-hud-widget {
+  position: absolute;
+  top: 278px;
+  left: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  pointer-events: none;
+}
+
+.squad-title-tag {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #38bdf8;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+.squad-mate-card {
+  width: 136px;
+  background: rgba(10, 16, 26, 0.72);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  padding: 4px 7px;
+  border-radius: 2px;
+}
+
+.squad-mate-card.sm-downed {
+  border-color: #ef4444;
+  animation: pulse-downed 0.6s infinite alternate;
+}
+
+@keyframes pulse-downed {
+  0% { background: rgba(185, 28, 28, 0.6); }
+  100% { background: rgba(220, 38, 38, 0.95); }
+}
+
+.sm-info-col {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 9px;
+  font-weight: 800;
+  margin-bottom: 2px;
+}
+
+.sm-callsign {
+  color: #e0f2fe;
+}
+
+.sm-order-tag {
+  color: #38bdf8;
+  font-size: 8px;
+}
+
+.sm-bar-bg {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.sm-bar-fill {
+  height: 100%;
+  background: #38bdf8;
+  transition: width 0.15s ease;
+}
+
+.squad-radio-sub {
+  position: absolute;
+  bottom: -32px;
+  left: 0;
+  white-space: nowrap;
+  background: rgba(6, 12, 20, 0.88);
+  border-left: 2px solid #38bdf8;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #bae6fd;
+}
+
+.command-wheel-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 8, 14, 0.62);
+  backdrop-filter: blur(3px);
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.command-wheel-center {
+  position: absolute;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.92);
+  border: 2px solid #38bdf8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.45);
+}
+
+.cw-center-icon {
+  font-size: 24px;
+  color: #38bdf8;
+}
+
+.cw-center-label {
+  font-size: 9px;
+  font-weight: 900;
+  color: #e0f2fe;
+  letter-spacing: 0.6px;
+}
+
+.command-wheel-ring {
+  position: relative;
+  width: 320px;
+  height: 320px;
+}
+
+.cw-slice {
+  position: absolute;
+  background: rgba(15, 23, 42, 0.88);
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  color: #f8fafc;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 800;
+  border-radius: 20px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.12s ease;
+}
+
+.cw-slice:hover {
+  background: rgba(14, 116, 144, 0.95);
+  border-color: #38bdf8;
+  color: #ffffff;
+  transform: scale(1.08);
+}
+
+.cw-top { top: 10px; left: 50%; transform: translateX(-50%); }
+.cw-top-right { top: 70px; right: 8px; }
+.cw-bottom-right { bottom: 70px; right: 8px; }
+.cw-bottom { bottom: 10px; left: 50%; transform: translateX(-50%); }
+.cw-top-left { top: 70px; left: 8px; }
+
 
 

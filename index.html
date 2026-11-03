@@ -2,8 +2,8 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>THE PORT FORTRESS — Night Port Military Operation (FireGun FPS v0.1.0)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>THE PORT FORTRESS — Night Port Military Operation (FireGun FPS v1.1.0)</title>
   <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
@@ -33,6 +33,12 @@
 
     <!-- Main Tactical HUD -->
     <div id="hud">
+      <!-- 3D Projected World-Space Floating Objective Diamond Marker (◇ 40 m) -->
+      <div id="world-obj-marker" class="world-obj-marker">
+        <div class="world-obj-diamond"><span class="world-obj-dot"></span></div>
+        <div id="world-obj-dist" class="world-obj-dist">40 m</div>
+      </div>
+
       <!-- Top-Left Minimap -->
       <div class="hud-minimap-card">
         <canvas id="minimap-canvas" width="168" height="168"></canvas>
@@ -42,21 +48,29 @@
         </div>
       </div>
 
-      <!-- Top-Center Compass, Objective & Prominent Gyroscope / Auto-Fire Tactical Pills -->
+      <!-- Multi-Stage Objective & Game Mode Card (Docked below Minimap on Mobile/Tablet, Top-Center on Desktop) -->
       <div class="hud-compass-wrap">
         <div id="compass-strip" class="compass-strip">
-          <span>NW 300</span><span>330</span><span class="compass-main">N 000</span><span>030</span><span>NE 060</span><span id="compass-heading" class="compass-heading">070</span><span>E 090</span><span>120</span><span>SE 150</span>
+          <span>210</span><span class="compass-main">SW</span><span>240</span><span>|</span><span class="compass-main">W</span><span id="compass-heading" class="compass-heading">352</span><span>|</span><span>300</span><span class="compass-main">NW</span><span>330</span><span class="compass-main">N</span>
         </div>
+
         <div id="objective-banner" class="objective-banner">
-          <span class="obj-diamond">◆</span>
-          <span id="objective-text">目標：肅清碼頭武裝守軍並奪還港務主控終端 (0 / 8)</span>
-          <span id="objective-dist" class="obj-dist">42m</span>
+          <div class="obj-stage-header">
+            <span id="objective-stage" class="obj-stage-title">2/3 · OBJECTIVE</span>
+            <button id="btn-mode-cycle" class="mode-pill-btn" title="點擊切換夜港作戰模式 (戰術突襲 / 波次生存 / 高空狙擊 / 極速計時)">模式: 戰術突襲 ▾</button>
+          </div>
+          <div class="obj-body-row">
+            <span class="obj-diamond">◆</span>
+            <span id="objective-text">於油料桶區安裝 C4 爆破電荷 — 靠近按 [E] 安裝</span>
+            <span id="objective-dist" class="obj-dist">(40 m)</span>
+          </div>
         </div>
+
         <div id="top-tactical-bar" class="top-tactical-bar">
           <button id="btn-gyro-toggle" class="gyro-btn gyro-pill-main" title="點擊開啟/關閉手機陀螺儀體感瞄準 (Key: Y)">🧭 陀螺儀瞄準: 點擊開啟</button>
           <button id="btn-gyro-cal" class="gyro-btn gyro-sub-btn" title="將目前手機握持角度設為準星中心">🔄校準</button>
           <button id="btn-gyro-sens" class="gyro-btn gyro-sub-btn" title="切換陀螺儀靈敏度倍率">1.0x</button>
-          <button id="btn-autofire-toggle" class="gyro-btn autofire-btn" title="準星對準敵人時自動扣扳機開火">🤖 自動開火: OFF</button>
+          <button id="btn-autofire-toggle" class="gyro-btn autofire-btn" title="準星對準敵人時自動扣扳機開火">🤖 自動開火: ON</button>
           <button id="btn-hud-minimal" class="gyro-btn gyro-sub-btn" title="切換精簡/完整戰術介面 (Key: H)">👁️ 精簡</button>
         </div>
       </div>
@@ -93,7 +107,7 @@
         <div id="kill-banner-text" class="kill-banner-text">ELIMINATED +100</div>
       </div>
 
-      <!-- Bottom-Left Health & Armor -->
+      <!-- Health & Armor Card (Docked under Objective on Mobile Portrait, Bottom-Left on Desktop) -->
       <div class="hud-status-card">
         <div class="status-row">
           <span class="status-icon hp-plus">+</span>
@@ -102,7 +116,7 @@
           <span class="status-unit">HP</span>
         </div>
         <div class="status-row">
-          <span class="status-icon armor-shield">🛡</span>
+          <span class="status-icon armor-shield">◈</span>
           <span id="armor-val" class="status-num armor-num">150</span>
           <div class="status-bar-bg armor-segments">
             <div id="armor-bar" class="status-bar-fill armor-fill" style="width:100%"></div>
@@ -115,7 +129,7 @@
         </div>
       </div>
 
-      <!-- Bottom-Right Weapon Slots & Ammo -->
+      <!-- Weapon Slots & Ammo Card (Docked Top-Right under Compass on Mobile Portrait, Bottom-Right on Desktop) -->
       <div class="hud-weapon-wrap">
         <div class="weapon-slots">
           <div id="slot-1" class="weapon-slot active"><span class="slot-key">1</span><span class="slot-name">AR-7</span></div>
@@ -123,11 +137,12 @@
           <div id="slot-3" class="weapon-slot"><span class="slot-key">3</span><span class="slot-name">SG-12</span></div>
           <div id="slot-4" class="weapon-slot"><span class="slot-key">4</span><span class="slot-name">SR-9</span></div>
           <div id="slot-5" class="weapon-slot"><span class="slot-key">5</span><span class="slot-name">RL-7</span></div>
+          <div id="slot-g" class="weapon-slot slot-grenade-tab" title="[G] 投擲破片手榴彈"><span class="slot-key">G</span><span id="slot-g-count" class="slot-name">×3</span></div>
         </div>
         <div class="ammo-card">
           <div class="weapon-silhouette-col">
             <div id="weapon-icon-svg" class="weapon-silhouette">︻╦╤─</div>
-            <div id="weapon-title" class="weapon-title">AR-7 カービン</div>
+            <div id="weapon-title" class="weapon-title">SG-12 Pump Shotgun</div>
             <div class="tactical-gadget-row">
               <span class="hazard-stripe-mini"></span>
               <span id="grenade-badge" class="grenade-badge" title="[G] 投擲 M67 破片手榴彈">💣 [G] x3</span>
@@ -138,56 +153,153 @@
           </div>
           <div class="ammo-count-col">
             <div class="ammo-numbers">
-              <span id="ammo-mag" class="ammo-mag">36</span>
+              <span id="ammo-mag" class="ammo-mag">06</span>
               <span class="ammo-sep">/</span>
-              <span id="ammo-reserve" class="ammo-reserve">120</span>
+              <span id="ammo-reserve" class="ammo-reserve">35</span>
             </div>
             <div class="fire-mode-row">
-              <span id="fire-mode-badge" class="fire-mode-badge" title="[B] 切換射擊模式 (AUTO/BURST/SEMI)">AUTO</span>
+              <span id="fire-mode-badge" class="fire-mode-badge" title="[B] 切換射擊模式 (AUTO/BURST/SEMI)">PUMP</span>
               <div id="ammo-ticks" class="ammo-ticks">||||||||||||||||||||</div>
             </div>
           </div>
+          <div class="ammo-card-hazard-bottom"></div>
         </div>
       </div>
 
-      <!-- Mobile / Tablet Ergonomic Touch Controls & Collapsible Tactical Drawer -->
+      <!-- Ultra-Clean Icon-Only Circular Mobile / Tablet Touch HUD (Matches Reference Image!) -->
       <div id="mobile-touch-controls" class="mobile-touch-controls">
-        <div id="touch-look-hint" class="touch-look-hint">👆 滑動畫面移動準星 // 雙擊快速開鏡</div>
+        <div id="touch-look-hint" class="touch-look-hint">👆 滑動移動準星 · 雙擊開鏡</div>
+
+        <!-- Left-Hand Subtle Floating Move Zone + Left-Thumb Circular Fire Trigger -->
         <div id="touch-joystick-zone" class="touch-joystick-zone">
-          <div class="joy-sprint-tag">▲ 推到底衝刺</div>
           <div id="touch-joystick-knob" class="touch-joystick-knob"></div>
         </div>
+        <button id="touch-btn-left-fire" class="touch-circle-btn touch-fire-left" aria-label="Left Fire">
+          <svg viewBox="0 0 36 36" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.6">
+            <circle cx="18" cy="18" r="8"/>
+            <line x1="18" y1="3" x2="18" y2="10"/>
+            <line x1="18" y1="26" x2="18" y2="33"/>
+            <line x1="3" y1="18" x2="10" y2="18"/>
+            <line x1="26" y1="18" x2="33" y2="18"/>
+          </svg>
+        </button>
 
-        <!-- Collapsible Secondary Tactical Gadget Drawer (Hidden by default to keep screen clean!) -->
+        <!-- Mid-Right Edge Vertical Utility Stack (NVG/Goggles, Operator/TPS, Gyroscope, More Drawer) -->
+        <div class="touch-mid-right-stack">
+          <button id="touch-btn-nvg-quick" class="touch-circle-btn touch-util-circle" title="戰術夜視儀 / 手電筒" aria-label="Night Vision">
+            <svg viewBox="0 0 36 36" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.3">
+              <circle cx="12" cy="20" r="5"/>
+              <circle cx="24" cy="20" r="5"/>
+              <path d="M7 20 L10 11 L26 11 L29 20"/>
+              <line x1="17" y1="19" x2="19" y2="19"/>
+            </svg>
+          </button>
+          <button id="touch-btn-tps-quick" class="touch-circle-btn touch-util-circle" title="切換第一/第三人稱視角" aria-label="Camera View">
+            <svg viewBox="0 0 36 36" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.3">
+              <circle cx="18" cy="12" r="4.5"/>
+              <path d="M9 28 C9 21 27 21 27 28"/>
+            </svg>
+          </button>
+          <button id="touch-btn-gyro-quick" class="touch-circle-btn touch-util-circle" title="開啟/關閉手機陀螺儀瞄準" aria-label="Gyroscope">
+            <svg viewBox="0 0 36 36" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2">
+              <circle cx="18" cy="18" r="11"/>
+              <ellipse cx="18" cy="18" rx="11" ry="4.5"/>
+              <circle cx="18" cy="18" r="2.2" fill="currentColor"/>
+            </svg>
+          </button>
+          <button id="touch-btn-drawer" class="touch-circle-btn touch-util-circle" title="更多戰術動作與遊戲模式" aria-label="Tactical Menu">
+            <svg viewBox="0 0 36 36" width="20" height="20" fill="currentColor">
+              <circle cx="10" cy="18" r="2.5"/>
+              <circle cx="18" cy="18" r="2.5"/>
+              <circle cx="26" cy="18" r="2.5"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Collapsible Secondary Tactical Gadget & Game Mode Drawer (Hidden by default) -->
         <div id="touch-tactical-drawer" class="touch-tactical-drawer hidden">
-          <div class="drawer-title">戰術裝備與動作選單</div>
+          <div class="drawer-title">夜港作戰模式切換 (GAME MODES)</div>
+          <div class="drawer-mode-grid">
+            <button data-mode="RAID" class="touch-btn touch-mode-btn active">⚔️ 戰術突襲 (3階)</button>
+            <button data-mode="SURVIVAL" class="touch-btn touch-mode-btn">🌊 波次防衛戰</button>
+            <button data-mode="SNIPER" class="touch-btn touch-mode-btn">🎯 高空狙擊獵殺</button>
+            <button data-mode="BLITZ" class="touch-btn touch-mode-btn">⏱️ 90秒極速肅清</button>
+          </div>
+          <div class="drawer-title" style="margin-top:8px">進階戰術裝備與動作</div>
           <div class="drawer-grid">
             <button id="touch-btn-nvg" class="touch-btn touch-btn-sm">🥽 夜視儀</button>
             <button id="touch-btn-light" class="touch-btn touch-btn-sm">🔦 手電筒</button>
-            <button id="touch-btn-grenade" class="touch-btn touch-btn-sm">💣 手榴彈</button>
+            <button id="touch-btn-stim" class="touch-btn touch-btn-sm">💉 強心針</button>
             <button id="touch-btn-lean-l" class="touch-btn touch-btn-sm">↖ 左探頭</button>
             <button id="touch-btn-lean-r" class="touch-btn touch-btn-sm">右探頭 ↗</button>
-            <button id="touch-btn-crouch" class="touch-btn touch-btn-sm">🧎 蹲下</button>
-            <button id="touch-btn-jump" class="touch-btn touch-btn-sm">⏫ 跳躍</button>
             <button id="touch-btn-melee" class="touch-btn touch-btn-sm">👊 近戰擊</button>
             <button id="touch-btn-mode" class="touch-btn touch-btn-sm">🔁 射擊模式</button>
             <button id="touch-btn-inspect" class="touch-btn touch-btn-sm">🔍 檢視槍械</button>
-            <button id="touch-btn-tps" class="touch-btn touch-btn-sm">🎥 第三人稱</button>
             <button id="touch-btn-loadout" class="touch-btn touch-btn-sm">🧰 3D武器庫</button>
           </div>
         </div>
 
-        <!-- Primary 5-Button Ergonomic Arc (Never overlaps bottom weapon bar!) -->
-        <div class="touch-action-cluster">
-          <div class="touch-sub-row">
-            <button id="touch-btn-drawer" class="touch-btn touch-btn-drawer">🎒 戰術</button>
-            <button id="touch-btn-stim" class="touch-btn touch-btn-stim-quick">💉 強心</button>
-            <button id="touch-btn-reload" class="touch-btn">🔄 換彈</button>
-          </div>
-          <div class="touch-main-row">
-            <button id="touch-btn-ads" class="touch-btn touch-btn-ads">🎯 瞄準</button>
-            <button id="touch-btn-fire" class="touch-btn touch-btn-fire">🔥 射擊</button>
-          </div>
+        <!-- Bottom-Right Ergonomic Circular Arc (Pure SVG Icons matching Reference Screenshot!) -->
+        <div class="touch-arc-cluster">
+          <!-- Grenade Circle (Top-Left of Arc) -->
+          <button id="touch-btn-grenade" class="touch-circle-btn arc-btn-grenade" title="投擲手榴彈 / 安裝 C4" aria-label="Grenade">
+            <svg viewBox="0 0 36 36" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.3">
+              <circle cx="18" cy="21" r="7.5"/>
+              <path d="M15 13.5 L21 13.5 L20 10 L16 10 Z"/>
+              <path d="M20 11 L25 9 L26 13"/>
+            </svg>
+          </button>
+
+          <!-- Weapon Swap Circle (Top-Mid of Arc: ⇄) -->
+          <button id="touch-btn-swap" class="touch-circle-btn arc-btn-swap" title="快速切換主/副武器" aria-label="Switch Weapon">
+            <svg viewBox="0 0 36 36" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 14 L26 14 L22 10"/>
+              <path d="M26 22 L10 22 L14 26"/>
+            </svg>
+          </button>
+
+          <!-- Jump Circle (Right of Arc: ↑) -->
+          <button id="touch-btn-jump" class="touch-circle-btn arc-btn-jump" title="跳躍" aria-label="Jump">
+            <svg viewBox="0 0 36 36" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="26" x2="18" y2="10"/>
+              <polyline points="12,16 18,10 24,16"/>
+            </svg>
+          </button>
+
+          <!-- ADS Scope Target Circle (Left-Mid of Arc: ⦿) -->
+          <button id="touch-btn-ads" class="touch-circle-btn arc-btn-ads" title="精準開鏡瞄準 (ADS)" aria-label="Aim Down Sights">
+            <svg viewBox="0 0 36 36" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4">
+              <circle cx="18" cy="18" r="9"/>
+              <circle cx="18" cy="18" r="2.8" fill="currentColor"/>
+            </svg>
+          </button>
+
+          <!-- Reload Circle (Bottom-Left of Arc: ↻) -->
+          <button id="touch-btn-reload" class="touch-circle-btn arc-btn-reload" title="更換彈匣 (Reload)" aria-label="Reload">
+            <svg viewBox="0 0 36 36" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M25.5 14 A8.5 8.5 0 1 0 26.5 21"/>
+              <polyline points="26,9 26,14.5 20.5,14.5"/>
+            </svg>
+          </button>
+
+          <!-- Crouch Circle (Bottom-Right of Arc) -->
+          <button id="touch-btn-crouch" class="touch-circle-btn arc-btn-crouch" title="戰術蹲姿" aria-label="Crouch">
+            <svg viewBox="0 0 36 36" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="19" cy="11" r="2.5"/>
+              <path d="M15 16 L19 21 L14 25 L23 25"/>
+            </svg>
+          </button>
+
+          <!-- Large Red-Bordered Main Fire Circle (Center-Right of Arc) -->
+          <button id="touch-btn-fire" class="touch-circle-btn arc-btn-fire" title="按住開火並拖曳壓槍" aria-label="Fire Weapon">
+            <svg viewBox="0 0 40 40" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2.8">
+              <circle cx="20" cy="20" r="9"/>
+              <line x1="20" y1="4" x2="20" y2="11"/>
+              <line x1="20" y1="29" x2="20" y2="36"/>
+              <line x1="4" y1="20" x2="11" y2="20"/>
+              <line x1="29" y1="20" x2="36" y2="20"/>
+            </svg>
+          </button>
         </div>
       </div>
     </div>

@@ -3,6 +3,19 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Water } from 'three/examples/jsm/objects/Water.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import blueprint from '../blueprints/night_port.json';
+import { GameScreensManager } from './game/screens.ts';
+import { SquadManager, SquadOrder } from './game/soldier.ts';
+import {
+  loadProgression,
+  saveProgression,
+  addWeaponExp,
+  equipAttachment,
+  unequipAttachment,
+  calculateWeaponEffectiveStats,
+  ATTACHMENTS_CATALOG,
+} from './game/progression.ts';
+import { WeaponsAttachmentVisualizer, PictureInPictureScope } from './game/weapons.ts';
+import { WorldDetailsManager } from './world/details.ts';
 
 interface WeaponSpec {
   id: string;
@@ -1246,6 +1259,19 @@ function releaseSuspendedCargoContainer() {
 // ---------------------------------------------------------------------------
 const gltfLoader = new GLTFLoader();
 
+const screensMgr = new GameScreensManager();
+const squadMgr = new SquadManager();
+const gunsmithVisualizer = new WeaponsAttachmentVisualizer();
+const pipScope = new PictureInPictureScope();
+let worldDetails: WorldDetailsManager | null = null;
+
+const first5SecTracker = {
+  active: true,
+  startTime: 0,
+  maxFrameTimeMs: 0,
+  recordedFrames: 0,
+};
+
 async function loadGlbAsset(relPath: string) {
   const preloaded = (window as unknown as { __PRELOADED_GLB_B64__?: Record<string, string> }).__PRELOADED_GLB_B64__?.[relPath];
   if (preloaded) {
@@ -1258,11 +1284,28 @@ async function loadGlbAsset(relPath: string) {
 }
 
 async function loadAllAssets() {
+  // Step 1 [0%~25%]: Download GLBs & Map Data
+  screensMgr.updatePreload({
+    step: 1,
+    totalSteps: 7,
+    label: 'DOWNLOADING GLB ASSETS & MAP DATA',
+    percent: 15,
+    hint: '正在自 CDN / 快取下載夜間軍事港口、武器庫與士兵骨架模型...',
+  });
+
   const [portGltf, wepGltf, soldierGltf] = await Promise.all([
     loadGlbAsset('assets/models/port_environment.glb'),
     loadGlbAsset('assets/models/weapons_pack.glb'),
     loadGlbAsset('assets/models/soldier_tactical_animated.glb'),
   ]);
+
+  screensMgr.updatePreload({
+    step: 2,
+    totalSteps: 7,
+    label: 'UPLOADING TEXTURES TO GPU VRAM (initTexture)',
+    percent: 38,
+    hint: '調用 renderer.initTexture 強制將所有漫反射、法線與粗糙度貼圖快取至顯示卡記憶體...',
+  });
 
   const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   const applyRepeatAndAnisotropy = (root: THREE.Object3D) => {
@@ -1278,6 +1321,7 @@ async function loadAllAssets() {
               tex.wrapS = THREE.RepeatWrapping;
               tex.wrapT = THREE.RepeatWrapping;
               tex.anisotropy = maxAniso;
+              renderer.initTexture(tex);
               tex.needsUpdate = true;
             }
           }
@@ -1302,7 +1346,7 @@ async function loadAllAssets() {
         m.material = puddleShaderMat;
         puddleMeshes.push(m);
       } else if (mat && mat.name === 'MI_Harbor_Sea') {
-        m.visible = false; // Replaced by official Three.js Water.js instance (`harborSeaWater`)
+        m.visible = false;
       }
     }
   });
@@ -1324,11 +1368,88 @@ async function loadAllAssets() {
     }
   }
 
-  // 3. Spawn 8 CC0 Skinned & Animated Tactical Enemy Soldiers + Setup Player CC0 Arms & Third-Person Rig
+  // Step 3 [40%~60%]: Pre-compile all shaders and render pipeline
+  screensMgr.updatePreload({
+    step: 3,
+    totalSteps: 7,
+    label: 'COMPILING SHADERS & GRAPHICS PIPELINE',
+    percent: 55,
+    hint: '執行 renderer.compile 預先編譯夜視儀、水窪反射、爆破火焰與武器頂點著色器...',
+  });
+  renderer.compile(scene, camera);
+
+  // Step 4 [60%~75%]: Warm up skeletal animation rigs
+  screensMgr.updatePreload({
+    step: 4,
+    totalSteps: 7,
+    label: 'WARMING UP SKELETAL RIGS & TWO-BONE IK',
+    percent: 72,
+    hint: '預熱 CC0 65-Bone 士兵骨架、槍身兩骨式 IK 與換彈動畫矩陣...',
+  });
   soldierTemplateGltf = { scene: soldierGltf.scene, animations: soldierGltf.animations };
   setupPlayerCc0ArmsAndThirdPerson();
   equipWeapon(0);
   spawnEnemySquad();
+
+  // Initialize Allied Squad (2 Members)
+  squadMgr.initSquadMembers(soldierTemplateGltf, scene, player.pos);
+
+  // Initialize Dynamic World Details (Rain & Breakable Lamps)
+  worldDetails = new WorldDetailsManager(scene, rainLines, scene.fog as THREE.FogExp2);
+
+  // Step 5 [75%~85%]: Warm up spatial audio system
+  screensMgr.updatePreload({
+    step: 5,
+    totalSteps: 7,
+    label: 'PRE-SYNTHESIZING ZERO-VOLUME AUDIO BUFFERS',
+    percent: 85,
+    hint: '預先載入 Web Audio 緩衝區並在零音量下試運行，避免首次槍聲解碼卡頓...',
+  });
+  await audioSys.unlockAndPreload();
+
+  // Step 6 [85%~98%]: Multi-angle offscreen warmup renders
+  screensMgr.updatePreload({
+    step: 6,
+    totalSteps: 7,
+    label: 'WARMUP OFF-SCREEN MULTI-CAMERA RENDERS (6 PASSES)',
+    percent: 96,
+    hint: '沿港口開場鏡頭路徑預先繪製 6 個關鍵幀，促使 GPU 完成所有管線狀態快取 (PSO)...',
+  });
+  for (let camIdx = 0; camIdx < 6; camIdx++) {
+    const angleRad = (camIdx / 6) * Math.PI * 2;
+    camera.position.set(Math.cos(angleRad) * 12, 4.5, Math.sin(angleRad) * 12);
+    camera.lookAt(0, 1.2, 0);
+    renderer.render(scene, camera);
+  }
+  // Reset camera to default player spawn
+  camera.position.set(blueprint.spawn.position[0], 1.72, blueprint.spawn.position[2]);
+  camera.fov = 60;
+  camera.updateProjectionMatrix();
+
+  // Step 7 [100%]: Ready!
+  screensMgr.updatePreload({
+    step: 7,
+    totalSteps: 7,
+    label: '5-SECOND PERF MONITOR ENGAGED (< 50ms)',
+    percent: 100,
+    hint: '預載與引擎暖機完成！作戰準備就緒。',
+  });
+
+  first5SecTracker.active = true;
+  first5SecTracker.startTime = performance.now();
+  first5SecTracker.maxFrameTimeMs = 0;
+  first5SecTracker.recordedFrames = 0;
+
+  setTimeout(() => {
+    screensMgr.hidePreload();
+    if (!captureMode && !initialCamParam) {
+      screensMgr.showTitleScreen(() => {
+        // Deploy audio chime
+        audioSys.play2D('assets/audio/radio_chatter.wav', 0.85);
+      });
+    }
+  }, 450);
+
   renderer.shadowMap.needsUpdate = true;
 }
 
@@ -1848,6 +1969,13 @@ const player = {
   multiKillCount: 0,
   multiKillTimer: 0,
   damageTaken: 0,
+  gameMode: 'RAID' as 'RAID' | 'SURVIVAL' | 'SNIPER' | 'BLITZ',
+  raidStage: 1 as 1 | 2 | 3,
+  c4Planted: false,
+  c4PlantProgress: 0,
+  waveNumber: 1,
+  blitzTimeRemaining: 90.0,
+  lastEquippedWeaponIdx: 1,
   terminalHacked: false,
   terminalHackProgress: 0,
   startTime: performance.now(),
@@ -1881,6 +2009,9 @@ function getGroundHeightAt(x: number, z: number): number {
 
 function equipWeapon(idx: number) {
   if (idx < 0 || idx >= WEAPONS.length) return;
+  if (idx !== activeWeaponIdx) {
+    player.lastEquippedWeaponIdx = activeWeaponIdx;
+  }
   activeWeaponIdx = idx;
   player.reloading = false;
   player.burstRemaining = 0;
@@ -1895,6 +2026,17 @@ function equipWeapon(idx: number) {
   if (player.ads) setAdsState(true);
   updateWeaponHud();
   updateLoadoutModal(idx);
+}
+
+function quickSwapWeapon() {
+  const targetIdx =
+    player.lastEquippedWeaponIdx !== activeWeaponIdx &&
+    player.lastEquippedWeaponIdx >= 0 &&
+    player.lastEquippedWeaponIdx < WEAPONS.length
+      ? player.lastEquippedWeaponIdx
+      : (activeWeaponIdx + 1) % 3;
+  equipWeapon(targetIdx);
+  audioSys.play2D('assets/audio/fire_mode_click.wav', 0.8);
 }
 
 function cycleFireMode() {
@@ -1915,6 +2057,7 @@ function setThirdPersonMode(enabled?: boolean) {
   if (playerTpsRoot) {
     playerTpsRoot.visible = (player.thirdPerson || Boolean(player.fixedCameraKey)) && !inModal;
   }
+  document.getElementById('touch-btn-tps-quick')?.classList.toggle('active', player.thirdPerson);
   updateStatusHud();
 }
 
@@ -1927,15 +2070,17 @@ function updateWeaponHud() {
   const modeEl = document.getElementById('fire-mode-badge');
   const ticksEl = document.getElementById('ammo-ticks');
   const grenEl = document.getElementById('grenade-badge');
+  const slotGCount = document.getElementById('slot-g-count');
   const stimEl = document.getElementById('stim-badge');
   const lightEl = document.getElementById('flashlight-badge');
   const nvgEl = document.getElementById('nvg-badge');
   if (titleEl) titleEl.textContent = w.name;
   if (iconEl) iconEl.textContent = w.silhouette;
-  if (magEl) magEl.textContent = String(w.mag).padStart(2, '0');
+  if (magEl) magEl.textContent = String(w.mag);
   if (resEl) resEl.textContent = String(w.reserve);
   if (modeEl) modeEl.textContent = w.fireMode;
   if (grenEl) grenEl.textContent = `💣 [G] x${player.grenades}`;
+  if (slotGCount) slotGCount.textContent = `×${player.grenades}`;
   if (stimEl) stimEl.textContent = `💉 [X] x${player.stims}`;
   if (lightEl) {
     lightEl.textContent = `🔦 [T] ${player.flashlightOn ? 'ON' : 'OFF'}`;
@@ -1945,6 +2090,7 @@ function updateWeaponHud() {
     nvgEl.textContent = `🥽 [N] ${player.nvgOn ? 'ON' : 'OFF'}`;
     nvgEl.classList.toggle('active', player.nvgOn);
   }
+  document.getElementById('touch-btn-nvg-quick')?.classList.toggle('active', player.nvgOn);
   if (ticksEl) {
     const count = Math.min(20, Math.ceil((w.mag / w.magSize) * 20));
     ticksEl.textContent = '|'.repeat(count) + '·'.repeat(20 - count);
@@ -1961,6 +2107,7 @@ function updateStatusHud() {
   if (hpBar) hpBar.style.width = `${Math.max(0, (player.hp / player.maxHp) * 100)}%`;
   if (arVal) arVal.textContent = String(Math.max(0, Math.round(player.armor)));
   if (arBar) arBar.style.width = `${Math.max(0, (player.armor / player.maxArmor) * 100)}%`;
+  document.getElementById('touch-btn-crouch')?.classList.toggle('active', player.crouching);
   if (stanceEl) {
     const viewPrefix = player.thirdPerson ? '[TPS] ' : '[FPS] ';
     const leanSuffix =
@@ -1978,18 +2125,154 @@ function updateStatusHud() {
   }
 }
 
+const currentObjectiveTarget = new THREE.Vector3(-4.8, 1.35, 9.5);
+
+function getActiveObjectiveTarget(): THREE.Vector3 {
+  if (player.gameMode === 'RAID') {
+    if (player.raidStage === 1) {
+      const vg = enemies.find((e) => e.state !== 'DEAD');
+      if (vg) {
+        currentObjectiveTarget.set(vg.root.position.x, vg.root.position.y + 1.35, vg.root.position.z);
+        return currentObjectiveTarget;
+      }
+    } else if (player.raidStage === 2 && !player.c4Planted) {
+      currentObjectiveTarget.set(-4.8, 1.15, 9.5);
+      return currentObjectiveTarget;
+    }
+    currentObjectiveTarget.set(-4.0, 1.35, -18.0);
+    return currentObjectiveTarget;
+  }
+  if (player.gameMode === 'SNIPER') {
+    const snTarget =
+      enemies.find((e) => e.state !== 'DEAD' && (e.archetype === 'SNIPER' || e.archetype === 'BREACHER')) ||
+      enemies.find((e) => e.state !== 'DEAD');
+    if (snTarget) {
+      currentObjectiveTarget.set(snTarget.root.position.x, snTarget.root.position.y + 1.45, snTarget.root.position.z);
+      return currentObjectiveTarget;
+    }
+  }
+  const nearest = enemies
+    .filter((e) => e.state !== 'DEAD')
+    .sort((a, b) => a.root.position.distanceTo(player.pos) - b.root.position.distanceTo(player.pos))[0];
+  if (nearest) {
+    currentObjectiveTarget.set(nearest.root.position.x, nearest.root.position.y + 1.35, nearest.root.position.z);
+    return currentObjectiveTarget;
+  }
+  currentObjectiveTarget.set(-4.0, 1.35, -18.0);
+  return currentObjectiveTarget;
+}
+
 function updateObjectiveHud() {
   const alive = enemies.filter((e) => e.state !== 'DEAD').length;
   const total = enemies.length || 8;
   const killed = total - alive;
-  const objText = document.getElementById('objective-text');
-  if (objText) {
-    const termTag = player.terminalHacked ? ' [終端已駭入⚡]' : '';
-    objText.textContent =
-      alive > 0
-        ? `目標：肅清碼頭武裝守軍並奪還港務主控終端 (${killed} / ${total})${termTag}`
-        : '目標達成：港務主控終端已奪還！按 [M] 檢視作戰結算';
+
+  // Automatically advance Tactical Raid 3-Stage Chain!
+  if (player.gameMode === 'RAID') {
+    if (player.raidStage === 1 && killed >= 2) {
+      player.raidStage = 2;
+      showKillBanner('STAGE 2/3 — PLANT C4 ON FUEL BARRELS');
+    }
+    if (player.raidStage === 2 && player.c4Planted) {
+      player.raidStage = 3;
+    }
   }
+
+  const stageEl = document.getElementById('objective-stage');
+  const objText = document.getElementById('objective-text');
+  const modeBtn = document.getElementById('btn-mode-cycle');
+  const modeNames: Record<string, string> = {
+    RAID: '戰術突襲',
+    SURVIVAL: '波次生存',
+    SNIPER: '高空狙擊',
+    BLITZ: '極速計時',
+  };
+  if (modeBtn) {
+    modeBtn.textContent = `模式: ${modeNames[player.gameMode] || '戰術突襲'} ▾`;
+  }
+
+  if (player.gameMode === 'RAID') {
+    if (stageEl) stageEl.textContent = `${player.raidStage}/3 · OBJECTIVE`;
+    if (objText) {
+      if (player.raidStage === 1) {
+        objText.textContent = `肅清西側碼頭前哨守軍 (${Math.min(2, killed)}/2) 推進防線`;
+      } else if (player.raidStage === 2) {
+        objText.textContent = 'Plant the charge on the fuel barrels — PICK at the barrels';
+      } else {
+        objText.textContent =
+          alive > 0 || !player.terminalHacked
+            ? `奪還北側主控終端並肅清守軍 (${killed}/${total})`
+            : '目標達成：港務主控終端已奪還！';
+      }
+    }
+  } else if (player.gameMode === 'SURVIVAL') {
+    if (stageEl) stageEl.textContent = `WAVE ${player.waveNumber} · SURVIVAL`;
+    if (objText) {
+      objText.textContent = `抵禦港區增援敵軍攻勢 · 剩餘敵軍 (${alive} 名) · 擊殺掉落護甲補給`;
+    }
+  } else if (player.gameMode === 'SNIPER') {
+    if (stageEl) stageEl.textContent = `OVERWATCH · SNIPER`;
+    if (objText) {
+      objText.textContent = `於高空走道使用 SR-9 8x 狙擊鏡精準獵殺目標 (${killed}/${total})`;
+    }
+  } else if (player.gameMode === 'BLITZ') {
+    const secLeft = Math.max(0, Math.ceil(player.blitzTimeRemaining));
+    if (stageEl) stageEl.textContent = `⏱️ ${secLeft}s · TIME BLITZ`;
+    if (objText) {
+      objText.textContent = `極速肅清守軍 (${killed}/${total}) · 爆頭擊殺 +6s / 油桶連爆 +5s`;
+    }
+  }
+}
+
+function setGameMode(mode: 'RAID' | 'SURVIVAL' | 'SNIPER' | 'BLITZ') {
+  player.gameMode = mode;
+  player.raidStage = 1;
+  player.c4Planted = false;
+  player.c4PlantProgress = 0;
+  player.terminalHacked = false;
+  player.terminalHackProgress = 0;
+  player.waveNumber = 1;
+  player.blitzTimeRemaining = 90.0;
+  player.hp = 100;
+  player.armor = 150;
+  player.grenades = 3;
+  player.stims = 2;
+
+  spawnEnemySquad();
+
+  if (mode === 'SNIPER') {
+    // Teleport player onto Elevated Container Catwalk with SR-9 8x Sniper Rifle!
+    player.pos.set(6.1, 5.34, 10.5);
+    player.yaw = 0.12;
+    player.pitch = -0.14;
+    equipWeapon(3); // SR-9 Sniper
+    showKillBanner('🎯 高空狙擊獵殺模式 — SR-9 8X');
+  } else if (mode === 'SURVIVAL') {
+    player.pos.set(-1.5, 0.0, 18.0);
+    player.yaw = 0.0;
+    player.pitch = 0.0;
+    equipWeapon(2); // SG-12 Pump Shotgun
+    showKillBanner('🌊 波次防衛生存戰 — WAVE 1');
+  } else if (mode === 'BLITZ') {
+    player.pos.set(-1.5, 0.0, 22.0);
+    player.yaw = 0.0;
+    player.pitch = 0.0;
+    equipWeapon(1); // SMG-9 Tactical
+    showKillBanner('⏱️ 90秒極速肅清計時賽 START!');
+  } else {
+    player.pos.set(blueprint.spawn.position[0], 0.0, blueprint.spawn.position[2]);
+    player.yaw = blueprint.spawn.yaw;
+    player.pitch = 0.0;
+    equipWeapon(0); // AR-7 Carbine
+    showKillBanner('⚔️ 戰術突襲 (3階段連鎖任務)');
+  }
+
+  document.querySelectorAll('.touch-mode-btn').forEach((btn) => {
+    btn.classList.toggle('active', (btn as HTMLElement).dataset.mode === mode);
+  });
+  updateStatusHud();
+  updateWeaponHud();
+  updateObjectiveHud();
 }
 
 function showKillBanner(text: string) {
@@ -2809,7 +3092,11 @@ function openMissionCompleteModal() {
 const gyroController = {
   enabled: false,
   aimAssist: true,
-  sensitivity: 1.0,
+  sensitivity: 2.2,
+  yawMult: 1.0,
+  pitchMult: 0.95,
+  accelGain: 1.35,
+  accelThreshold: 12.0, // deg/s threshold for non-linear flick acceleration
   calibrated: false,
   baseAlpha: 0,
   baseBeta: 0,
@@ -2869,6 +3156,7 @@ function updateGyroHudButtons() {
     toggleBtn.textContent = gyroController.enabled ? '🧭 陀螺儀: ON' : '🧭 陀螺儀瞄準: 點擊開啟';
     toggleBtn.classList.toggle('active', gyroController.enabled);
   }
+  document.getElementById('touch-btn-gyro-quick')?.classList.toggle('active', gyroController.enabled);
   if (sensBtn) {
     sensBtn.textContent = `${gyroController.sensitivity.toFixed(1)}x`;
   }
@@ -2896,7 +3184,6 @@ function calibrateGyroCenter() {
 async function toggleGyroAiming(forceState?: boolean) {
   const target = forceState !== undefined ? forceState : !gyroController.enabled;
   if (target) {
-    // Request iOS 13+ DeviceOrientationEvent / DeviceMotionEvent permission if required
     const DevOrient = window.DeviceOrientationEvent as unknown as {
       requestPermission?: () => Promise<'granted' | 'denied'>;
     };
@@ -2908,12 +3195,12 @@ async function toggleGyroAiming(forceState?: boolean) {
           return;
         }
       } catch {
-        // Ignore in desktop/headless browsers
+        // Ignore
       }
     }
     gyroController.enabled = true;
     calibrateGyroCenter();
-    showKillBanner('🧭 陀螺儀體感瞄準：已開啟');
+    showKillBanner('🧭 陀螺儀體感瞄準：已開啟 (2.2x 非線性加速)');
   } else {
     gyroController.enabled = false;
     showKillBanner('🧭 陀螺儀體感瞄準：已關閉');
@@ -2978,8 +3265,16 @@ window.addEventListener('deviceorientation', (ev) => {
     pitchDegDelta = dGamma;
   }
 
-  const radScale = (Math.PI / 180) * gyroController.sensitivity * (player.ads ? 0.58 : 0.95);
-  const [adjYaw, adjPitch] = applyGyroAimAssistToDelta(yawDegDelta * radScale, pitchDegDelta * radScale);
+  // Non-linear acceleration curve calculation
+  const absYaw = Math.abs(yawDegDelta);
+  const absPitch = Math.abs(pitchDegDelta);
+  const accelYaw = absYaw > gyroController.accelThreshold ? Math.pow(absYaw / gyroController.accelThreshold, 1.35) : 1.0;
+  const accelPitch = absPitch > gyroController.accelThreshold ? Math.pow(absPitch / gyroController.accelThreshold, 1.35) : 1.0;
+  const adsScale = player.ads ? 0.65 : 1.0;
+
+  const radScaleYaw = (Math.PI / 180) * gyroController.sensitivity * gyroController.yawMult * accelYaw * adsScale;
+  const radScalePitch = (Math.PI / 180) * gyroController.sensitivity * gyroController.pitchMult * accelPitch * adsScale;
+  const [adjYaw, adjPitch] = applyGyroAimAssistToDelta(yawDegDelta * radScaleYaw, pitchDegDelta * radScalePitch);
   player.yaw += adjYaw;
   player.pitch = Math.max(-1.35, Math.min(1.35, player.pitch + adjPitch));
 });
@@ -2991,8 +3286,16 @@ window.addEventListener('devicemotion', (ev) => {
   const alphaRate = ev.rotationRate.alpha || 0;
   const betaRate = ev.rotationRate.beta || 0;
   const dtMotion = (ev.interval || 16) / 1000;
-  const radScale = (Math.PI / 180) * gyroController.sensitivity * (player.ads ? 0.55 : 0.85);
-  const [adjYaw, adjPitch] = applyGyroAimAssistToDelta(betaRate * dtMotion * radScale, alphaRate * dtMotion * radScale);
+
+  const absYaw = Math.abs(betaRate * dtMotion);
+  const absPitch = Math.abs(alphaRate * dtMotion);
+  const accelYaw = absYaw > (gyroController.accelThreshold * dtMotion) ? Math.pow(absYaw / (gyroController.accelThreshold * dtMotion), 1.35) : 1.0;
+  const accelPitch = absPitch > (gyroController.accelThreshold * dtMotion) ? Math.pow(absPitch / (gyroController.accelThreshold * dtMotion), 1.35) : 1.0;
+  const adsScale = player.ads ? 0.65 : 1.0;
+
+  const radScaleYaw = (Math.PI / 180) * gyroController.sensitivity * gyroController.yawMult * accelYaw * adsScale;
+  const radScalePitch = (Math.PI / 180) * gyroController.sensitivity * gyroController.pitchMult * accelPitch * adsScale;
+  const [adjYaw, adjPitch] = applyGyroAimAssistToDelta(betaRate * dtMotion * radScaleYaw, alphaRate * dtMotion * radScalePitch);
   player.yaw += adjYaw;
   player.pitch = Math.max(-1.35, Math.min(1.35, player.pitch + adjPitch));
 });
@@ -3250,12 +3553,61 @@ for (let s = 1; s <= 5; s++) {
   });
 }
 
+let zKeyDownTime = 0;
+let zKeyHeldTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Squad Command Wheel Buttons
+document.querySelectorAll('.cw-slice').forEach((btn) => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const ord = (btn as HTMLElement).dataset.order as SquadOrder;
+    if (ord) squadMgr.setOrder(ord);
+    squadMgr.openCommandWheel(false);
+  });
+});
+
+// Pause Menu Buttons
+document.getElementById('btn-pause-resume')?.addEventListener('click', () => {
+  screensMgr.togglePause(false);
+});
+document.getElementById('btn-pause-records')?.addEventListener('click', () => {
+  screensMgr.showRecords();
+});
+document.getElementById('btn-records-close')?.addEventListener('click', () => {
+  screensMgr.hideRecords();
+});
+document.getElementById('btn-records-back')?.addEventListener('click', () => {
+  screensMgr.hideRecords();
+});
+document.getElementById('btn-pause-restart')?.addEventListener('click', () => {
+  screensMgr.togglePause(false);
+  player.pos.set(blueprint.spawn.position[0], 0, blueprint.spawn.position[2]);
+  player.hp = 100;
+  player.armor = 150;
+  spawnEnemySquad();
+  squadMgr.initSquadMembers(soldierTemplateGltf!, scene, player.pos);
+  updateStatusHud();
+});
+document.getElementById('btn-pause-main')?.addEventListener('click', () => {
+  screensMgr.togglePause(false);
+  screensMgr.showTitleScreen(() => {});
+});
+
 // ---------------------------------------------------------------------------
 // Input Events
 // ---------------------------------------------------------------------------
 window.addEventListener('keydown', (e) => {
   keys[e.code] = true;
   audioSys.unlockAndPreload();
+  if (e.code === 'Escape') {
+    screensMgr.togglePause();
+  }
+  if (e.code === 'KeyZ' && !zKeyDownTime) {
+    zKeyDownTime = performance.now();
+    zKeyHeldTimer = setTimeout(() => {
+      squadMgr.openCommandWheel(true);
+    }, 280);
+  }
   if (e.code === 'Digit1') equipWeapon(0);
   if (e.code === 'Digit2') equipWeapon(1);
   if (e.code === 'Digit3') equipWeapon(2);
@@ -3278,6 +3630,13 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyE') {
     player.leanTarget = 1;
     updateStatusHud();
+    // Check if player is near any downed squad mate to revive!
+    for (const mate of squadMgr.squadMembers) {
+      if (mate.downed && mate.root.position.distanceTo(player.pos) < 2.8) {
+        squadMgr.reviveMember(mate.id);
+        break;
+      }
+    }
   }
   if (e.code === 'KeyP') setThirdPersonMode();
   if (e.code === 'KeyC') {
@@ -3310,6 +3669,21 @@ window.addEventListener('keydown', (e) => {
 
 window.addEventListener('keyup', (e) => {
   keys[e.code] = false;
+  if (e.code === 'KeyZ') {
+    if (zKeyHeldTimer) clearTimeout(zKeyHeldTimer);
+    const duration = performance.now() - zKeyDownTime;
+    zKeyDownTime = 0;
+    if (duration < 280) {
+      // Quick Contextual Order: Look at ground -> Move; Look at enemy -> Attack; Else -> Follow
+      const camDir = new THREE.Vector3();
+      camera.getWorldDirection(camDir);
+      const groundTarget = player.pos.clone().addScaledVector(camDir, 14);
+      groundTarget.y = 0;
+      squadMgr.setOrder('MOVE_TO', groundTarget);
+    } else {
+      squadMgr.openCommandWheel(false);
+    }
+  }
   if (e.code === 'KeyQ' && player.leanTarget < 0) {
     player.leanTarget = keys['KeyE'] ? 1 : 0;
     updateStatusHud();
@@ -3554,6 +3928,7 @@ function getPerfSummary() {
   return {
     avgFps: Number((1000 / Math.max(0.1, avgMs)).toFixed(1)),
     p95FrameTimeMs: Number(p95Ms.toFixed(2)),
+    first5SecMaxFrameTimeMs: Number(first5SecTracker.maxFrameTimeMs.toFixed(2)),
     drawCalls: mainPassDrawCalls || renderer.info.render.calls,
     triangles: mainPassTriangles || renderer.info.render.triangles,
     geometries: renderer.info.memory.geometries,
@@ -4254,10 +4629,23 @@ function stepSimulation(dt: number, elapsedSec: number) {
     }
   }
 
+  // Update Allied Squad Tactical Behaviors & World Dynamic Rain/Storm
+  if (squadMgr) {
+    squadMgr.update(dt, player.pos, enemies);
+  }
+  if (worldDetails) {
+    worldDetails.update(dt, elapsedSec, renderer);
+  }
+
   renderMinimap();
 }
 
 function renderSceneWithWater(forceReflection = true) {
+  // Picture-in-Picture 4x Scope Lens Render Pass
+  if (player.ads && WEAPONS[activeWeaponIdx].id === 'sr9' && pipScope) {
+    pipScope.render(renderer, scene, camera);
+  }
+
   const prevAutoReset = renderer.info.autoReset;
   renderer.info.autoReset = false;
 
@@ -4299,6 +4687,19 @@ function animate(now: number) {
   if (rawDt > 0 && rawDt < 500) {
     frameTimesMs.push(rawDt);
     if (frameTimesMs.length > 180) frameTimesMs.shift();
+
+    // 5-Second Warmup Frame Time Gate Tracker (< 50ms)
+    if (first5SecTracker.active) {
+      const elapsed = now - first5SecTracker.startTime;
+      if (rawDt > first5SecTracker.maxFrameTimeMs) {
+        first5SecTracker.maxFrameTimeMs = rawDt;
+      }
+      first5SecTracker.recordedFrames++;
+      if (elapsed >= 5000) {
+        first5SecTracker.active = false;
+        console.log(`[PERF GATE] First 5-sec max frame time: ${first5SecTracker.maxFrameTimeMs.toFixed(2)}ms (Target < 50ms)`);
+      }
+    }
   }
   const dt = Math.min(0.05, rawDt / 1000);
   stepSimulation(dt, now / 1000);
