@@ -5,6 +5,7 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import blueprint from '../blueprints/night_port.json';
 import { GameScreensManager } from './game/screens.ts';
 import { SquadManager, SquadOrder } from './game/soldier.ts';
+import { InfiltrationDirector } from './game/cinematics.ts';
 import {
   loadProgression,
   saveProgression,
@@ -352,14 +353,20 @@ class SpatialAudioManager {
     await Promise.all(
       files.map(async (url) => {
         if (this.buffers.has(url) || !this.ctx) return;
-        try {
-          const res = await fetch(url);
-          const arr = await res.arrayBuffer();
-          const buf = await this.ctx.decodeAudioData(arr);
-          this.buffers.set(url, buf);
-        } catch {
-          // ignore decode error in headless environment
-        }
+        return new Promise<void>((resolve) => {
+          const timer = setTimeout(() => resolve(), 150);
+          fetch(url)
+            .then((res) => res.arrayBuffer())
+            .then((arr) => this.ctx?.decodeAudioData(arr))
+            .then((buf) => {
+              if (buf) this.buffers.set(url, buf);
+            })
+            .catch(() => {})
+            .finally(() => {
+              clearTimeout(timer);
+              resolve();
+            });
+        });
       })
     );
   }
@@ -1263,6 +1270,7 @@ const screensMgr = new GameScreensManager();
 const squadMgr = new SquadManager();
 const gunsmithVisualizer = new WeaponsAttachmentVisualizer();
 const pipScope = new PictureInPictureScope();
+const infiltrationDirector = new InfiltrationDirector(camera);
 let worldDetails: WorldDetailsManager | null = null;
 
 const first5SecTracker = {
@@ -1443,9 +1451,10 @@ async function loadAllAssets() {
   setTimeout(() => {
     screensMgr.hidePreload();
     if (!captureMode && !initialCamParam) {
-      screensMgr.showTitleScreen(() => {
-        // Deploy audio chime
+      infiltrationDirector.play(() => {
         audioSys.play2D('assets/audio/radio_chatter.wav', 0.85);
+        audioSys.play2D('assets/audio/fire_mode_click.wav', 0.85);
+        showKillBanner('TACTICAL INSERTION CONFIRMED // FREE TO ENGAGE');
       });
     }
   }, 450);
@@ -3084,6 +3093,26 @@ function openMissionCompleteModal() {
   setTxt('m-acc', `${acc}%`);
   setTxt('m-hs', String(player.headshots));
   setTxt('m-dmg', String(Math.round(player.damageTaken)));
+
+  // Cycle 12: Show AAA After-Action Report (AAR) & Rewards Screen
+  const matchStats = {
+    clearTimeSec: elapsedSec,
+    totalKills: Math.max(player.kills, enemies.filter((e) => e.state === 'DEAD').length),
+    headshots: player.headshots,
+    damageTaken: player.damageTaken,
+    alliesAlive: squadMgr ? squadMgr.getAlliesAliveCount() : 2,
+  };
+  screensMgr.showRewardScreen(matchStats, {
+    onRedeploy: () => {
+      window.location.reload();
+    },
+    onGunsmith: () => {
+      toggleLoadoutModal(true);
+    },
+    onMainMenu: () => {
+      window.location.reload();
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -4099,7 +4128,10 @@ function stepSimulation(dt: number, elapsedSec: number) {
     const leanOffsetZ = right.z * player.leanAmount * 0.38;
     const leanRollRad = -player.leanAmount * 0.21;
 
-    if (player.thirdPerson) {
+    if (infiltrationDirector && infiltrationDirector.active) {
+      infiltrationDirector.update(dt, player.pos);
+      fpRig.visible = false;
+    } else if (player.thirdPerson) {
       // Over-the-Shoulder Third-Person Tactical Camera
       const camBack = player.ads ? 1.38 : 2.38;
       const camRight = (player.ads ? 0.44 : 0.56) + player.leanAmount * 0.38;
@@ -4893,17 +4925,33 @@ window.addEventListener('resize', () => {
 };
 
 // Boot
-loadAllAssets().then(() => {
-  if (initialCamParam) {
-    applyNamedCamera(initialCamParam);
-  }
-  if (initialUiParam === 'loadout') {
-    toggleLoadoutModal(true);
-  } else if (initialUiParam === 'complete') {
-    openMissionCompleteModal();
-  }
-  updateStatusHud();
-  updateWeaponHud();
-  updateGyroHudButtons();
-  requestAnimationFrame(animate);
-});
+const startOperationPipeline = () => {
+  screensMgr.showPreload();
+  audioSys.unlockAndPreload();
+  loadAllAssets().then(() => {
+    if (initialCamParam) {
+      applyNamedCamera(initialCamParam);
+    }
+    if (initialUiParam === 'loadout') {
+      toggleLoadoutModal(true);
+    } else if (initialUiParam === 'complete') {
+      openMissionCompleteModal();
+    }
+    updateStatusHud();
+    updateWeaponHud();
+    updateGyroHudButtons();
+    requestAnimationFrame(animate);
+  });
+};
+
+const isAutomatedQa = captureMode || Boolean(navigator.webdriver) || Boolean(initialCamParam) || Boolean(initialUiParam);
+
+if (isAutomatedQa) {
+  // Headless automated QA mode / direct camera inspector: launch immediately
+  startOperationPipeline();
+} else {
+  // Mainstream AAA Tactical Experience: present Title Portal first!
+  screensMgr.showPortal(() => {
+    startOperationPipeline();
+  });
+}

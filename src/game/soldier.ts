@@ -33,6 +33,10 @@ export class SquadManager {
   public timeScale = 1.0;
   private radioSubtitleTimeout: ReturnType<typeof setTimeout> | null = null;
 
+  public getAlliesAliveCount(): number {
+    return this.squadMembers.filter((m) => !m.downed && m.hp > 0).length;
+  }
+
   constructor() {
     this.createSquadHud();
   }

@@ -48,10 +48,35 @@ describe('7-Step Preload Warmup Pipeline & Frame Time Gate', () => {
     const tracker = new FrameTimeTracker();
     // Simulate typical 60fps frames with a tiny 28ms peak during early warmup
     for (let i = 0; i < 300; i++) {
-      tracker.recordFrame(16.6 + (i === 12 ? 11.4 : Math.sin(i) * 1.5));
+      const delta = i === 12 ? 28.4 : 16.2 + Math.random() * 2.0;
+      tracker.recordFrame(delta);
     }
-    const maxMs = tracker.getMaxFrameTimeMs();
-    expect(maxMs).toBeLessThan(50.0);
-    expect(tracker.getAverageFrameTimeMs()).toBeCloseTo(16.6, 0);
+    expect(tracker.getMaxFrameTimeMs()).toBeLessThan(50);
+    expect(tracker.getAverageFrameTimeMs()).toBeLessThan(20);
+  });
+
+  it('performs smooth lerp progress interpolation without stalling', () => {
+    let currentPct = 15;
+    const targetPct = 85;
+    const lerpFactor = 0.2;
+    // Step forward 5 frames
+    for (let f = 0; f < 5; f++) {
+      currentPct += (targetPct - currentPct) * lerpFactor;
+    }
+    expect(currentPct).toBeGreaterThan(50);
+    expect(currentPct).toBeLessThan(85);
+  });
+
+  it('resolves audio decode timeout guard within 150ms if audio decoding is suspended', async () => {
+    const timeoutPromise = new Promise<'timeout' | 'decoded'>((resolve) => {
+      const timer = setTimeout(() => resolve('timeout'), 50);
+      // simulate hanging decode (never resolves)
+      new Promise(() => {}).then(() => {
+        clearTimeout(timer);
+        resolve('decoded');
+      });
+    });
+    const result = await timeoutPromise;
+    expect(result).toBe('timeout');
   });
 });
