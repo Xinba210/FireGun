@@ -12,6 +12,28 @@ export interface PreloadStatus {
   mbTotal?: number;
 }
 
+export interface TacticalSetupOptions {
+  credits?: number;
+  activeWeaponName?: string;
+  activeWeaponLevel?: number;
+  activeWeaponDesc?: string;
+  activeWeaponStats?: { dmg: number; rof: number; stb: number; rng: number; cap: number };
+  currentMode: 'RAID' | 'SURVIVAL' | 'SNIPER' | 'BLITZ';
+  currentDifficulty: 'STANDARD' | 'HARDCORE' | 'NIGHTMARE';
+  gyroEnabled: boolean;
+  gyroSens: number;
+  autofireEnabled: boolean;
+  onDeploy: () => void;
+  onOpenGunsmith: () => void;
+  onOpenHudEditor: () => void;
+  onBackToTitle: () => void;
+  onModeChange: (mode: 'RAID' | 'SURVIVAL' | 'SNIPER' | 'BLITZ') => void;
+  onDifficultyChange: (diff: 'STANDARD' | 'HARDCORE' | 'NIGHTMARE') => void;
+  onGyroToggle: () => void;
+  onGyroSensCycle: () => void;
+  onAutofireToggle: () => void;
+}
+
 export const TACTICAL_TIPS = [
   '提示：開啟 [Y] 陀螺儀瞄準可在手機微動手腕實現高精準度爆頭。',
   '提示：按住 [Z] 可召喚友軍小隊戰術指令輪盤，並進入 0.3x 戰術子彈時間。',
@@ -80,6 +102,8 @@ export class GameScreensManager {
   private pauseModal: HTMLElement | null = null;
   private recordsModal: HTMLElement | null = null;
   private titlePortal: HTMLElement | null = null;
+  private setupModal: HTMLElement | null = null;
+  private setupOptions: TacticalSetupOptions | null = null;
   private rewardScreen: HTMLElement | null = null;
 
   private tipIdx = 0;
@@ -106,38 +130,35 @@ export class GameScreensManager {
   private createDomElements() {
     if (typeof document === 'undefined') return;
 
-    // 0. Tactical Title Portal (Main Entrance Portal)
+    // 0. Tactical Title Portal (Main 3A Hero Entrance Screen)
     let portalEl = document.getElementById('screen-title-portal');
     if (!portalEl) {
       portalEl = document.createElement('div');
       portalEl.id = 'screen-title-portal';
       portalEl.className = 'screen-portal-overlay hidden';
       portalEl.innerHTML = `
-        <div class="portal-backdrop"></div>
+        <div class="portal-backdrop">
+          <div class="portal-hero-bg"></div>
+          <div class="portal-spotlight-beam"></div>
+          <div class="portal-rain-layer"></div>
+        </div>
         <div class="portal-scanline"></div>
         <div class="portal-container">
           <div class="portal-header-tag">
             <span class="portal-badge-dot"></span>
             <span class="portal-badge-text">TASK FORCE 141 // RECON OPS DIVISION</span>
-            <span class="portal-version-badge">v1.6.1</span>
+            <span class="portal-version-badge">v1.6.2</span>
             <span class="portal-server-status">PACIFIC ASIA-EAST [ONLINE 22ms]</span>
           </div>
 
           <div class="portal-main-branding">
-            <h1 class="portal-title-h1">FIREGUN <span class="portal-version-inline">v1.6.1</span></h1>
+            <h1 class="portal-title-h1">FIREGUN <span class="portal-version-inline">v1.6.2</span></h1>
             <div class="portal-hazard-line"></div>
             <div class="portal-subtitle-row">
               <span class="portal-sub-code">ACT-01 // PFT-08</span>
               <span class="portal-sub-name">OPERATION COLD HARBOR (寒港行動)</span>
-              <span class="portal-sub-ver">BUILD 1.6.1</span>
+              <span class="portal-sub-ver">BUILD 1.6.2</span>
             </div>
-          </div>
-
-          <!-- Tactical Navigation Glass Bar -->
-          <div class="portal-nav-bar">
-            <button id="btn-portal-tab-campaign" class="btn-portal-tab active">⚔️ 戰役行動 (CAMPAIGN)</button>
-            <button id="btn-portal-tab-gunsmith" class="btn-portal-tab">🧰 戰術軍械庫 (GUNSMITH)</button>
-            <button id="btn-portal-tab-dossier" class="btn-portal-tab">📊 作戰紀錄 (DOSSIER)</button>
           </div>
 
           <div class="portal-features-chips">
@@ -147,12 +168,12 @@ export class GameScreensManager {
             <span class="p-chip">👥 SQUAD TACTICS</span>
           </div>
 
-          <button id="btn-portal-deploy" class="btn-portal-deploy">
+          <button id="btn-portal-deploy" class="btn-portal-deploy btn-portal-start-hero">
             <span class="btn-portal-glow"></span>
-            <span class="btn-portal-text">⚔️ DEPLOY OPERATOR // 點擊進入作戰</span>
+            <span class="btn-portal-text">⚔️ 開始遊戲 // START OPERATION</span>
           </button>
 
-          <div class="portal-footer-note">PRESS ANY KEY OR TAP SCREEN TO COMMENCE OPERATION · CLIENT v1.6.1</div>
+          <div class="portal-footer-note">PRESS ENTER OR TAP ANYWHERE TO START · CLIENT v1.6.2</div>
         </div>
       `;
       document.body.appendChild(portalEl);
@@ -186,16 +207,177 @@ export class GameScreensManager {
 
     // Attach early eager fallback listeners so even pre-warmed clicks/touches register safely
     const earlyDeployBtn = portalEl.querySelector('#btn-portal-deploy') as HTMLElement | null;
-    const earlyCampBtn = portalEl.querySelector('#btn-portal-tab-campaign') as HTMLElement | null;
     this.bindPortalTap(earlyDeployBtn, (e) => this.triggerDeployAction(e));
-    this.bindPortalTap(earlyCampBtn, (e) => this.triggerDeployAction(e));
     this.bindPortalTap(portalEl, (e) => {
       const target = e.target as HTMLElement;
-      if (target.closest('.btn-portal-tab') || target.closest('.btn-portal-deploy') || target.closest('.portal-nav-bar')) {
+      if (target.closest('.btn-portal-deploy')) {
         return;
       }
       this.triggerDeployAction(e);
     });
+
+    // 0.5 Tactical Setup Hub (Briefing & Operation Settings Screen)
+    let setupEl = document.getElementById('screen-tactical-setup');
+    if (!setupEl) {
+      setupEl = document.createElement('div');
+      setupEl.id = 'screen-tactical-setup';
+      setupEl.className = 'screen-setup-overlay hidden';
+      setupEl.innerHTML = `
+        <div class="setup-backdrop">
+          <div class="setup-hero-bg"></div>
+          <div class="setup-ambient-vignette"></div>
+        </div>
+        <div class="setup-scanlines"></div>
+        <div class="setup-container">
+          <div class="setup-header">
+            <div class="setup-header-left">
+              <div class="setup-badge-row">
+                <span class="setup-badge-dot"></span>
+                <span class="setup-badge-text">TASK FORCE 141 // OPERATION COLD HARBOR</span>
+                <span class="setup-ver-pill">v1.6.2</span>
+              </div>
+              <h2 class="setup-title-h2">戰役作戰整備室 <span class="setup-title-sub">// TACTICAL SETUP</span></h2>
+            </div>
+            <div class="setup-header-right">
+              <span class="setup-chip-server">PACIFIC ASIA-EAST [22ms]</span>
+              <span class="setup-chip-credits">💰 CREDITS: <b id="setup-credits-val" class="text-gold">1,250 CR</b></span>
+            </div>
+          </div>
+
+          <!-- 3 Nav Tabs -->
+          <div class="setup-nav-tabs">
+            <button id="setup-tab-btn-briefing" class="setup-tab-nav active">📋 任務情報與難度 (BRIEFING)</button>
+            <button id="setup-tab-btn-gunsmith" class="setup-tab-nav">🧰 武器軍械庫 (GUNSMITH)</button>
+            <button id="setup-tab-btn-settings" class="setup-tab-nav">⚙️ 體感與操作 (SETTINGS)</button>
+          </div>
+
+          <!-- Panel 1: Briefing -->
+          <div id="setup-panel-briefing" class="setup-panel-content active">
+            <div class="setup-briefing-layout">
+              <div class="setup-intel-card">
+                <div class="intel-tag">MISSION BRIEFING // 作戰目標</div>
+                <h3 class="intel-title">寒港深水碼頭滲透與防空火控奪還</h3>
+                <p class="intel-desc">
+                  敵軍 PMC「黑爪部隊」已佔領寒港 4 號碼頭並架設干擾天線。
+                  你將率領 Task Force 141 特戰小隊搭乘隱形直升機索降突入，安放 C4 破壞油料庫，
+                  並奪回港務主控終端，最後消滅重裝防彈 Juggernaut 首領。
+                </p>
+                <div class="intel-objectives">
+                  <div class="obj-item"><span class="obj-step-num">01</span><span>避開探照燈巡邏，安放 C4 破壞重型油料桶</span></div>
+                  <div class="obj-item"><span class="obj-step-num">02</span><span>駭入港務主控終端，解除近迫防空火控系統</span></div>
+                  <div class="obj-item"><span class="obj-step-num">03</span><span>消滅 PMC Juggernaut 重裝機槍隊長並呼叫撤離</span></div>
+                </div>
+              </div>
+
+              <div class="setup-briefing-controls">
+                <div class="setup-control-group">
+                  <span class="control-group-title">夜港作戰模式 (OPERATION MODE):</span>
+                  <div class="setup-mode-grid">
+                    <button data-setup-mode="RAID" class="btn-setup-mode-opt active">⚔️ 戰術突襲 (3階任務)</button>
+                    <button data-setup-mode="SURVIVAL" class="btn-setup-mode-opt">🌊 波次防衛戰</button>
+                    <button data-setup-mode="SNIPER" class="btn-setup-mode-opt">🎯 高空狙擊獵殺</button>
+                    <button data-setup-mode="BLITZ" class="btn-setup-mode-opt">⏱️ 90秒極速肅清</button>
+                  </div>
+                </div>
+
+                <div class="setup-control-group">
+                  <span class="control-group-title">戰役難度等級 (DIFFICULTY):</span>
+                  <div class="setup-diff-grid">
+                    <button data-setup-diff="STANDARD" class="btn-setup-diff-opt active">🟢 標準 (STANDARD)</button>
+                    <button data-setup-diff="HARDCORE" class="btn-setup-diff-opt">🟡 困難 (HARDCORE)</button>
+                    <button data-setup-diff="NIGHTMARE" class="btn-setup-diff-opt">🔴 極限 (NIGHTMARE)</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Panel 2: Gunsmith Preview -->
+          <div id="setup-panel-gunsmith" class="setup-panel-content hidden">
+            <div class="setup-gunsmith-box">
+              <div class="wep-preview-card">
+                <div class="wep-preview-header">
+                  <span class="wep-preview-type">突擊步槍 / PRIMARY WEAPON</span>
+                  <div class="wep-preview-title-row">
+                    <h3 id="setup-wep-title">AR-7 カービン</h3>
+                    <span id="setup-wep-level" class="gunsmith-lvl-badge">LV. 3</span>
+                  </div>
+                  <p id="setup-wep-desc">標準配發全自動戰術步槍。兼顧中近距離壓制力與穩定後座力，支援瞄具、槍口、握把與彈匣改裝。</p>
+                </div>
+
+                <div class="wep-preview-attributes">
+                  <div class="wep-attr-pill">威力: <b id="setup-attr-dmg">34</b></div>
+                  <div class="wep-attr-pill">連射: <b id="setup-attr-rof">75</b></div>
+                  <div class="wep-attr-pill">安定: <b id="setup-attr-stb">72</b></div>
+                  <div class="wep-attr-pill">射程: <b id="setup-attr-rng">65</b></div>
+                  <div class="wep-attr-pill">彈容: <b id="setup-attr-cap">30</b></div>
+                </div>
+
+                <button id="btn-setup-to-gunsmith" class="btn-gold-workbench">
+                  🧰 開啟 3D 戰術軍械庫改裝 (OPEN WORKBENCH)
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Panel 3: Settings -->
+          <div id="setup-panel-settings" class="setup-panel-content hidden">
+            <div class="setup-settings-grid">
+              <div class="setup-setting-card">
+                <div class="setting-title-row">
+                  <span class="setting-icon">🧭</span>
+                  <div>
+                    <div class="setting-name">手機陀螺儀體感瞄準</div>
+                    <div class="setting-sub">傾斜手機微動手腕進行高精度瞄準</div>
+                  </div>
+                </div>
+                <div class="setting-action-row">
+                  <button id="setup-btn-gyro-toggle" class="btn-setup-toggle active">陀螺儀: 啟用中 (ON)</button>
+                  <button id="setup-btn-gyro-sens" class="btn-setup-cycle">靈敏度: 2.2x</button>
+                </div>
+              </div>
+
+              <div class="setup-setting-card">
+                <div class="setting-title-row">
+                  <span class="setting-icon">🤖</span>
+                  <div>
+                    <div class="setting-name">智慧自動開火輔助</div>
+                    <div class="setting-sub">準星精準對準敵軍身軀時自動扣扳機開火</div>
+                  </div>
+                </div>
+                <div class="setting-action-row">
+                  <button id="setup-btn-autofire-toggle" class="btn-setup-toggle active">自動開火: 啟用中 (ON)</button>
+                </div>
+              </div>
+
+              <div class="setup-setting-card">
+                <div class="setting-title-row">
+                  <span class="setting-icon">⚙️</span>
+                  <div>
+                    <div class="setting-name">手遊觸控鍵位工坊</div>
+                    <div class="setting-sub">自訂按鈕位置、縮放大小 (70%~150%) 與透明度</div>
+                  </div>
+                </div>
+                <div class="setting-action-row">
+                  <button id="setup-btn-hud-editor" class="btn-setup-action">開啟鍵位與體感工坊</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Footer Action Bar -->
+          <div class="setup-footer">
+            <button id="btn-setup-back" class="btn-setup-back">🏠 返回首頁</button>
+            <button id="btn-setup-deploy" class="btn-setup-deploy">
+              <span class="btn-deploy-pulse"></span>
+              <span class="btn-deploy-text">🚁 確認出擊 // COMMENCE INFILTRATION</span>
+            </button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(setupEl);
+    }
+    this.setupModal = setupEl;
 
     // 1. Dynamic Recon Preload Screen (Multi-Angle Surveillance & Lerp Progress Bar)
     let pScreen = document.getElementById('screen-preload');
@@ -221,17 +403,17 @@ export class GameScreensManager {
         <div class="preload-content-center">
           <div class="preload-badge-row">
             <span class="preload-badge-title">OPERATION MIDNIGHT RECON // WARMING ENGINE</span>
-            <span class="preload-version-pill">BUILD v1.6.1</span>
+            <span class="preload-version-pill">BUILD v1.6.2</span>
           </div>
           <div class="preload-stage-row">
-            <span id="preload-stage-label" class="preload-stage-label">[v1.6.1] STEP 1/7 · DOWNLOADING ASSETS...</span>
+            <span id="preload-stage-label" class="preload-stage-label">[v1.6.2] STEP 1/7 · DOWNLOADING ASSETS...</span>
             <span id="preload-stage-pct" class="preload-stage-pct">0%</span>
           </div>
           <div class="preload-line-track">
             <div id="preload-line-fill" class="preload-line-fill"></div>
           </div>
           <div id="preload-stage-hint" class="preload-stage-hint">${TACTICAL_TIPS[0]}</div>
-          <div class="preload-footer-ver">FIREGUN TACTICAL ENGINE · CLIENT v1.6.1-REL</div>
+          <div class="preload-footer-ver">FIREGUN TACTICAL ENGINE · CLIENT v1.6.2-REL</div>
         </div>
       `;
       document.body.appendChild(pScreen);
@@ -256,7 +438,7 @@ export class GameScreensManager {
         <div class="pause-card">
           <div class="pause-header">
             <span class="pause-title">PAUSED // 作戰暫停</span>
-            <span class="pause-code">GRID K2 · PACIFIC TIME 02:40 · BUILD v1.6.1</span>
+            <span class="pause-code">GRID K2 · PACIFIC TIME 02:40 · BUILD v1.6.2</span>
           </div>
           <div class="pause-actions">
             <button id="btn-pause-resume" class="btn-pause-act btn-pause-primary">RESUME OPERATION // 繼續作戰</button>
@@ -470,8 +652,14 @@ export class GameScreensManager {
   }
 
   public showPortal(onDeploy: () => void, onGunsmith?: () => void) {
+    this.isDeploying = false;
     this.onDeployCallback = onDeploy;
     if (onGunsmith) this.onGunsmithCallback = onGunsmith;
+
+    const btnText = this.titlePortal?.querySelector('.btn-portal-text');
+    if (btnText) {
+      btnText.textContent = '⚔️ 開始遊戲 // START OPERATION';
+    }
 
     if (this.portalDeployPending) {
       this.portalDeployPending = false;
@@ -483,38 +671,10 @@ export class GameScreensManager {
     this.titlePortal.classList.remove('hidden');
 
     const deployBtn = document.getElementById('btn-portal-deploy');
-    const campBtn = document.getElementById('btn-portal-tab-campaign');
-    const gunsmithBtn = document.getElementById('btn-portal-tab-gunsmith');
-    const dossierBtn = document.getElementById('btn-portal-tab-dossier');
-
     this.bindPortalTap(deployBtn, (e) => this.triggerDeployAction(e));
-    this.bindPortalTap(campBtn, (e) => this.triggerDeployAction(e));
 
-    this.bindPortalTap(gunsmithBtn, (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.titlePortal?.classList.add('hidden');
-      (this.onGunsmithCallback || onGunsmith)?.();
-    });
-
-    this.bindPortalTap(dossierBtn, (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.titlePortal?.classList.add('hidden');
-      this.showRecords(() => {
-        // Return to title portal if closed before game deployment
-        if (!this.isDeploying) {
-          this.titlePortal?.classList.remove('hidden');
-        }
-      });
-    });
-
-    // Tap anywhere on the portal backdrop/screen to deploy as stated in footer note
+    // Tap anywhere on the portal backdrop/screen to start
     this.bindPortalTap(this.titlePortal, (e) => {
-      const target = e.target as HTMLElement;
-      if (target.closest('.btn-portal-tab') || target.closest('.btn-portal-deploy') || target.closest('.portal-nav-bar')) {
-        return;
-      }
       this.triggerDeployAction(e);
     });
 
@@ -525,6 +685,215 @@ export class GameScreensManager {
       }
     };
     window.addEventListener('keydown', keyStart);
+  }
+
+  public showTacticalSetup(options: TacticalSetupOptions) {
+    this.setupOptions = options;
+    if (!this.setupModal) return;
+    this.setupModal.classList.remove('hidden');
+
+    // Update header credits
+    const creditsEl = document.getElementById('setup-credits-val');
+    if (creditsEl && options.credits !== undefined) {
+      creditsEl.textContent = `${options.credits.toLocaleString()} CR`;
+    }
+
+    // Update weapon preview
+    const wepTitle = document.getElementById('setup-wep-title');
+    const wepLvl = document.getElementById('setup-wep-level');
+    const wepDesc = document.getElementById('setup-wep-desc');
+    if (wepTitle && options.activeWeaponName) wepTitle.textContent = options.activeWeaponName;
+    if (wepLvl && options.activeWeaponLevel !== undefined) wepLvl.textContent = `LV. ${options.activeWeaponLevel}`;
+    if (wepDesc && options.activeWeaponDesc) wepDesc.textContent = options.activeWeaponDesc;
+
+    if (options.activeWeaponStats) {
+      const s = options.activeWeaponStats;
+      const dmg = document.getElementById('setup-attr-dmg');
+      const rof = document.getElementById('setup-attr-rof');
+      const stb = document.getElementById('setup-attr-stb');
+      const rng = document.getElementById('setup-attr-rng');
+      const cap = document.getElementById('setup-attr-cap');
+      if (dmg) dmg.textContent = String(s.dmg);
+      if (rof) rof.textContent = String(s.rof);
+      if (stb) stb.textContent = String(s.stb);
+      if (rng) rng.textContent = String(s.rng);
+      if (cap) cap.textContent = String(s.cap);
+    }
+
+    // Update active mode and difficulty buttons
+    this.updateSetupModeAndDiffUi(options.currentMode, options.currentDifficulty);
+
+    // Update gyro & autofire status
+    this.updateSetupControlsUi(options.gyroEnabled, options.gyroSens, options.autofireEnabled);
+
+    // Bind Tabs
+    const tabBriefing = document.getElementById('setup-tab-btn-briefing');
+    const tabGunsmith = document.getElementById('setup-tab-btn-gunsmith');
+    const tabSettings = document.getElementById('setup-tab-btn-settings');
+    const panelBriefing = document.getElementById('setup-panel-briefing');
+    const panelGunsmith = document.getElementById('setup-panel-gunsmith');
+    const panelSettings = document.getElementById('setup-panel-settings');
+
+    const switchTab = (tabName: 'briefing' | 'gunsmith' | 'settings') => {
+      tabBriefing?.classList.toggle('active', tabName === 'briefing');
+      tabGunsmith?.classList.toggle('active', tabName === 'gunsmith');
+      tabSettings?.classList.toggle('active', tabName === 'settings');
+
+      panelBriefing?.classList.toggle('active', tabName === 'briefing');
+      panelBriefing?.classList.toggle('hidden', tabName !== 'briefing');
+
+      panelGunsmith?.classList.toggle('active', tabName === 'gunsmith');
+      panelGunsmith?.classList.toggle('hidden', tabName !== 'gunsmith');
+
+      panelSettings?.classList.toggle('active', tabName === 'settings');
+      panelSettings?.classList.toggle('hidden', tabName !== 'settings');
+    };
+
+    if (tabBriefing) {
+      tabBriefing.onclick = () => switchTab('briefing');
+      tabBriefing.ontouchend = () => switchTab('briefing');
+    }
+    if (tabGunsmith) {
+      tabGunsmith.onclick = () => switchTab('gunsmith');
+      tabGunsmith.ontouchend = () => switchTab('gunsmith');
+    }
+    if (tabSettings) {
+      tabSettings.onclick = () => switchTab('settings');
+      tabSettings.ontouchend = () => switchTab('settings');
+    }
+
+    // Bind Mode buttons
+    document.querySelectorAll<HTMLElement>('.btn-setup-mode-opt').forEach((btn) => {
+      const onMode = (e: Event) => {
+        e.stopPropagation();
+        const m = btn.dataset.setupMode as 'RAID' | 'SURVIVAL' | 'SNIPER' | 'BLITZ';
+        if (m && options.onModeChange) {
+          options.onModeChange(m);
+          this.updateSetupModeAndDiffUi(m, options.currentDifficulty);
+        }
+      };
+      btn.onclick = onMode;
+      btn.ontouchend = onMode;
+    });
+
+    // Bind Difficulty buttons
+    document.querySelectorAll<HTMLElement>('.btn-setup-diff-opt').forEach((btn) => {
+      const onDiff = (e: Event) => {
+        e.stopPropagation();
+        const d = btn.dataset.setupDiff as 'STANDARD' | 'HARDCORE' | 'NIGHTMARE';
+        if (d && options.onDifficultyChange) {
+          options.onDifficultyChange(d);
+          this.updateSetupModeAndDiffUi(options.currentMode, d);
+        }
+      };
+      btn.onclick = onDiff;
+      btn.ontouchend = onDiff;
+    });
+
+    // Bind Open Gunsmith
+    const openWepBtn = document.getElementById('btn-setup-to-gunsmith');
+    if (openWepBtn) {
+      const onOpenGunsmith = (e: Event) => {
+        e.stopPropagation();
+        options.onOpenGunsmith();
+      };
+      openWepBtn.onclick = onOpenGunsmith;
+      openWepBtn.ontouchend = onOpenGunsmith;
+    }
+
+    // Bind Gyro & Autofire
+    const gyroBtn = document.getElementById('setup-btn-gyro-toggle');
+    if (gyroBtn) {
+      const onGyro = (e: Event) => {
+        e.stopPropagation();
+        options.onGyroToggle();
+      };
+      gyroBtn.onclick = onGyro;
+      gyroBtn.ontouchend = onGyro;
+    }
+
+    const gyroSensBtn = document.getElementById('setup-btn-gyro-sens');
+    if (gyroSensBtn) {
+      const onSens = (e: Event) => {
+        e.stopPropagation();
+        options.onGyroSensCycle();
+      };
+      gyroSensBtn.onclick = onSens;
+      gyroSensBtn.ontouchend = onSens;
+    }
+
+    const autoBtn = document.getElementById('setup-btn-autofire-toggle');
+    if (autoBtn) {
+      const onAuto = (e: Event) => {
+        e.stopPropagation();
+        options.onAutofireToggle();
+      };
+      autoBtn.onclick = onAuto;
+      autoBtn.ontouchend = onAuto;
+    }
+
+    const hudEditorBtn = document.getElementById('setup-btn-hud-editor');
+    if (hudEditorBtn) {
+      const onHud = (e: Event) => {
+        e.stopPropagation();
+        options.onOpenHudEditor();
+      };
+      hudEditorBtn.onclick = onHud;
+      hudEditorBtn.ontouchend = onHud;
+    }
+
+    // Back to title
+    const backBtn = document.getElementById('btn-setup-back');
+    if (backBtn) {
+      const onBack = (e: Event) => {
+        e.stopPropagation();
+        options.onBackToTitle();
+      };
+      backBtn.onclick = onBack;
+      backBtn.ontouchend = onBack;
+    }
+
+    // Deploy Operator
+    const deployBtn = document.getElementById('btn-setup-deploy');
+    if (deployBtn) {
+      const onDeploy = (e: Event) => {
+        e.stopPropagation();
+        this.triggerWhiteFlash();
+        options.onDeploy();
+      };
+      deployBtn.onclick = onDeploy;
+      deployBtn.ontouchend = onDeploy;
+    }
+  }
+
+  public hideTacticalSetup() {
+    this.setupModal?.classList.add('hidden');
+  }
+
+  public updateSetupModeAndDiffUi(mode: string, diff: string) {
+    document.querySelectorAll<HTMLElement>('.btn-setup-mode-opt').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.setupMode === mode);
+    });
+    document.querySelectorAll<HTMLElement>('.btn-setup-diff-opt').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.setupDiff === diff);
+    });
+  }
+
+  public updateSetupControlsUi(gyroEnabled: boolean, gyroSens: number, autofire: boolean) {
+    const gyroBtn = document.getElementById('setup-btn-gyro-toggle');
+    if (gyroBtn) {
+      gyroBtn.classList.toggle('active', gyroEnabled);
+      gyroBtn.textContent = `🧭 陀螺儀: ${gyroEnabled ? '啟用中 (ON)' : '已關閉 (OFF)'}`;
+    }
+    const sensBtn = document.getElementById('setup-btn-gyro-sens');
+    if (sensBtn) {
+      sensBtn.textContent = `靈敏度: ${gyroSens.toFixed(1)}x`;
+    }
+    const autoBtn = document.getElementById('setup-btn-autofire-toggle');
+    if (autoBtn) {
+      autoBtn.classList.toggle('active', autofire);
+      autoBtn.textContent = `🤖 自動開火: ${autofire ? '啟用中 (ON)' : '已關閉 (OFF)'}`;
+    }
   }
 
   public hidePortal() {
@@ -545,7 +914,7 @@ export class GameScreensManager {
   public updatePreload(status: PreloadStatus) {
     this.targetPct = Math.min(100, Math.max(0, status.percent));
     if (this.preloadLabel) {
-      this.preloadLabel.textContent = `[v1.6.1] STEP ${status.step}/${status.totalSteps} · ${status.label}`;
+      this.preloadLabel.textContent = `[v1.6.2] STEP ${status.step}/${status.totalSteps} · ${status.label}`;
     }
     if (this.preloadHint && status.hint) {
       this.preloadHint.textContent = status.hint;
@@ -726,6 +1095,7 @@ export class GameScreensManager {
     gyroConfig: { yawSens: number; pitchSens: number; deadzone: number; invertPitch: boolean; aimAssist: boolean };
     onSave: (layout: Record<string, { leftPct: number; topPct: number; scale: number; opacity: number }>, gyro: typeof options.gyroConfig) => void;
     onReset: () => void;
+    onClose?: () => void;
   }) {
     const editor = document.getElementById('screen-hud-editor');
     if (!editor) return;
@@ -998,6 +1368,7 @@ export class GameScreensManager {
 
     document.getElementById('btn-hud-editor-close')?.addEventListener('click', () => {
       editor.classList.add('hidden');
+      options.onClose?.();
     });
   }
 }

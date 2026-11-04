@@ -3508,13 +3508,14 @@ function renderGunsmithAttachmentsList(weaponId: string, wState: any) {
       ${!equippedId ? '✓ 已裝備 (EQUIPPED)' : '恢復原廠 (DEFAULT)'}
     </button>
   `;
-  noneCard.querySelector('button')?.addEventListener('click', (e) => {
+  const handleDefaultTap = (e: Event) => {
     e.stopPropagation();
     unequipAttachment(weaponId, activeGunsmithSlot);
     tacticalRadioAudio.playMechanicalGunsmithClick('unmount');
     syncWeaponAttachments(weaponId);
     updateLoadoutModal(activeWeaponIdx);
-  });
+  };
+  noneCard.addEventListener('click', handleDefaultTap);
   listEl.appendChild(noneCard);
 
   // 2. Catalog attachments
@@ -3555,7 +3556,7 @@ function renderGunsmithAttachmentsList(weaponId: string, wState: any) {
       </button>
     `;
 
-    card.querySelector('button')?.addEventListener('click', (e) => {
+    const handleCardAction = (e: Event) => {
       e.stopPropagation();
       if (isEq) {
         unequipAttachment(weaponId, activeGunsmithSlot);
@@ -3568,8 +3569,9 @@ function renderGunsmithAttachmentsList(weaponId: string, wState: any) {
       }
       syncWeaponAttachments(weaponId);
       updateLoadoutModal(activeWeaponIdx);
-    });
+    };
 
+    card.addEventListener('click', handleCardAction);
     listEl.appendChild(card);
   }
 }
@@ -4163,10 +4165,129 @@ window.addEventListener('devicemotion', (ev) => {
   player.pitch = Math.max(-1.35, Math.min(1.35, player.pitch + adjPitch));
 });
 
-// Floating Instant Gyroscope Recenter
-document.getElementById('touch-btn-gyro-recenter')?.addEventListener('click', (e) => {
-  e.stopPropagation();
+// ---------------------------------------------------------------------------
+// Mainstream AAA Game Setup State & Responsive Quick Touch Controls
+// ---------------------------------------------------------------------------
+let currentDifficulty: 'STANDARD' | 'HARDCORE' | 'NIGHTMARE' = 'STANDARD';
+let tacticalSetupOpen = false;
+
+function openTacticalSetupScreen() {
+  tacticalSetupOpen = true;
+  const w = WEAPONS[activeWeaponIdx];
+  const prog = loadProgression();
+  const wState = prog.weapons[w.id] || { level: 1, exp: 0, equippedAttachments: {} };
+  const eff = calculateWeaponEffectiveStats(w, w.id);
+
+  screensMgr.showTacticalSetup({
+    credits: prog.credits,
+    activeWeaponName: w.name,
+    activeWeaponLevel: wState.level,
+    activeWeaponDesc: w.desc,
+    activeWeaponStats: {
+      dmg: eff.damage,
+      rof: w.stats.rof,
+      stb: Math.round(100 - eff.recoilPitch * 1400),
+      rng: w.stats.rng,
+      cap: eff.magSize,
+    },
+    currentMode: player.gameMode,
+    currentDifficulty,
+    gyroEnabled: gyroController.enabled,
+    gyroSens: gyroController.sensitivity,
+    autofireEnabled: player.autoFireOn,
+    onDeploy: () => {
+      tacticalSetupOpen = false;
+      screensMgr.hideTacticalSetup();
+      launchInfiltrationCutscene();
+    },
+    onOpenGunsmith: () => {
+      screensMgr.hideTacticalSetup();
+      toggleLoadoutModal(true);
+    },
+    onOpenHudEditor: () => {
+      screensMgr.hideTacticalSetup();
+      openCustomHudEditor();
+    },
+    onBackToTitle: () => {
+      screensMgr.hideTacticalSetup();
+      tacticalSetupOpen = false;
+      screensMgr.showPortal(() => {
+        audioSys.unlockAndPreload().catch(() => {});
+        screensMgr.hidePortal();
+        openTacticalSetupScreen();
+      });
+    },
+    onModeChange: (mode) => {
+      setGameMode(mode);
+    },
+    onDifficultyChange: (diff) => {
+      currentDifficulty = diff;
+      showKillBanner(`DIFFICULTY SET: ${diff}`);
+    },
+    onGyroToggle: () => {
+      toggleGyroAiming();
+      updateSetupScreenState();
+    },
+    onGyroSensCycle: () => {
+      const presets = [1.0, 1.5, 2.2, 3.0];
+      const idx = presets.indexOf(gyroController.sensitivity);
+      gyroController.sensitivity = presets[(idx + 1) % presets.length];
+      updateGyroHudButtons();
+      updateSetupScreenState();
+    },
+    onAutofireToggle: () => {
+      toggleAutoFireAssist();
+      updateSetupScreenState();
+    },
+  });
+}
+
+function updateSetupScreenState() {
+  screensMgr.updateSetupControlsUi(gyroController.enabled, gyroController.sensitivity, player.autoFireOn);
+  screensMgr.updateSetupModeAndDiffUi(player.gameMode, currentDifficulty);
+}
+
+// Robust Mobile Touch & Pointer Debounced Binder
+const bindQuickTouchBtn = (id: string, action: () => void) => {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  let lastTouchTime = 0;
+  const handler = (e: Event) => {
+    const now = performance.now();
+    if (now - lastTouchTime < 240) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    lastTouchTime = now;
+    e.preventDefault();
+    e.stopPropagation();
+    action();
+  };
+  btn.addEventListener('pointerup', handler);
+  btn.addEventListener('click', handler);
+  btn.addEventListener('touchend', handler);
+};
+
+// Bind Mid-Right Vertical Utility Icon Stack (100% Reliable on Mobile Touch!)
+bindQuickTouchBtn('touch-btn-nvg-quick', () => {
+  toggleNvgMode();
+});
+bindQuickTouchBtn('touch-btn-tps-quick', () => {
+  setThirdPersonMode();
+});
+bindQuickTouchBtn('touch-btn-gyro-quick', () => {
+  toggleGyroAiming();
+});
+bindQuickTouchBtn('touch-btn-gyro-recenter', () => {
   calibrateGyroCenter();
+});
+bindQuickTouchBtn('touch-btn-drawer', () => {
+  toggleTacticalDrawer();
+});
+bindQuickTouchBtn('touch-btn-swap', () => {
+  const next = (activeWeaponIdx + 1) % WEAPONS.length;
+  equipWeapon(next);
 });
 
 // HUD & Gyro Customizer Opener
@@ -4187,6 +4308,7 @@ const openCustomHudEditor = () => {
       gyroController.aimAssist = gyro.aimAssist;
       loadAndApplyCustomHudLayout();
       showKillBanner('HUD & GYRO CONFIG SAVED');
+      if (!operationStarted) openTacticalSetupScreen();
     },
     onReset: () => {
       for (const id of [
@@ -4216,6 +4338,10 @@ const openCustomHudEditor = () => {
       gyroController.deadzone = 0.02;
       gyroController.invertPitch = false;
       showKillBanner('HUD & GYRO RESTORED TO DEFAULT');
+      if (!operationStarted) openTacticalSetupScreen();
+    },
+    onClose: () => {
+      if (!operationStarted) openTacticalSetupScreen();
     },
   });
 };
@@ -4240,10 +4366,7 @@ const closeGunsmith = (e?: Event) => {
   }
   toggleLoadoutModal(false);
   if (!operationStarted) {
-    screensMgr.showPortal(
-      () => launchInfiltrationCutscene(),
-      () => toggleLoadoutModal(true)
-    );
+    openTacticalSetupScreen();
   }
 };
 const closeBtn = document.getElementById('btn-gunsmith-close');
@@ -4543,7 +4666,8 @@ document.getElementById('btn-pause-restart')?.addEventListener('click', () => {
 });
 document.getElementById('btn-pause-main')?.addEventListener('click', () => {
   screensMgr.togglePause(false);
-  screensMgr.showTitleScreen(() => {});
+  operationStarted = false;
+  openTacticalSetupScreen();
 });
 
 // ---------------------------------------------------------------------------
@@ -5677,11 +5801,13 @@ function stepSimulation(dt: number, elapsedSec: number) {
 
           // Inflict slight damage to player if in line of sight
           if (dist < 26 && !player.fixedCameraKey) {
-            const dmg = 4;
+            const dmgMult = currentDifficulty === 'HARDCORE' ? 1.4 : currentDifficulty === 'NIGHTMARE' ? 1.9 : 1.0;
+            const minHp = currentDifficulty === 'STANDARD' ? 15 : 0;
+            const dmg = Math.round(4 * dmgMult);
             if (player.armor > 0) {
               player.armor = Math.max(0, player.armor - dmg);
             } else {
-              player.hp = Math.max(15, player.hp - dmg);
+              player.hp = Math.max(minHp, player.hp - dmg);
             }
             player.damageTaken += dmg;
             updateStatusHud();
@@ -5994,35 +6120,64 @@ window.addEventListener('resize', () => {
 const isAutomatedQa = captureMode || Boolean(navigator.webdriver) || Boolean(initialCamParam) || Boolean(initialUiParam);
 
 const startOperationPipeline = () => {
-  screensMgr.showPreload();
-  audioSys.unlockAndPreload().catch(() => {});
-  loadAllAssets()
-    .catch((err) => {
-      console.warn('Asset loading encountered fallback:', err);
-      screensMgr.hidePreload();
-      screensMgr.showPortal(
-        () => launchInfiltrationCutscene(),
-        () => {
-          toggleLoadoutModal(true);
+  if (isAutomatedQa) {
+    // Automated testing / QA harness
+    screensMgr.showPreload();
+    audioSys.unlockAndPreload().catch(() => {});
+    loadAllAssets()
+      .catch((err) => {
+        console.warn('Asset loading encountered fallback:', err);
+      })
+      .finally(() => {
+        screensMgr.hidePreload();
+        operationStarted = true;
+        if (!captureMode && !initialCamParam) {
+          launchInfiltrationCutscene();
         }
-      );
-    })
-    .finally(() => {
-      loadAndApplyCustomHudLayout();
-      syncWeaponAttachments(WEAPONS[activeWeaponIdx].id);
-      if (initialCamParam) {
-        applyNamedCamera(initialCamParam);
-      }
-      if (initialUiParam === 'loadout') {
-        toggleLoadoutModal(true);
-      } else if (initialUiParam === 'complete') {
-        openMissionCompleteModal();
-      }
-      updateStatusHud();
-      updateWeaponHud();
-      updateGyroHudButtons();
-      requestAnimationFrame(animate);
-    });
+        loadAndApplyCustomHudLayout();
+        syncWeaponAttachments(WEAPONS[activeWeaponIdx].id);
+        if (initialCamParam) {
+          applyNamedCamera(initialCamParam);
+        }
+        if (initialUiParam === 'loadout') {
+          toggleLoadoutModal(true);
+        } else if (initialUiParam === 'complete') {
+          openMissionCompleteModal();
+        }
+        updateStatusHud();
+        updateWeaponHud();
+        updateGyroHudButtons();
+        requestAnimationFrame(animate);
+      });
+    return;
+  }
+
+  // Mainstream AAA Commercial Flow:
+  // Stage 1: Present 3A Hero Title Screen with "開始遊戲 // START OPERATION"
+  screensMgr.showPortal(() => {
+    // Stage 2: User taps "開始遊戲" -> Unlocks Web Audio on gesture & starts Preload!
+    audioSys.unlockAndPreload().catch(() => {});
+    tacticalRadioAudio.initAudio().catch(() => {});
+    screensMgr.hidePortal();
+    screensMgr.showPreload();
+
+    loadAllAssets()
+      .catch((err) => {
+        console.warn('Asset loading encountered fallback:', err);
+      })
+      .finally(() => {
+        screensMgr.hidePreload();
+        loadAndApplyCustomHudLayout();
+        syncWeaponAttachments(WEAPONS[activeWeaponIdx].id);
+        updateStatusHud();
+        updateWeaponHud();
+        updateGyroHudButtons();
+        requestAnimationFrame(animate);
+
+        // Stage 3: Enter Tactical Setup Hub!
+        openTacticalSetupScreen();
+      });
+  });
 };
 
 // Boot immediately: warm up engine and assets, then present live 3D portal or direct QA harness
