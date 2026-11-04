@@ -2,7 +2,7 @@ import { chromium, devices } from 'playwright';
 import path from 'node:path';
 import fs from 'node:fs';
 
-const EVIDENCE_DIR = path.resolve('docs/evidence/v1.6.2');
+const EVIDENCE_DIR = path.resolve('docs/evidence/v1.7.0');
 fs.mkdirSync(EVIDENCE_DIR, { recursive: true });
 
 async function safeScreenshot(page, filePath) {
@@ -117,6 +117,23 @@ async function run() {
   await page.waitForSelector('#screen-tactical-setup:not(.hidden)', { timeout: 6000 });
   console.log('✓ Returned cleanly to Tactical Setup Hub');
 
+  // Verify Settings tab and Haptics toggle button
+  console.log('6b. Testing Settings tab and Haptic Feedback toggle...');
+  await page.evaluate(() => {
+    document.getElementById('setup-tab-btn-settings')?.click();
+  });
+  await page.waitForTimeout(200);
+  const hapticsBtnText = await page.evaluate(() => document.getElementById('setup-btn-haptics-toggle')?.textContent);
+  console.log(`✓ Haptics setup button text: "${hapticsBtnText}"`);
+  await page.evaluate(() => {
+    document.getElementById('setup-btn-haptics-toggle')?.click();
+  });
+  const hapticsAfterClick = await page.evaluate(() => document.getElementById('setup-btn-haptics-toggle')?.textContent);
+  console.log(`✓ Haptics button after toggle: "${hapticsAfterClick}"`);
+  await page.evaluate(() => {
+    document.getElementById('setup-btn-haptics-toggle')?.click();
+  });
+
   // 7. Click "確認出擊 // COMMENCE INFILTRATION"
   console.log('7. Clicking "確認出擊 // COMMENCE INFILTRATION"...');
   await page.evaluate(() => {
@@ -129,8 +146,17 @@ async function run() {
   // Wait 2 seconds for cutscene transition
   await page.waitForTimeout(2000);
 
-  // 8. Test Right-Side 3 Utility Icons
-  console.log('8. Testing right-side touch buttons: NVG, TPS, Gyro...');
+  // 8. Test Reticle and Ammunition Card
+  console.log('8. Testing dynamic bloom reticle and ammunition card tap...');
+  const reticleExists = await page.evaluate(() => Boolean(document.getElementById('reticle-wrap')));
+  console.log(`✓ Dynamic bloom reticle exists: ${reticleExists}`);
+  await page.evaluate(() => {
+    document.querySelector('.ammo-card')?.click();
+  });
+  console.log('✓ Clicked .ammo-card to trigger reload');
+
+  // 9. Test Right-Side 3 Utility Icons
+  console.log('9. Testing right-side touch buttons: NVG, TPS, Gyro...');
   await page.evaluate(() => {
     document.getElementById('touch-btn-nvg-quick')?.click();
   });

@@ -222,7 +222,7 @@ body, html {
 .kf-weapon { color: #f8fafc; font-family: monospace; }
 .kf-victim { color: #f87171; }
 
-/* Center Reticle */
+/* Center Reticle (Dynamic Bloom & Tactile Dispersion) */
 .reticle-wrap {
   position: absolute;
   top: 50%;
@@ -230,24 +230,72 @@ body, html {
   width: 32px;
   height: 32px;
   transform: translate(-50%, -50%);
+  pointer-events: none;
 }
 
 .reticle-line {
   position: absolute;
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 0 3px rgba(0, 0, 0, 0.9);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.95);
+  border-radius: 1px;
 }
 
-.ret-top { width: 2px; height: 8px; left: 15px; top: 0; }
-.ret-bottom { width: 2px; height: 8px; left: 15px; bottom: 0; }
-.ret-left { width: 8px; height: 2px; left: 0; top: 15px; }
-.ret-right { width: 8px; height: 2px; right: 0; top: 15px; }
+.ret-top {
+  width: 2px;
+  height: 8px;
+  left: 15px;
+  top: 0;
+  transform: translateY(calc(var(--bloom-offset, 0px) * -1));
+  transition: transform 0.04s cubic-bezier(0.1, 0.9, 0.2, 1);
+}
+
+.ret-bottom {
+  width: 2px;
+  height: 8px;
+  left: 15px;
+  bottom: 0;
+  transform: translateY(var(--bloom-offset, 0px));
+  transition: transform 0.04s cubic-bezier(0.1, 0.9, 0.2, 1);
+}
+
+.ret-left {
+  width: 8px;
+  height: 2px;
+  left: 0;
+  top: 15px;
+  transform: translateX(calc(var(--bloom-offset, 0px) * -1));
+  transition: transform 0.04s cubic-bezier(0.1, 0.9, 0.2, 1);
+}
+
+.ret-right {
+  width: 8px;
+  height: 2px;
+  right: 0;
+  top: 15px;
+  transform: translateX(var(--bloom-offset, 0px));
+  transition: transform 0.04s cubic-bezier(0.1, 0.9, 0.2, 1);
+}
 
 .hitmarker {
   position: absolute;
   inset: 4px;
-  border: 2px solid #ef4444;
-  transform: rotate(45deg);
+  border: 2px solid #fef08a;
+  transform: rotate(45deg) scale(0.95);
+  box-shadow: 0 0 8px rgba(254, 240, 138, 0.7);
+  transition: transform 0.05s ease-out, border-color 0.05s ease-out;
+  pointer-events: none;
+}
+
+.hitmarker.hitmarker-headshot {
+  border-color: #ef4444 !important;
+  transform: rotate(45deg) scale(1.36) !important;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.95), inset 0 0 8px rgba(239, 68, 68, 0.5) !important;
+  animation: hitmarker-headshot-pop 0.15s ease-out !important;
+}
+
+@keyframes hitmarker-headshot-pop {
+  0% { transform: rotate(45deg) scale(1.6); }
+  100% { transform: rotate(45deg) scale(1.36); }
 }
 
 /* Reload Box */
@@ -427,6 +475,14 @@ body, html {
   justify-content: space-between;
   align-items: center;
   overflow: hidden;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 0.12s ease-out, border-color 0.12s ease-out;
+}
+
+.ammo-card:active {
+  transform: scale(0.97);
+  border-color: #facc15;
 }
 
 .ammo-card-hazard-bottom {

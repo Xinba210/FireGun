@@ -19,6 +19,7 @@ import {
 import { WeaponsAttachmentVisualizer, PictureInPictureScope } from './game/weapons.ts';
 import { WorldDetailsManager } from './world/details.ts';
 import { tacticalRadioAudio } from './game/audio.ts';
+import { hapticEngine } from './game/haptics.ts';
 
 interface WeaponSpec {
   id: string;
@@ -393,8 +394,60 @@ class SpatialAudioManager {
     const atten = Math.max(0.05, Math.min(1, refDist / Math.max(refDist, dist)));
     this.play2D(url, gain * atten);
   }
+
+  playHitTick(isHeadshot = false) {
+    if (!this.ctx) return;
+    if (this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    }
+    const now = this.ctx.currentTime;
+    if (isHeadshot) {
+      // 爆頭雙頻破甲重音 (Crunch: 4200Hz + 850Hz)
+      const osc1 = this.ctx.createOscillator();
+      const osc2 = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+
+      osc1.type = 'triangle';
+      osc1.frequency.setValueAtTime(4200, now);
+      osc1.frequency.exponentialRampToValueAtTime(1400, now + 0.08);
+
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(850, now);
+      osc2.frequency.exponentialRampToValueAtTime(220, now + 0.08);
+
+      g.gain.setValueAtTime(0.55 * this.masterVolume, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+
+      osc1.connect(g);
+      osc2.connect(g);
+      g.connect(this.ctx.destination);
+
+      osc1.start(now);
+      osc2.start(now);
+      osc1.stop(now + 0.09);
+      osc2.stop(now + 0.09);
+    } else {
+      // 戰術擊中高頻清脆金屬音 (Hit Tick: 3200Hz)
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(3200, now);
+      osc.frequency.exponentialRampToValueAtTime(1800, now + 0.045);
+
+      g.gain.setValueAtTime(0.42 * this.masterVolume, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+
+      osc.connect(g);
+      g.connect(this.ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.05);
+    }
+  }
 }
 const audioSys = new SpatialAudioManager();
+let reticleBloomOffset = 4.0;
 
 // ---------------------------------------------------------------------------
 // Night Port Atmosphere, Sky Dome, Lights & Volumetric Cones (Step 5)
@@ -2686,11 +2739,21 @@ function pushKillfeed(weaponName: string, victimName: string, headshot: boolean)
   }, isMobilePortrait ? 2000 : 3500);
 }
 
-function triggerHitmarker() {
+function triggerHitmarker(isHeadshot = false) {
+  audioSys.playHitTick(isHeadshot);
+  hapticEngine.triggerHit(isHeadshot);
   const hm = document.getElementById('hitmarker');
   if (!hm) return;
   hm.classList.remove('hidden');
-  setTimeout(() => hm.classList.add('hidden'), 140);
+  if (isHeadshot) {
+    hm.classList.add('hitmarker-headshot');
+  } else {
+    hm.classList.remove('hitmarker-headshot');
+  }
+  setTimeout(() => {
+    hm.classList.add('hidden');
+    hm.classList.remove('hitmarker-headshot');
+  }, 140);
 }
 
 function startReload() {
@@ -2699,6 +2762,7 @@ function startReload() {
   player.reloading = true;
   player.reloadTimer = 0;
   audioSys.play2D('assets/audio/reload.wav', 0.8);
+  hapticEngine.triggerReload();
   document.getElementById('reload-box')?.classList.remove('hidden');
 }
 
@@ -2929,7 +2993,18 @@ function damageEnemy(enemy: EnemyActor, amount: number, isHeadshot: boolean, wea
   }
 
   enemy.hp -= finalAmount;
-  triggerHitmarker();
+  triggerHitmarker(isHeadshot);
+
+  // Procedural Stagger / Flinch impulse on non-boss enemies
+  if (enemy.hp > 0 && enemy.archetype !== 'JUGGERNAUT') {
+    enemy.isStaggered = true;
+    enemy.staggerTimer = 0.26;
+    const impactDir = enemy.root.position.clone().sub(camera.position).normalize();
+    impactDir.y = 0;
+    enemy.root.position.addScaledVector(impactDir, isHeadshot ? 0.16 : 0.08);
+    enemy.root.rotation.x = isHeadshot ? -0.22 : -0.14;
+    enemy.root.rotation.z += (Math.random() - 0.5) * 0.16;
+  }
 
   if (enemy.archetype === 'JUGGERNAUT') {
     const bossHpText = document.getElementById('boss-hp-text');
@@ -3261,6 +3336,8 @@ function fireSingleRound(fromBurstQueue = false) {
   player.fireTimer = w.fireInterval;
   player.recoilOffsetZ = w.recoilZ;
   player.recoilPitch = w.recoilPitch;
+  reticleBloomOffset = Math.min(22, reticleBloomOffset + w.recoilPitch * 140 + 4.2);
+  hapticEngine.triggerShot(w.id);
   muzzleFlashMesh.material.opacity = 0.95;
   muzzleFlashMesh.rotation.z = Math.random() * Math.PI * 2;
   muzzleLight.intensity = 18.0;
@@ -4239,11 +4316,21 @@ function openTacticalSetupScreen() {
       toggleAutoFireAssist();
       updateSetupScreenState();
     },
+    hapticsEnabled: hapticEngine.isEnabled(),
+    onHapticsToggle: () => {
+      hapticEngine.toggle();
+      updateSetupScreenState();
+    },
   });
 }
 
 function updateSetupScreenState() {
-  screensMgr.updateSetupControlsUi(gyroController.enabled, gyroController.sensitivity, player.autoFireOn);
+  screensMgr.updateSetupControlsUi(
+    gyroController.enabled,
+    gyroController.sensitivity,
+    player.autoFireOn,
+    hapticEngine.isEnabled()
+  );
   screensMgr.updateSetupModeAndDiffUi(player.gameMode, currentDifficulty);
 }
 
@@ -4289,6 +4376,17 @@ bindQuickTouchBtn('touch-btn-swap', () => {
   const next = (activeWeaponIdx + 1) % WEAPONS.length;
   equipWeapon(next);
 });
+
+// Bind Ammunition HUD Card Tap to Trigger Quick Reload
+const ammoCardEl = document.querySelector('.ammo-card');
+if (ammoCardEl) {
+  const onAmmoCardTap = (e: Event) => {
+    e.stopPropagation();
+    startReload();
+  };
+  ammoCardEl.addEventListener('click', onAmmoCardTap);
+  ammoCardEl.addEventListener('touchend', onAmmoCardTap);
+}
 
 // HUD & Gyro Customizer Opener
 const openCustomHudEditor = () => {
@@ -4431,10 +4529,14 @@ function applyTouchLookDelta(dxPx: number, dyPx: number) {
 canvas.addEventListener('pointerdown', (e) => {
   audioSys.unlockAndPreload();
   if (e.pointerType === 'touch' || e.pointerType === 'pen' || window.innerWidth <= 1024) {
-    // Double-tap on touch screen toggles ADS scope!
+    // Double-tap on touch screen: lower right quadrant triggers quick reload, else toggles ADS scope!
     const nowMs = performance.now();
-    if (nowMs - lastCanvasTapMs < 280 && Math.hypot(e.clientX - lastLookX, e.clientY - lastLookY) < 36) {
-      setAdsState(!player.ads);
+    if (nowMs - lastCanvasTapMs < 280 && Math.hypot(e.clientX - lastLookX, e.clientY - lastLookY) < 42) {
+      if (e.clientY > window.innerHeight * 0.52 && e.clientX > window.innerWidth * 0.55) {
+        startReload();
+      } else {
+        setAdsState(!player.ads);
+      }
     }
     lastCanvasTapMs = nowMs;
 
@@ -5131,6 +5233,23 @@ function stepSimulation(dt: number, elapsedSec: number) {
       }
     }
 
+    // Dynamic Crosshair Bloom (Spread expansion on fire/move, contraction on ADS/crouch)
+    let targetBloom = 4.0;
+    if (player.ads) {
+      targetBloom = 0.0;
+    } else if (player.crouching) {
+      targetBloom = isMoving ? 4.5 : 2.0;
+    } else if (player.sprinting) {
+      targetBloom = 13.0;
+    } else if (isMoving) {
+      targetBloom = 7.5;
+    }
+    reticleBloomOffset = THREE.MathUtils.lerp(reticleBloomOffset, targetBloom, dt * 14);
+    const reticleEl = document.getElementById('reticle-wrap');
+    if (reticleEl) {
+      reticleEl.style.setProperty('--bloom-offset', `${reticleBloomOffset.toFixed(1)}px`);
+    }
+
     // Gravity & Multi-level Ground Height (Dock vs Catwalk Stairs vs Ship Deck)
     const groundY = getGroundHeightAt(player.pos.x, player.pos.z);
     if (!player.grounded || player.pos.y > groundY + 0.05) {
@@ -5711,6 +5830,18 @@ function stepSimulation(dt: number, elapsedSec: number) {
         e.mixer.update(dist > 28 ? dt * 2 : dt);
       }
 
+      // Update Enemy Procedural Stagger / Flinch Spring Decay
+      if (e.isStaggered && e.staggerTimer !== undefined) {
+        e.staggerTimer -= dt;
+        e.root.rotation.x = THREE.MathUtils.lerp(e.root.rotation.x, 0, dt * 10);
+        e.root.rotation.z = THREE.MathUtils.lerp(e.root.rotation.z, 0, dt * 10);
+        if (e.staggerTimer <= 0) {
+          e.isStaggered = false;
+          e.root.rotation.x = 0;
+          e.root.rotation.z = 0;
+        }
+      }
+
       if (e.state === 'HIT') {
         e.stateTimer -= dt;
         if (e.stateTimer <= 0) {
@@ -5810,6 +5941,7 @@ function stepSimulation(dt: number, elapsedSec: number) {
               player.hp = Math.max(minHp, player.hp - dmg);
             }
             player.damageTaken += dmg;
+            hapticEngine.triggerDamage();
             updateStatusHud();
             showDirectionalDamageArc(e.root.position);
             const vig = document.getElementById('damage-vignette');

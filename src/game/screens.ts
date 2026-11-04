@@ -23,6 +23,7 @@ export interface TacticalSetupOptions {
   gyroEnabled: boolean;
   gyroSens: number;
   autofireEnabled: boolean;
+  hapticsEnabled: boolean;
   onDeploy: () => void;
   onOpenGunsmith: () => void;
   onOpenHudEditor: () => void;
@@ -32,6 +33,7 @@ export interface TacticalSetupOptions {
   onGyroToggle: () => void;
   onGyroSensCycle: () => void;
   onAutofireToggle: () => void;
+  onHapticsToggle: () => void;
 }
 
 export const TACTICAL_TIPS = [
@@ -147,17 +149,17 @@ export class GameScreensManager {
           <div class="portal-header-tag">
             <span class="portal-badge-dot"></span>
             <span class="portal-badge-text">TASK FORCE 141 // RECON OPS DIVISION</span>
-            <span class="portal-version-badge">v1.6.2</span>
+            <span class="portal-version-badge">v1.7.0</span>
             <span class="portal-server-status">PACIFIC ASIA-EAST [ONLINE 22ms]</span>
           </div>
 
           <div class="portal-main-branding">
-            <h1 class="portal-title-h1">FIREGUN <span class="portal-version-inline">v1.6.2</span></h1>
+            <h1 class="portal-title-h1">FIREGUN <span class="portal-version-inline">v1.7.0</span></h1>
             <div class="portal-hazard-line"></div>
             <div class="portal-subtitle-row">
               <span class="portal-sub-code">ACT-01 // PFT-08</span>
               <span class="portal-sub-name">OPERATION COLD HARBOR (寒港行動)</span>
-              <span class="portal-sub-ver">BUILD 1.6.2</span>
+              <span class="portal-sub-ver">BUILD 1.7.0</span>
             </div>
           </div>
 
@@ -173,7 +175,7 @@ export class GameScreensManager {
             <span class="btn-portal-text">⚔️ 開始遊戲 // START OPERATION</span>
           </button>
 
-          <div class="portal-footer-note">PRESS ENTER OR TAP ANYWHERE TO START · CLIENT v1.6.2</div>
+          <div class="portal-footer-note">PRESS ENTER OR TAP ANYWHERE TO START · CLIENT v1.7.0</div>
         </div>
       `;
       document.body.appendChild(portalEl);
@@ -234,7 +236,7 @@ export class GameScreensManager {
               <div class="setup-badge-row">
                 <span class="setup-badge-dot"></span>
                 <span class="setup-badge-text">TASK FORCE 141 // OPERATION COLD HARBOR</span>
-                <span class="setup-ver-pill">v1.6.2</span>
+                <span class="setup-ver-pill">v1.7.0</span>
               </div>
               <h2 class="setup-title-h2">戰役作戰整備室 <span class="setup-title-sub">// TACTICAL SETUP</span></h2>
             </div>
@@ -352,6 +354,19 @@ export class GameScreensManager {
 
               <div class="setup-setting-card">
                 <div class="setting-title-row">
+                  <span class="setting-icon">📳</span>
+                  <div>
+                    <div class="setting-name">手機觸覺震動回饋</div>
+                    <div class="setting-sub">射擊後座力、受傷重擊與換彈卡榫之細膩觸感</div>
+                  </div>
+                </div>
+                <div class="setting-action-row">
+                  <button id="setup-btn-haptics-toggle" class="btn-setup-toggle active">震動回饋: 啟用中 (ON)</button>
+                </div>
+              </div>
+
+              <div class="setup-setting-card">
+                <div class="setting-title-row">
                   <span class="setting-icon">⚙️</span>
                   <div>
                     <div class="setting-name">手遊觸控鍵位工坊</div>
@@ -403,17 +418,17 @@ export class GameScreensManager {
         <div class="preload-content-center">
           <div class="preload-badge-row">
             <span class="preload-badge-title">OPERATION MIDNIGHT RECON // WARMING ENGINE</span>
-            <span class="preload-version-pill">BUILD v1.6.2</span>
+            <span class="preload-version-pill">BUILD v1.7.0</span>
           </div>
           <div class="preload-stage-row">
-            <span id="preload-stage-label" class="preload-stage-label">[v1.6.2] STEP 1/7 · DOWNLOADING ASSETS...</span>
+            <span id="preload-stage-label" class="preload-stage-label">[v1.7.0] STEP 1/7 · DOWNLOADING ASSETS...</span>
             <span id="preload-stage-pct" class="preload-stage-pct">0%</span>
           </div>
           <div class="preload-line-track">
             <div id="preload-line-fill" class="preload-line-fill"></div>
           </div>
           <div id="preload-stage-hint" class="preload-stage-hint">${TACTICAL_TIPS[0]}</div>
-          <div class="preload-footer-ver">FIREGUN TACTICAL ENGINE · CLIENT v1.6.2-REL</div>
+          <div class="preload-footer-ver">FIREGUN TACTICAL ENGINE · CLIENT v1.7.0-REL</div>
         </div>
       `;
       document.body.appendChild(pScreen);
@@ -438,7 +453,7 @@ export class GameScreensManager {
         <div class="pause-card">
           <div class="pause-header">
             <span class="pause-title">PAUSED // 作戰暫停</span>
-            <span class="pause-code">GRID K2 · PACIFIC TIME 02:40 · BUILD v1.6.2</span>
+            <span class="pause-code">GRID K2 · PACIFIC TIME 02:40 · BUILD v1.7.0</span>
           </div>
           <div class="pause-actions">
             <button id="btn-pause-resume" class="btn-pause-act btn-pause-primary">RESUME OPERATION // 繼續作戰</button>
@@ -832,6 +847,16 @@ export class GameScreensManager {
       autoBtn.ontouchend = onAuto;
     }
 
+    const hapticsBtn = document.getElementById('setup-btn-haptics-toggle');
+    if (hapticsBtn) {
+      const onHaptics = (e: Event) => {
+        e.stopPropagation();
+        options.onHapticsToggle();
+      };
+      hapticsBtn.onclick = onHaptics;
+      hapticsBtn.ontouchend = onHaptics;
+    }
+
     const hudEditorBtn = document.getElementById('setup-btn-hud-editor');
     if (hudEditorBtn) {
       const onHud = (e: Event) => {
@@ -879,7 +904,7 @@ export class GameScreensManager {
     });
   }
 
-  public updateSetupControlsUi(gyroEnabled: boolean, gyroSens: number, autofire: boolean) {
+  public updateSetupControlsUi(gyroEnabled: boolean, gyroSens: number, autofire: boolean, hapticsEnabled = true) {
     const gyroBtn = document.getElementById('setup-btn-gyro-toggle');
     if (gyroBtn) {
       gyroBtn.classList.toggle('active', gyroEnabled);
@@ -893,6 +918,11 @@ export class GameScreensManager {
     if (autoBtn) {
       autoBtn.classList.toggle('active', autofire);
       autoBtn.textContent = `🤖 自動開火: ${autofire ? '啟用中 (ON)' : '已關閉 (OFF)'}`;
+    }
+    const hapticsBtn = document.getElementById('setup-btn-haptics-toggle');
+    if (hapticsBtn) {
+      hapticsBtn.classList.toggle('active', hapticsEnabled);
+      hapticsBtn.textContent = `📳 震動回饋: ${hapticsEnabled ? '啟用中 (ON)' : '已關閉 (OFF)'}`;
     }
   }
 
@@ -914,7 +944,7 @@ export class GameScreensManager {
   public updatePreload(status: PreloadStatus) {
     this.targetPct = Math.min(100, Math.max(0, status.percent));
     if (this.preloadLabel) {
-      this.preloadLabel.textContent = `[v1.6.2] STEP ${status.step}/${status.totalSteps} · ${status.label}`;
+      this.preloadLabel.textContent = `[v1.7.0] STEP ${status.step}/${status.totalSteps} · ${status.label}`;
     }
     if (this.preloadHint && status.hint) {
       this.preloadHint.textContent = status.hint;
