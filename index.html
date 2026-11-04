@@ -62,24 +62,24 @@
         </div>
 
         <div id="top-tactical-bar" class="top-tactical-bar">
-          <button id="btn-gyro-toggle" class="gyro-btn gyro-pill-main" title="點擊開啟/關閉手機陀螺儀體感瞄準 (Key: Y)">🧭 陀螺儀瞄準: 點擊開啟</button>
-          <button id="btn-gyro-cal" class="gyro-btn gyro-sub-btn" title="將目前手機握持角度設為準星中心">🔄校準</button>
+          <button id="btn-gyro-toggle" class="gyro-btn gyro-pill-main" title="點擊開啟/關閉手機陀螺儀體感瞄準 (Key: Y)">GYRO: 點擊開啟</button>
+          <button id="btn-gyro-cal" class="gyro-btn gyro-sub-btn" title="將目前手機握持角度設為準星中心">CALIB</button>
           <button id="btn-gyro-sens" class="gyro-btn gyro-sub-btn" title="切換陀螺儀靈敏度倍率">1.0x</button>
-          <button id="btn-autofire-toggle" class="gyro-btn autofire-btn" title="準星對準敵人時自動扣扳機開火">🤖 自動開火: ON</button>
-          <button id="btn-hud-minimal" class="gyro-btn gyro-sub-btn" title="切換精簡/完整戰術介面 (Key: H)">👁️ 精簡</button>
+          <button id="btn-autofire-toggle" class="gyro-btn autofire-btn" title="準星對準敵人時自動扣扳機開火">AUTO-FIRE: ON</button>
+          <button id="btn-hud-minimal" class="gyro-btn gyro-sub-btn" title="切換精簡/完整戰術介面 (Key: H)">MINIMAL</button>
         </div>
 
         <!-- Boss Encounter HUD Card (Goal B) -->
         <div id="boss-hud-card" class="boss-hud-card hidden">
           <div class="boss-header-row">
-            <span class="boss-skull-tag">⚠️ BOSS // PMC JUGGERNAUT</span>
+            <span class="boss-skull-tag">HOSTILE // PMC JUGGERNAUT</span>
             <span class="boss-codename">GOLIATH-01 [HEAVY ARMOR]</span>
             <span id="boss-hp-text" class="boss-hp-text">1200 / 1200 HP</span>
           </div>
           <div class="boss-hp-track">
             <div id="boss-hp-ghost" class="boss-hp-ghost" style="width: 100%;"></div>
             <div id="boss-hp-fill" class="boss-hp-fill" style="width: 100%;"></div>
-            <div id="boss-shield-indicator" class="boss-shield-badge">🛡️ 防彈重盾: 啟用中 (減傷80%)</div>
+            <div id="boss-shield-indicator" class="boss-shield-badge">BALLISTIC SHIELD: ACTIVE (-80% DMG)</div>
           </div>
         </div>
       </div>
@@ -107,13 +107,13 @@
       </div>
 
       <div id="terminal-box" class="terminal-box hidden">
-        <div id="terminal-title" class="terminal-title">⚡ [E] 奪還港務主控終端 // HACKING TERMINAL</div>
+        <div id="terminal-title" class="terminal-title">[E] 奪還港務主控終端 // HACKING TERMINAL</div>
         <div class="reload-bar-bg"><div id="terminal-bar-fill" class="terminal-bar-fill"></div></div>
       </div>
 
       <div id="kill-banner" class="kill-banner hidden">
-        <div class="kill-skull">☠</div>
-        <div id="kill-banner-text" class="kill-banner-text">ELIMINATED +100</div>
+        <div class="kill-skull">CONFIRMED</div>
+        <div id="kill-banner-text" class="kill-banner-text">TARGET ELIMINATED +100</div>
       </div>
 
       <!-- Health & Armor Card (Docked under Objective on Mobile Portrait, Bottom-Left on Desktop) -->
@@ -154,10 +154,10 @@
             <div id="weapon-title" class="weapon-title">SG-12 Pump Shotgun</div>
             <div class="tactical-gadget-row">
               <span class="hazard-stripe-mini"></span>
-              <span id="grenade-badge" class="grenade-badge" title="[G] 投擲 M67 破片手榴彈">💣 [G] x3</span>
-              <span id="stim-badge" class="grenade-badge stim-badge" title="[X] 注射戰術強心針 (+45 HP)">💉 [X] x2</span>
-              <span id="flashlight-badge" class="grenade-badge light-badge" title="[T] 槍掛戰術手電筒與雷射指示器">🔦 [T] OFF</span>
-              <span id="nvg-badge" class="grenade-badge nvg-badge" title="[N] GPNVG-18 雙筒戰術夜視儀">🥽 [N] OFF</span>
+              <span id="grenade-badge" class="grenade-badge" title="[G] 投擲 M67 破片手榴彈">G-FRAG [G] x3</span>
+              <span id="stim-badge" class="grenade-badge stim-badge" title="[X] 注射戰術強心針 (+45 HP)">STIM [X] x2</span>
+              <span id="flashlight-badge" class="grenade-badge light-badge" title="[T] 槍掛戰術手電筒與雷射指示器">LIGHT [T] OFF</span>
+              <span id="nvg-badge" class="grenade-badge nvg-badge" title="[N] GPNVG-18 雙筒戰術夜視儀">NVG [N] OFF</span>
             </div>
           </div>
           <div class="ammo-count-col">
@@ -177,7 +177,7 @@
 
       <!-- Ultra-Clean Icon-Only Circular Mobile / Tablet Touch HUD (Matches Reference Image!) -->
       <div id="mobile-touch-controls" class="mobile-touch-controls">
-        <div id="touch-look-hint" class="touch-look-hint">👆 滑動移動準星 · 雙擊開鏡</div>
+        <div id="touch-look-hint" class="touch-look-hint">滑動移動準星 · 雙擊開鏡</div>
 
         <!-- Left-Hand Subtle Floating Move Zone + Left-Thumb Circular Fire Trigger -->
         <div id="touch-joystick-zone" class="touch-joystick-zone">
@@ -239,23 +239,23 @@
         <div id="touch-tactical-drawer" class="touch-tactical-drawer hidden">
           <div class="drawer-title">夜港作戰模式切換 (GAME MODES)</div>
           <div class="drawer-mode-grid">
-            <button data-mode="RAID" class="touch-btn touch-mode-btn active">⚔️ 戰術突襲 (3階)</button>
-            <button data-mode="SURVIVAL" class="touch-btn touch-mode-btn">🌊 波次防衛戰</button>
-            <button data-mode="SNIPER" class="touch-btn touch-mode-btn">🎯 高空狙擊獵殺</button>
-            <button data-mode="BLITZ" class="touch-btn touch-mode-btn">⏱️ 90秒極速肅清</button>
+            <button data-mode="RAID" class="touch-btn touch-mode-btn active">戰術突襲 (RAID)</button>
+            <button data-mode="SURVIVAL" class="touch-btn touch-mode-btn">波次防衛 (SURVIVAL)</button>
+            <button data-mode="SNIPER" class="touch-btn touch-mode-btn">高空狙擊 (SNIPER)</button>
+            <button data-mode="BLITZ" class="touch-btn touch-mode-btn">極速肅清 (BLITZ)</button>
           </div>
           <div class="drawer-title" style="margin-top:8px">進階戰術裝備與動作</div>
           <div class="drawer-grid">
-            <button id="touch-btn-nvg" class="touch-btn touch-btn-sm">🥽 夜視儀</button>
-            <button id="touch-btn-light" class="touch-btn touch-btn-sm">🔦 手電筒</button>
-            <button id="touch-btn-stim" class="touch-btn touch-btn-sm">💉 強心針</button>
-            <button id="touch-btn-lean-l" class="touch-btn touch-btn-sm">↖ 左探頭</button>
-            <button id="touch-btn-lean-r" class="touch-btn touch-btn-sm">右探頭 ↗</button>
-            <button id="touch-btn-melee" class="touch-btn touch-btn-sm">👊 近戰擊</button>
-            <button id="touch-btn-mode" class="touch-btn touch-btn-sm">🔁 射擊模式</button>
-            <button id="touch-btn-inspect" class="touch-btn touch-btn-sm">🔍 檢視槍械</button>
-            <button id="touch-btn-loadout" class="touch-btn touch-btn-sm">🧰 3D軍械庫</button>
-            <button id="touch-btn-hud-editor" class="touch-btn touch-btn-sm" style="background:#0284c7;color:#fff">⚙️ 鍵位與體感</button>
+            <button id="touch-btn-nvg" class="touch-btn touch-btn-sm">夜視儀 (NVG)</button>
+            <button id="touch-btn-light" class="touch-btn touch-btn-sm">手電筒 (LIGHT)</button>
+            <button id="touch-btn-stim" class="touch-btn touch-btn-sm">強心針 (STIM)</button>
+            <button id="touch-btn-lean-l" class="touch-btn touch-btn-sm">左探頭 (LEAN-L)</button>
+            <button id="touch-btn-lean-r" class="touch-btn touch-btn-sm">右探頭 (LEAN-R)</button>
+            <button id="touch-btn-melee" class="touch-btn touch-btn-sm">近戰刺 (MELEE)</button>
+            <button id="touch-btn-mode" class="touch-btn touch-btn-sm">射擊模式 (FIRE)</button>
+            <button id="touch-btn-inspect" class="touch-btn touch-btn-sm">檢視槍械 (INSPECT)</button>
+            <button id="touch-btn-loadout" class="touch-btn touch-btn-sm">軍械庫 (GUNSMITH)</button>
+            <button id="touch-btn-hud-editor" class="touch-btn touch-btn-sm" style="background:#0284c7;color:#fff">自訂鍵位 (HUD)</button>
           </div>
         </div>
 
@@ -323,7 +323,7 @@
         </div>
       </div>
       <!-- HUD Build & Version Watermark -->
-      <div class="hud-build-watermark">FIREGUN v1.8.3-STEALTH</div>
+      <div class="hud-build-watermark">FIREGUN v1.9.0-TACTICAL</div>
     </div>
 
     <!-- 3D Interactive Gunsmith Workbench (Key: L / Tab / Mobile Menu) -->
@@ -361,17 +361,17 @@
 
             <!-- 4 Tactical Slot Chips -->
             <div class="gunsmith-slot-tabs">
-              <button data-slot="optic" class="slot-tab active">🎯 瞄具 (OPTIC)</button>
-              <button data-slot="muzzle" class="slot-tab">🔇 槍口 (MUZZLE)</button>
-              <button data-slot="grip" class="slot-tab">握 握把 (GRIP)</button>
-              <button data-slot="mag" class="slot-tab">🔋 彈匣 (MAGAZINE)</button>
+              <button data-slot="optic" class="slot-tab active">瞄具 (OPTIC)</button>
+              <button data-slot="muzzle" class="slot-tab">槍口 (MUZZLE)</button>
+              <button data-slot="grip" class="slot-tab">握把 (GRIP)</button>
+              <button data-slot="mag" class="slot-tab">彈匣 (MAGAZINE)</button>
             </div>
           </div>
 
           <!-- Right Column: Interactive Attachment Catalog Cards for Selected Slot -->
           <div class="gunsmith-right-col">
             <div class="gunsmith-slot-header">
-              <span id="gunsmith-slot-title">🎯 瞄具配件庫 (OPTICS CATALOG)</span>
+              <span id="gunsmith-slot-title">瞄具配件庫 (OPTICS CATALOG)</span>
               <span class="gunsmith-slot-hint">點擊配件即時組裝並帶入戰鬥</span>
             </div>
             <div id="gunsmith-attachments-list" class="gunsmith-attachments-list">
@@ -394,7 +394,7 @@
     <div id="screen-hud-editor" class="screen-hud-editor-overlay hidden">
       <div class="hud-editor-header">
         <div class="hud-editor-title">
-          <span class="editor-badge">⚙️ PRO TOUCH & GYRO</span>
+          <span class="editor-badge">PRO TOUCH & GYRO</span>
           <h2>手遊自訂鍵位與體感校準工坊</h2>
         </div>
         <div class="hud-editor-presets">
@@ -404,8 +404,8 @@
           <button id="preset-4finger" class="btn-preset">職業四指 (四角壓槍)</button>
         </div>
         <div class="hud-editor-actions">
-          <button id="btn-hud-editor-save" class="btn-gold-save">💾 儲存並套用</button>
-          <button id="btn-hud-editor-reset" class="btn-dark-reset">🔄 恢復預設</button>
+          <button id="btn-hud-editor-save" class="btn-gold-save">儲存套用</button>
+          <button id="btn-hud-editor-reset" class="btn-dark-reset">恢復預設</button>
           <button id="btn-hud-editor-close" class="btn-editor-x">✕</button>
         </div>
       </div>
@@ -418,8 +418,8 @@
       <!-- Bottom Toolbar: Selected Element Inspector & Gyroscope Calibration Tabs -->
       <div class="hud-editor-bottom-bar">
         <div class="editor-tab-row">
-          <button id="tab-edit-element" class="btn-editor-tab active">🔘 按鈕大小與透明度</button>
-          <button id="tab-edit-gyro" class="btn-editor-tab">🧭 陀螺儀高精度微調</button>
+          <button id="tab-edit-element" class="btn-editor-tab active">按鈕大小與透明度</button>
+          <button id="tab-edit-gyro" class="btn-editor-tab">陀螺儀高精度微調</button>
         </div>
 
         <!-- Element Adjust Panel -->

@@ -65,7 +65,7 @@ export class SquadManager {
           <div class="sm-bar-bg"><div id="sm-2-hp" class="sm-bar-fill" style="width:100%"></div></div>
         </div>
         <div id="squad-radio-sub" class="squad-radio-sub hidden">
-          <span class="radio-icon">📻</span>
+          <span class="radio-icon">[RADIO]</span>
           <span id="squad-radio-text"></span>
         </div>
       `;
@@ -80,15 +80,15 @@ export class SquadManager {
       wModal.className = 'command-wheel-modal hidden';
       wModal.innerHTML = `
         <div class="command-wheel-center">
-          <div class="cw-center-icon">⚡</div>
+          <div class="cw-center-icon">TACTICAL</div>
           <div id="cw-center-label" class="cw-center-label">SQUAD ORDERS</div>
         </div>
         <div class="command-wheel-ring">
-          <button data-order="FOLLOW" class="cw-slice cw-top">▲ 跟隨我 (FOLLOW)</button>
-          <button data-order="HOLD" class="cw-slice cw-top-right">🛡 就地防守 (HOLD)</button>
-          <button data-order="MOVE_TO" class="cw-slice cw-bottom-right">📍 前往標記 (MOVE)</button>
-          <button data-order="ATTACK_TARGET" class="cw-slice cw-bottom">🔥 集火目標 (FOCUS)</button>
-          <button data-order="REGROUP" class="cw-slice cw-top-left">🔄 重整歸隊 (REGROUP)</button>
+          <button data-order="FOLLOW" class="cw-slice cw-top">跟隨 (FOLLOW)</button>
+          <button data-order="HOLD" class="cw-slice cw-top-right">防守 (HOLD)</button>
+          <button data-order="MOVE_TO" class="cw-slice cw-bottom-right">推進 (MOVE)</button>
+          <button data-order="ATTACK_TARGET" class="cw-slice cw-bottom">集火 (FOCUS)</button>
+          <button data-order="REGROUP" class="cw-slice cw-top-left">歸隊 (REGROUP)</button>
         </div>
       `;
       document.body.appendChild(wModal);
@@ -318,7 +318,7 @@ export class SquadManager {
       const ordEl = document.getElementById(`sm-${idx + 1}-order`);
       if (card) card.classList.toggle('sm-downed', m.downed);
       if (hpEl) hpEl.style.width = `${Math.max(0, (m.hp / m.maxHp) * 100)}%`;
-      if (ordEl) ordEl.textContent = m.downed ? 'DOWNED ⚠️' : m.order;
+      if (ordEl) ordEl.textContent = m.downed ? 'DOWNED [CRITICAL]' : m.order;
     });
   }
 }

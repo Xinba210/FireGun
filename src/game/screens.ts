@@ -150,33 +150,33 @@ export class GameScreensManager {
           <div class="portal-header-tag">
             <span class="portal-badge-dot"></span>
             <span class="portal-badge-text">TASK FORCE 141 // RECON OPS DIVISION</span>
-            <span class="portal-version-badge">v1.8.3</span>
+            <span class="portal-version-badge">v1.9.0</span>
             <span class="portal-server-status">PACIFIC ASIA-EAST [ONLINE 22ms]</span>
           </div>
 
           <div class="portal-main-branding">
-            <h1 class="portal-title-h1">FIREGUN <span class="portal-version-inline">v1.8.3</span></h1>
+            <h1 class="portal-title-h1">FIREGUN <span class="portal-version-inline">v1.9.0</span></h1>
             <div class="portal-hazard-line"></div>
             <div class="portal-subtitle-row">
               <span class="portal-sub-code">ACT-01 // PFT-08</span>
               <span class="portal-sub-name">OPERATION COLD HARBOR (寒港行動)</span>
-              <span class="portal-sub-ver">BUILD 1.8.3-STEALTH</span>
+              <span class="portal-sub-ver">BUILD 1.9.0-TACTICAL</span>
             </div>
           </div>
 
           <div class="portal-features-chips">
-            <span class="p-chip">🚁 STEALTH HELI INFIL</span>
-            <span class="p-chip">📻 TACTICAL RADIO</span>
-            <span class="p-chip">🧭 2.2x GYRO AIM</span>
-            <span class="p-chip">👥 ALLIED SQUAD</span>
+            <span class="p-chip">STEALTH HELI INFIL</span>
+            <span class="p-chip">TACTICAL RADIO</span>
+            <span class="p-chip">2.2x GYRO AIM</span>
+            <span class="p-chip">ALLIED SQUAD</span>
           </div>
 
           <button id="btn-portal-deploy" class="btn-portal-deploy btn-portal-start-hero">
             <span class="btn-portal-glow"></span>
-            <span class="btn-portal-text">⚔️ 開始遊戲 // START OPERATION</span>
+            <span class="btn-portal-text">開始遊戲 // START OPERATION</span>
           </button>
 
-          <div class="portal-footer-note">PRESS ENTER OR TAP ANYWHERE TO START · CLIENT v1.8.3-STEALTH</div>
+          <div class="portal-footer-note">PRESS ENTER OR TAP ANYWHERE TO START · CLIENT v1.9.0-TACTICAL</div>
         </div>
       `;
       document.body.appendChild(portalEl);
@@ -237,22 +237,22 @@ export class GameScreensManager {
               <div class="setup-badge-row">
                 <span class="setup-badge-dot"></span>
                 <span class="setup-badge-text">TASK FORCE 141 // OPERATION COLD HARBOR</span>
-                <span class="setup-ver-pill">v1.8.3</span>
+                <span class="setup-ver-pill">v1.9.0</span>
               </div>
               <h2 class="setup-title-h2">戰役作戰整備室 <span class="setup-title-sub">// TACTICAL SETUP</span></h2>
             </div>
             <div class="setup-header-right">
               <span class="setup-chip-server">PACIFIC ASIA-EAST [22ms]</span>
-              <span class="setup-chip-credits">💰 CREDITS: <b id="setup-credits-val" class="text-gold">1,250 CR</b></span>
+              <span class="setup-chip-credits">CREDITS: <b id="setup-credits-val" class="text-gold">1,250 CR</b></span>
             </div>
           </div>
 
           <!-- 4 Nav Tabs -->
           <div class="setup-nav-tabs">
-            <button id="setup-tab-btn-briefing" class="setup-tab-nav active">📋 作戰模式與情報 (MODES)</button>
-            <button id="setup-tab-btn-operator" class="setup-tab-nav">👤 特戰隊員裝備預覽 (OPERATOR)</button>
-            <button id="setup-tab-btn-gunsmith" class="setup-tab-nav">🧰 武器軍械庫 (GUNSMITH)</button>
-            <button id="setup-tab-btn-settings" class="setup-tab-nav">⚙️ 體感與操作 (SETTINGS)</button>
+            <button id="setup-tab-btn-briefing" class="setup-tab-nav active">作戰情報 (MODES)</button>
+            <button id="setup-tab-btn-operator" class="setup-tab-nav">裝備預覽 (OPERATOR)</button>
+            <button id="setup-tab-btn-gunsmith" class="setup-tab-nav">武器軍械庫 (GUNSMITH)</button>
+            <button id="setup-tab-btn-settings" class="setup-tab-nav">體感操作 (SETTINGS)</button>
           </div>
 
           <!-- Panel 1: Briefing & 4 Mode Visual Cards -->
@@ -279,25 +279,25 @@ export class GameScreensManager {
                   <div class="setup-mode-cards-grid">
                     <div data-setup-mode="RAID" class="mode-visual-card btn-setup-mode-opt active" style="background-image: linear-gradient(180deg, rgba(3,7,18,0.3) 0%, rgba(2,6,23,0.92) 100%), url('assets/modes/mode_raid.jpg');">
                       <div class="mode-badge-pill">3-STAGE INFILTRATION</div>
-                      <div class="mode-card-title">⚔️ 戰役突襲 (RAID)</div>
+                      <div class="mode-card-title">戰役突襲 (RAID)</div>
                       <div class="mode-card-desc">夜間集裝箱碼頭索降突入，安放 C4 爆破油料庫，奪回近迫防空火控終端並呼叫黑鷹撤離。</div>
                       <div class="mode-card-rec">推薦: AR-7 突擊步槍 · 全自動壓制</div>
                     </div>
                     <div data-setup-mode="SURVIVAL" class="mode-visual-card btn-setup-mode-opt" style="background-image: linear-gradient(180deg, rgba(3,7,18,0.3) 0%, rgba(2,6,23,0.92) 100%), url('assets/modes/mode_survival.jpg');">
                       <div class="mode-badge-pill gold">ENDLESS DEFENSE</div>
-                      <div class="mode-card-title">🌊 極限生存 (SURVIVAL)</div>
+                      <div class="mode-card-title">極限生存 (SURVIVAL)</div>
                       <div class="mode-card-desc">敵軍特種部隊波次圍攻，難度隨波次指數遞增。每波間隔 20 秒戰術補給，檢驗極限防守。</div>
                       <div class="mode-card-rec">推薦: SG-12 破門霰彈槍 · 範圍破點</div>
                     </div>
                     <div data-setup-mode="SNIPER" class="mode-visual-card btn-setup-mode-opt" style="background-image: linear-gradient(180deg, rgba(3,7,18,0.3) 0%, rgba(2,6,23,0.92) 100%), url('assets/modes/mode_sniper.jpg');">
                       <div class="mode-badge-pill cyan">STEALTH HUNT</div>
-                      <div class="mode-card-title">🎯 潛行暗殺 (SNIPER)</div>
+                      <div class="mode-card-title">潛行暗殺 (SNIPER)</div>
                       <div class="mode-card-desc">利用高架鋼構貓道與吊車制高點，在敵軍未拉響警報前使用消音狙擊逐一肅清目標。</div>
                       <div class="mode-card-rec">推薦: SR-9 狙擊步槍 · 消音器 + 4x鏡</div>
                     </div>
                     <div data-setup-mode="BLITZ" class="mode-visual-card btn-setup-mode-opt" style="background-image: linear-gradient(180deg, rgba(3,7,18,0.3) 0%, rgba(2,6,23,0.92) 100%), url('assets/modes/mode_blitz.jpg');">
                       <div class="mode-badge-pill red">90s SPEEDRUN</div>
-                      <div class="mode-card-title">⏱️ 閃擊靶場 (BLITZ)</div>
+                      <div class="mode-card-title">閃擊靶場 (BLITZ)</div>
                       <div class="mode-card-desc">90 秒極速靶場反應測試。精準擊碎紅色戰術敵軍靶，避免誤傷平民靶，挑戰個人紀錄。</div>
                       <div class="mode-card-rec">推薦: SMG-9 衝鋒槍 · 超高連射</div>
                     </div>
@@ -307,9 +307,9 @@ export class GameScreensManager {
                 <div class="setup-control-group">
                   <span class="control-group-title">戰役難度等級 (DIFFICULTY):</span>
                   <div class="setup-diff-grid">
-                    <button data-setup-diff="STANDARD" class="btn-setup-diff-opt active">🟢 標準 (STANDARD)</button>
-                    <button data-setup-diff="HARDCORE" class="btn-setup-diff-opt">🟡 困難 (HARDCORE)</button>
-                    <button data-setup-diff="NIGHTMARE" class="btn-setup-diff-opt">🔴 極限 (NIGHTMARE)</button>
+                    <button data-setup-diff="STANDARD" class="btn-setup-diff-opt active">標準 (STANDARD)</button>
+                    <button data-setup-diff="HARDCORE" class="btn-setup-diff-opt">困難 (HARDCORE)</button>
+                    <button data-setup-diff="NIGHTMARE" class="btn-setup-diff-opt">極限 (NIGHTMARE)</button>
                   </div>
                 </div>
               </div>
@@ -321,23 +321,23 @@ export class GameScreensManager {
             <div class="operator-showcase-layout">
               <div class="showcase-3d-viewport">
                 <div id="showcase-mount-point" class="showcase-mount-point"></div>
-                <div class="showcase-drag-hint">🔄 滑鼠拖曳 / 單指滑動 360° 旋轉檢視特戰隊員</div>
+                <div class="showcase-drag-hint">滑鼠拖曳 / 單指滑動 360° 旋轉檢視特戰隊員</div>
               </div>
               <div class="showcase-controls-panel">
                 <div class="showcase-sec-title">TACTICAL UNIFORM // 戰術部隊迷彩</div>
                 <div class="showcase-camo-pills">
-                  <button data-camo="MIDNIGHT" class="btn-camo-pill active">🌑 暗夜特勤 (MIDNIGHT)</button>
-                  <button data-camo="URBAN_WOLF" class="btn-camo-pill">🐺 城市灰狼 (URBAN)</button>
-                  <button data-camo="DESERT_OPS" class="btn-camo-pill">🏜️ 沙漠突擊 (DESERT)</button>
+                  <button data-camo="MIDNIGHT" class="btn-camo-pill active">暗夜特勤 (MIDNIGHT)</button>
+                  <button data-camo="URBAN_WOLF" class="btn-camo-pill">城市灰狼 (URBAN)</button>
+                  <button data-camo="DESERT_OPS" class="btn-camo-pill">沙漠突擊 (DESERT)</button>
                 </div>
 
                 <div class="showcase-sec-title">OPERATOR STANCE // 戰術動作姿勢</div>
                 <div class="showcase-pose-pills">
-                  <button data-pose="Rifle_Aim" class="btn-pose-pill active">🎯 舉槍瞄準 (AIM)</button>
-                  <button data-pose="Idle_Loop" class="btn-pose-pill">🛡️ 戰術警戒 (IDLE)</button>
-                  <button data-pose="Walk_Loop" class="btn-pose-pill">🚶 戰術步態 (WALK)</button>
-                  <button data-pose="Crouch_Idle_Loop" class="btn-pose-pill">蹲 戰術蹲伏 (CROUCH)</button>
-                  <button data-pose="Sprint_Loop" class="btn-pose-pill">⚡ 戰術疾跑 (SPRINT)</button>
+                  <button data-pose="Rifle_Aim" class="btn-pose-pill active">舉槍瞄準 (AIM)</button>
+                  <button data-pose="Idle_Loop" class="btn-pose-pill">戰術警戒 (IDLE)</button>
+                  <button data-pose="Walk_Loop" class="btn-pose-pill">戰術步態 (WALK)</button>
+                  <button data-pose="Crouch_Idle_Loop" class="btn-pose-pill">戰術蹲伏 (CROUCH)</button>
+                  <button data-pose="Sprint_Loop" class="btn-pose-pill">戰術疾跑 (SPRINT)</button>
                 </div>
 
                 <div class="showcase-gear-manifest">
@@ -371,7 +371,7 @@ export class GameScreensManager {
                 </div>
 
                 <button id="btn-setup-to-gunsmith" class="btn-gold-workbench">
-                  🧰 開啟 3D 戰術軍械庫改裝 (OPEN WORKBENCH)
+                  開啟 3D 戰術軍械庫改裝 (OPEN WORKBENCH)
                 </button>
               </div>
             </div>
@@ -382,7 +382,7 @@ export class GameScreensManager {
             <div class="setup-settings-grid">
               <div class="setup-setting-card">
                 <div class="setting-title-row">
-                  <span class="setting-icon">🧭</span>
+                  <span class="setting-icon-tag">GYRO</span>
                   <div>
                     <div class="setting-name">手機陀螺儀體感瞄準</div>
                     <div class="setting-sub">傾斜手機微動手腕進行高精度瞄準</div>
@@ -396,7 +396,7 @@ export class GameScreensManager {
 
               <div class="setup-setting-card">
                 <div class="setting-title-row">
-                  <span class="setting-icon">🤖</span>
+                  <span class="setting-icon-tag">AUTO</span>
                   <div>
                     <div class="setting-name">智慧自動開火輔助</div>
                     <div class="setting-sub">準星精準對準敵軍身軀時自動扣扳機開火</div>
@@ -409,7 +409,7 @@ export class GameScreensManager {
 
               <div class="setup-setting-card">
                 <div class="setting-title-row">
-                  <span class="setting-icon">📳</span>
+                  <span class="setting-icon-tag">HAPTIC</span>
                   <div>
                     <div class="setting-name">手機觸覺震動回饋</div>
                     <div class="setting-sub">射擊後座力、受傷重擊與換彈卡榫之細膩觸感</div>
@@ -422,7 +422,7 @@ export class GameScreensManager {
 
               <div class="setup-setting-card">
                 <div class="setting-title-row">
-                  <span class="setting-icon">⚙️</span>
+                  <span class="setting-icon-tag">HUD</span>
                   <div>
                     <div class="setting-name">手遊觸控鍵位工坊</div>
                     <div class="setting-sub">自訂按鈕位置、縮放大小 (70%~150%) 與透明度</div>
@@ -437,10 +437,10 @@ export class GameScreensManager {
 
           <!-- Footer Action Bar -->
           <div class="setup-footer">
-            <button id="btn-setup-back" class="btn-setup-back">🏠 返回首頁</button>
+            <button id="btn-setup-back" class="btn-setup-back">返回首頁</button>
             <button id="btn-setup-deploy" class="btn-setup-deploy">
               <span class="btn-deploy-pulse"></span>
-              <span class="btn-deploy-text">🚁 確認出擊 // COMMENCE INFILTRATION</span>
+              <span class="btn-deploy-text">確認出擊 // COMMENCE INFILTRATION</span>
             </button>
           </div>
         </div>
@@ -473,17 +473,17 @@ export class GameScreensManager {
         <div class="preload-content-center">
           <div class="preload-badge-row">
             <span class="preload-badge-title">OPERATION MIDNIGHT RECON // WARMING ENGINE</span>
-            <span class="preload-version-pill">BUILD v1.8.3</span>
+            <span class="preload-version-pill">BUILD v1.9.0</span>
           </div>
           <div class="preload-stage-row">
-            <span id="preload-stage-label" class="preload-stage-label">[v1.8.3] STEP 1/7 · DOWNLOADING ASSETS...</span>
+            <span id="preload-stage-label" class="preload-stage-label">[v1.9.0] STEP 1/7 · DOWNLOADING ASSETS...</span>
             <span id="preload-stage-pct" class="preload-stage-pct">0%</span>
           </div>
           <div class="preload-line-track">
             <div id="preload-line-fill" class="preload-line-fill"></div>
           </div>
           <div id="preload-stage-hint" class="preload-stage-hint">${TACTICAL_TIPS[0]}</div>
-          <div class="preload-footer-ver">FIREGUN TACTICAL ENGINE · CLIENT v1.8.3-STEALTH</div>
+          <div class="preload-footer-ver">FIREGUN TACTICAL ENGINE · CLIENT v1.9.0-TACTICAL</div>
         </div>
       `;
       document.body.appendChild(pScreen);
@@ -508,12 +508,12 @@ export class GameScreensManager {
         <div class="pause-card">
           <div class="pause-header">
             <span class="pause-title">PAUSED // 作戰暫停</span>
-            <span class="pause-code">GRID K2 · PACIFIC TIME 02:40 · BUILD v1.8.3</span>
+            <span class="pause-code">GRID K2 · PACIFIC TIME 02:40 · BUILD v1.9.0</span>
           </div>
           <div class="pause-actions">
             <button id="btn-pause-resume" class="btn-pause-act btn-pause-primary">RESUME OPERATION // 繼續作戰</button>
-            <button id="btn-pause-gunsmith" class="btn-pause-act">🧰 戰術軍械庫 (GUNSMITH WORKBENCH)</button>
-            <button id="btn-pause-hud-editor" class="btn-pause-act">⚙️ 鍵位自訂與體感 (CUSTOM TOUCH & GYRO)</button>
+            <button id="btn-pause-gunsmith" class="btn-pause-act">戰術軍械庫 (GUNSMITH WORKBENCH)</button>
+            <button id="btn-pause-hud-editor" class="btn-pause-act">鍵位自訂與體感 (CUSTOM TOUCH & GYRO)</button>
             <button id="btn-pause-records" class="btn-pause-act">RECORDS // 作戰紀錄與成就</button>
             <button id="btn-pause-restart" class="btn-pause-act">RESTART MISSION // 重新開始</button>
             <button id="btn-pause-main" class="btn-pause-act btn-pause-danger">MAIN MENU // 返回主畫面</button>
@@ -603,7 +603,7 @@ export class GameScreensManager {
           </div>
 
           <div id="reward-unlock-alert" class="reward-unlock-box hidden">
-            <span class="unlock-icon">🎖️</span>
+            <span class="unlock-icon">UNLOCKED</span>
             <div class="unlock-info">
               <b class="unlock-title">NEW ATTACHMENT UNLOCKED!</b>
               <span class="unlock-name" id="reward-unlock-name">戰術前握把 (VERTICAL GRIP)</span>
@@ -616,9 +616,9 @@ export class GameScreensManager {
           </div>
 
           <div class="reward-actions">
-            <button id="btn-reward-redeploy" class="btn-reward-primary">⚔️ 再次出擊 (REDEPLOY)</button>
-            <button id="btn-reward-gunsmith" class="btn-reward-sec">🧰 槍匠改裝 (GUNSMITH)</button>
-            <button id="btn-reward-main" class="btn-reward-sub">🏠 返回主選單</button>
+            <button id="btn-reward-redeploy" class="btn-reward-primary">再次出擊 (REDEPLOY)</button>
+            <button id="btn-reward-gunsmith" class="btn-reward-sec">槍匠改裝 (GUNSMITH)</button>
+            <button id="btn-reward-main" class="btn-reward-sub">返回主選單</button>
           </div>
         </div>
       `;
@@ -728,7 +728,7 @@ export class GameScreensManager {
 
     const btnText = this.titlePortal?.querySelector('.btn-portal-text');
     if (btnText) {
-      btnText.textContent = '⚔️ 開始遊戲 // START OPERATION';
+      btnText.textContent = '開始遊戲 // START OPERATION';
     }
 
     if (this.portalDeployPending) {
@@ -977,7 +977,7 @@ export class GameScreensManager {
     const gyroBtn = document.getElementById('setup-btn-gyro-toggle');
     if (gyroBtn) {
       gyroBtn.classList.toggle('active', gyroEnabled);
-      gyroBtn.textContent = `🧭 陀螺儀: ${gyroEnabled ? '啟用中 (ON)' : '已關閉 (OFF)'}`;
+      gyroBtn.textContent = `陀螺儀: ${gyroEnabled ? '啟用中 (ON)' : '已關閉 (OFF)'}`;
     }
     const sensBtn = document.getElementById('setup-btn-gyro-sens');
     if (sensBtn) {
@@ -986,12 +986,12 @@ export class GameScreensManager {
     const autoBtn = document.getElementById('setup-btn-autofire-toggle');
     if (autoBtn) {
       autoBtn.classList.toggle('active', autofire);
-      autoBtn.textContent = `🤖 自動開火: ${autofire ? '啟用中 (ON)' : '已關閉 (OFF)'}`;
+      autoBtn.textContent = `自動開火: ${autofire ? '啟用中 (ON)' : '已關閉 (OFF)'}`;
     }
     const hapticsBtn = document.getElementById('setup-btn-haptics-toggle');
     if (hapticsBtn) {
       hapticsBtn.classList.toggle('active', hapticsEnabled);
-      hapticsBtn.textContent = `📳 震動回饋: ${hapticsEnabled ? '啟用中 (ON)' : '已關閉 (OFF)'}`;
+      hapticsBtn.textContent = `震動回饋: ${hapticsEnabled ? '啟用中 (ON)' : '已關閉 (OFF)'}`;
     }
   }
 
@@ -1013,7 +1013,7 @@ export class GameScreensManager {
   public updatePreload(status: PreloadStatus) {
     this.targetPct = Math.min(100, Math.max(0, status.percent));
     if (this.preloadLabel) {
-      this.preloadLabel.textContent = `[v1.8.3] STEP ${status.step}/${status.totalSteps} · ${status.label}`;
+      this.preloadLabel.textContent = `[v1.9.0] STEP ${status.step}/${status.totalSteps} · ${status.label}`;
     }
     if (this.preloadHint && status.hint) {
       this.preloadHint.textContent = status.hint;

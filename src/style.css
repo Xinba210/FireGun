@@ -1149,17 +1149,21 @@ body, html {
 /* Mid-Right Vertical Utility Icon Stack (NVG, TPS, Gyroscope, More Drawer) */
 .touch-mid-right-stack {
   position: absolute;
-  top: 37%;
+  top: 36%;
   right: 14px;
   display: flex;
   flex-direction: column;
   gap: 10px;
   pointer-events: auto;
+  z-index: 45;
 }
 
 .touch-util-circle {
   width: 44px;
   height: 44px;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* Bottom-Right Ergonomic Circular Action Arc (Zero Text Clutter!) */
@@ -2630,6 +2634,21 @@ body, html {
   gap: 12px;
 }
 
+.setting-icon-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 8px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  color: #facc15;
+  font-family: Consolas, monospace;
+  font-weight: 800;
+  font-size: 10px;
+  border-radius: 4px;
+  letter-spacing: 1px;
+}
+
 .setting-icon {
   font-size: 22px;
 }
@@ -3017,30 +3036,36 @@ body, html {
 
 .preload-recon-hud {
   position: absolute;
-  top: 36px;
-  left: 28px;
-  right: 28px;
+  top: max(20px, env(safe-area-inset-top, 20px));
+  left: 16px;
+  right: 16px;
   z-index: 10;
   display: flex;
   flex-direction: column;
   gap: 6px;
   font-family: Consolas, monospace;
+  box-sizing: border-box;
 }
 
 .recon-hud-top {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
 }
 
 .recon-rec-chip {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: rgba(15, 23, 42, 0.85);
+  background: rgba(15, 23, 42, 0.9);
   border: 1px solid rgba(239, 68, 68, 0.4);
   padding: 4px 10px;
   border-radius: 4px;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .recon-rec-blip {
@@ -3050,6 +3075,7 @@ body, html {
   background: #ef4444;
   box-shadow: 0 0 8px #ef4444;
   animation: pulse-dot 1s infinite;
+  flex-shrink: 0;
 }
 
 .recon-title-text {
@@ -3057,22 +3083,31 @@ body, html {
   font-weight: 800;
   letter-spacing: 1px;
   color: #f87171;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .recon-grid-text {
   font-size: 11px;
   color: #38bdf8;
   letter-spacing: 1px;
+  white-space: nowrap;
+  background: rgba(15, 23, 42, 0.75);
+  padding: 3px 8px;
+  border-radius: 3px;
+  border: 1px solid rgba(56, 189, 248, 0.25);
 }
 
 .recon-desc-text {
   font-size: 11.5px;
   color: #94a3b8;
-  max-width: 460px;
+  max-width: 480px;
   line-height: 1.4;
-  background: rgba(2, 6, 23, 0.65);
-  padding: 4px 8px;
+  background: rgba(2, 6, 23, 0.75);
+  padding: 4px 10px;
   border-radius: 4px;
+  border-left: 2px solid #ef4444;
   border-left: 2px solid #38bdf8;
 }
 

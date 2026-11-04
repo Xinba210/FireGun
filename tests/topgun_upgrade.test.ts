@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { InfiltrationDirector, EvacuationDirector } from '../src/game/cinematics.ts';
 
-describe('FireGun v1.8.2 - TopGun Architecture & Upgrade Suite', () => {
-  it('verifies 62-second Infiltration Director with multi-stage keyframes', () => {
+describe('FireGun v1.9.0 - TopGun Architecture & Tactical Upgrade Suite', () => {
+  it('verifies 24-second High-Speed Infiltration Director with multi-stage keyframes', () => {
     const cam = new THREE.PerspectiveCamera();
     const director = new InfiltrationDirector(cam);
     expect(director).toBeDefined();
@@ -11,12 +11,12 @@ describe('FireGun v1.8.2 - TopGun Architecture & Upgrade Suite', () => {
     director.play(() => {});
     expect(director.active).toBe(true);
 
-    // Initial maritime cruise
-    director.update(0.1, new THREE.Vector3(-6.5, 1.72, 24.0));
+    // Initial high-speed maritime cruise
+    director.update(0.1, new THREE.Vector3(-18.5, 1.72, 30.5));
     expect(director.helicopterPos.z).toBeGreaterThan(100);
 
-    // Mid-ingress searchlight avoidance
-    director.update(25.0, new THREE.Vector3(-6.5, 1.72, 24.0));
+    // High-speed ingress reaches container canyon within 12 seconds
+    director.update(12.0, new THREE.Vector3(-18.5, 1.72, 30.5));
     expect(director.helicopterPos.z).toBeLessThan(60);
 
     // Skip functionality

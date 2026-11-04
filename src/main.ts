@@ -1222,6 +1222,161 @@ function setupTacticalPropsAndMarkings() {
   const beaconMesh = new THREE.Mesh(beaconGeo, beaconMat);
   beaconMesh.position.copy(beaconLight.position);
   scene.add(beaconMesh);
+
+  // 5. Expanded Harbor Infrastructure (South Breakwater Pier, Revolving Lighthouse, Tank Farm & Tetrapods)
+  setupExpandedPortInfrastructure();
+}
+
+let revolvingLighthouseHead: THREE.Group | null = null;
+
+function setupExpandedPortInfrastructure() {
+  // A. South Breakwater Pier (x: -26, z: 32 ~ 85)
+  const pierGroup = new THREE.Group();
+  pierGroup.name = 'SouthBreakwaterPier';
+  const pierMat = new THREE.MeshStandardMaterial({
+    color: 0x334155,
+    roughness: 0.88,
+    metalness: 0.12,
+  });
+  const pierMesh = new THREE.Mesh(new THREE.BoxGeometry(10, 2.2, 54), pierMat);
+  pierMesh.position.set(-26.0, -0.2, 58.0);
+  pierMesh.receiveShadow = true;
+  pierMesh.castShadow = true;
+  pierGroup.add(pierMesh);
+
+  // Safety curbs with hazard stripes
+  const curbMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.8 });
+  const curbLeft = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.45, 54), curbMat);
+  curbLeft.position.set(-30.8, 0.95, 58.0);
+  const curbRight = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.45, 54), curbMat);
+  curbRight.position.set(-21.2, 0.95, 58.0);
+  pierGroup.add(curbLeft, curbRight);
+  scene.add(pierGroup);
+
+  // B. Revolving Port Lighthouse (x: -26, y: 0.9, z: 82)
+  const lighthouseGroup = new THREE.Group();
+  lighthouseGroup.name = 'PortLighthouse';
+  lighthouseGroup.position.set(-26.0, 0.9, 82.0);
+
+  const towerGeo = new THREE.CylinderGeometry(1.8, 2.8, 18, 16);
+  const towerMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.65, metalness: 0.1 });
+  const towerMesh = new THREE.Mesh(towerGeo, towerMat);
+  towerMesh.position.y = 9.0;
+  towerMesh.castShadow = true;
+  towerMesh.receiveShadow = true;
+  lighthouseGroup.add(towerMesh);
+
+  // Red band
+  const stripeGeo = new THREE.CylinderGeometry(2.1, 2.4, 3.5, 16);
+  const redStripeMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.6 });
+  const stripeMesh = new THREE.Mesh(stripeGeo, redStripeMat);
+  stripeMesh.position.y = 11.5;
+  lighthouseGroup.add(stripeMesh);
+
+  // Lantern room
+  const lanternBaseGeo = new THREE.CylinderGeometry(2.2, 2.2, 0.8, 16);
+  const lanternBase = new THREE.Mesh(lanternBaseGeo, new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8 }));
+  lanternBase.position.y = 18.4;
+  lighthouseGroup.add(lanternBase);
+
+  // Revolving searchlight head
+  const searchHead = new THREE.Group();
+  searchHead.position.y = 19.5;
+
+  const beamGeo = new THREE.ConeGeometry(5.5, 38, 16, 1, true);
+  beamGeo.translate(0, -19, 0);
+  beamGeo.rotateX(-Math.PI / 2);
+  const beamMat = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending,
+    uniforms: { beamColor: { value: new THREE.Color(0xfff1cf) } },
+    vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `uniform vec3 beamColor; varying vec2 vUv; void main() { float fade = (1.0 - vUv.y) * 0.15; gl_FragColor = vec4(beamColor, fade); }`,
+  });
+  const beamMesh = new THREE.Mesh(beamGeo, beamMat);
+  searchHead.add(beamMesh);
+
+  const spot = new THREE.SpotLight(0xffeedd, 6.0, 75, Math.PI / 7, 0.45, 1.2);
+  const spotTarget = new THREE.Object3D();
+  spotTarget.position.set(0, -4, 45);
+  searchHead.add(spotTarget);
+  spot.target = spotTarget;
+  searchHead.add(spot);
+
+  revolvingLighthouseHead = searchHead;
+  lighthouseGroup.add(searchHead);
+  scene.add(lighthouseGroup);
+
+  // C. Concrete Tetrapods (24 units along seawall)
+  const tetrapodGroup = new THREE.Group();
+  const legGeo = new THREE.CylinderGeometry(0.24, 0.48, 1.6, 8);
+  const tetraMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.95 });
+  const angleStep = (Math.PI * 2) / 3;
+  for (let i = 0; i < 22; i++) {
+    const tg = new THREE.Group();
+    for (let leg = 0; leg < 3; leg++) {
+      const m = new THREE.Mesh(legGeo, tetraMat);
+      m.rotation.z = 0.65;
+      m.rotation.y = leg * angleStep;
+      m.position.y = 0.4;
+      tg.add(m);
+    }
+    const topLeg = new THREE.Mesh(legGeo, tetraMat);
+    topLeg.position.y = 1.0;
+    tg.add(topLeg);
+    const pZ = 24 + i * 2.7;
+    const pX = -21.5 + ((i % 3) - 1) * 2.2;
+    tg.position.set(pX, -0.6 + (i % 2) * 0.4, pZ);
+    tg.rotation.set((i * 0.5) % 1.2, i * 0.9, (i * 0.3) % 1.2);
+    tetrapodGroup.add(tg);
+  }
+  scene.add(tetrapodGroup);
+
+  // D. East Fuel Storage Tank Farm (4 Giant Cylinders at x: 28 ~ 46, z: -10 ~ 18)
+  const tankFarmGroup = new THREE.Group();
+  tankFarmGroup.name = 'EastFuelTankFarm';
+  const tankGeo = new THREE.CylinderGeometry(4.8, 4.8, 7.5, 24);
+  const tankDomeGeo = new THREE.SphereGeometry(4.8, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2);
+  const tankMat = new THREE.MeshStandardMaterial({
+    color: 0x94a3b8,
+    metalness: 0.65,
+    roughness: 0.38,
+  });
+  const tankCoords = [
+    [32.0, -4.0],
+    [43.0, -4.0],
+    [32.0, 10.0],
+    [43.0, 10.0],
+  ];
+  tankCoords.forEach(([tx, tz]) => {
+    const tg = new THREE.Group();
+    tg.position.set(tx, 0.0, tz);
+    const cyl = new THREE.Mesh(tankGeo, tankMat);
+    cyl.position.y = 3.75;
+    cyl.castShadow = true;
+    cyl.receiveShadow = true;
+    const dome = new THREE.Mesh(tankDomeGeo, tankMat);
+    dome.position.y = 7.5;
+    tg.add(cyl, dome);
+    tankFarmGroup.add(tg);
+  });
+
+  // Concrete bund wall
+  const bundMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.9 });
+  const bundMesh = new THREE.Mesh(new THREE.BoxGeometry(26, 1.4, 26), bundMat);
+  bundMesh.position.set(37.5, 0.7, 3.0);
+  bundMesh.receiveShadow = true;
+  tankFarmGroup.add(bundMesh);
+
+  // Yellow fuel pipeline manifold
+  const pipeMat = new THREE.MeshStandardMaterial({ color: 0xca8a04, metalness: 0.5, roughness: 0.4 });
+  const pipeMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 30, 12), pipeMat);
+  pipeMesh.rotation.x = Math.PI / 2;
+  pipeMesh.position.set(24.5, 2.2, 3.0);
+  tankFarmGroup.add(pipeMesh);
+  scene.add(tankFarmGroup);
 }
 
 // ---------------------------------------------------------------------------
@@ -1327,8 +1482,8 @@ function createProceduralWaterNormalsTexture(size = 256): THREE.DataTexture {
 const sharedWaterNormals = createProceduralWaterNormalsTexture(256);
 
 function setupHarborWaterAndPuddles() {
-  // 1. Official Three.js Water.js for West & North Harbor Sea Basin
-  const seaGeo = new THREE.PlaneGeometry(76, 130);
+  // 1. Official Three.js Water.js for Expanded West & North Harbor Sea Basin (160 x 220)
+  const seaGeo = new THREE.PlaneGeometry(160, 220);
   harborSeaWater = new Water(seaGeo, {
     textureWidth: 256,
     textureHeight: 256,
@@ -1340,7 +1495,7 @@ function setupHarborWaterAndPuddles() {
     fog: scene.fog !== undefined,
   });
   harborSeaWater.rotation.x = -Math.PI / 2;
-  harborSeaWater.position.set(-44, -1.32, 0);
+  harborSeaWater.position.set(-52, -1.32, 25);
   scene.add(harborSeaWater);
 
   // 2. Shared Real-Time Planar Reflection + Analytical Raindrop Wave Normal Shader for Wet Dock Puddles
@@ -2465,7 +2620,7 @@ function createStatusBadgeMat(symbol: string, bgCol: string, borderCol: string) 
   return new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
 }
 const statusMatCombat = createStatusBadgeMat('!', 'rgba(185, 28, 28, 0.88)', '#f87171');
-const statusMatCover = createStatusBadgeMat('🛡', 'rgba(3, 105, 161, 0.88)', '#38bdf8');
+const statusMatCover = createStatusBadgeMat('DEF', 'rgba(3, 105, 161, 0.88)', '#38bdf8');
 const statusMatPatrol = createStatusBadgeMat('?', 'rgba(161, 98, 7, 0.85)', '#facc15');
 const enemyHpBgGeo = new THREE.PlaneGeometry(0.56, 0.065);
 const enemyHpFillGeo = new THREE.PlaneGeometry(0.52, 0.042);
@@ -2492,11 +2647,11 @@ function spawnEnemySquad() {
     { name: '突撃兵 Alpha (West Dock)', archetype: 'ASSAULT', hp: 100, pos: [-6.5, 0.0, 2.0], patrol: [[-6.5, 2.0], [-6.5, -6.0]], clip: 'Walk_Loop' },
     { name: '突撃兵 Bravo (Crane Guard)', archetype: 'ASSAULT', hp: 100, pos: [-5.2, 0.0, -9.5], patrol: [[-5.2, -9.5], [-8.2, -16.0]], clip: 'Walk_Loop' },
     { name: '突撃兵 Charlie (Center Alley)', archetype: 'ASSAULT', hp: 100, pos: [3.2, 0.0, -2.0], patrol: [[3.2, -2.0], [3.2, -10.0]], clip: 'Idle_Loop' },
-    { name: '狙撃兵 Delta (Catwalk Sniper 🎯)', archetype: 'SNIPER', hp: 90, pos: [6.2, 5.34, -5.0], patrol: [[6.2, -5.0], [6.2, -14.0]], clip: 'Idle_Loop' },
+    { name: '狙撃兵 Delta (Catwalk Sniper)', archetype: 'SNIPER', hp: 90, pos: [6.2, 5.34, -5.0], patrol: [[6.2, -5.0], [6.2, -14.0]], clip: 'Idle_Loop' },
     { name: '突撃兵 Echo (Guard Post)', archetype: 'ASSAULT', hp: 100, pos: [14.5, 0.0, 6.0], patrol: [[14.5, 6.0], [14.5, -4.0]], clip: 'Walk_Loop' },
-    { name: '重装兵 Foxtrot (Heavy Breacher 🛡)', archetype: 'BREACHER', hp: 145, pos: [16.5, 0.0, -6.5], patrol: [[16.5, -6.5], [20.5, -14.0]], clip: 'Crouch_Idle_Loop' },
-    { name: '狙撃兵 Golf (Terminal Overwatch 🎯)', archetype: 'SNIPER', hp: 95, pos: [0.5, 0.0, -19.5], patrol: [[0.5, -19.5], [-6.5, -21.0]], clip: 'Walk_Loop' },
-    { name: '重装隊長 Commander (Ship Deck 🛡)', archetype: 'BREACHER', hp: 160, pos: [-26.5, 6.6, -12.0], patrol: [[-26.5, -12.0], [-26.5, -4.0]], clip: 'Idle_Loop' },
+    { name: '重装兵 Foxtrot (Heavy Breacher)', archetype: 'BREACHER', hp: 145, pos: [16.5, 0.0, -6.5], patrol: [[16.5, -6.5], [20.5, -14.0]], clip: 'Crouch_Idle_Loop' },
+    { name: '狙撃兵 Golf (Terminal Overwatch)', archetype: 'SNIPER', hp: 95, pos: [0.5, 0.0, -19.5], patrol: [[0.5, -19.5], [-6.5, -21.0]], clip: 'Walk_Loop' },
+    { name: '重装隊長 Commander (Ship Deck)', archetype: 'BREACHER', hp: 160, pos: [-26.5, 6.6, -12.0], patrol: [[-26.5, -12.0], [-26.5, -4.0]], clip: 'Idle_Loop' },
   ];
 
   squadSpawns.forEach((sp, idx) => {
@@ -2747,15 +2902,15 @@ function updateWeaponHud() {
   if (magEl) magEl.textContent = String(w.mag);
   if (resEl) resEl.textContent = String(w.reserve);
   if (modeEl) modeEl.textContent = w.fireMode;
-  if (grenEl) grenEl.textContent = `💣 [G] x${player.grenades}`;
+  if (grenEl) grenEl.textContent = `G-FRAG [G] x${player.grenades}`;
   if (slotGCount) slotGCount.textContent = `×${player.grenades}`;
-  if (stimEl) stimEl.textContent = `💉 [X] x${player.stims}`;
+  if (stimEl) stimEl.textContent = `STIM [X] x${player.stims}`;
   if (lightEl) {
-    lightEl.textContent = `🔦 [T] ${player.flashlightOn ? 'ON' : 'OFF'}`;
+    lightEl.textContent = `LIGHT [T] ${player.flashlightOn ? 'ON' : 'OFF'}`;
     lightEl.classList.toggle('active', player.flashlightOn);
   }
   if (nvgEl) {
-    nvgEl.textContent = `🥽 [N] ${player.nvgOn ? 'ON' : 'OFF'}`;
+    nvgEl.textContent = `NVG [N] ${player.nvgOn ? 'ON' : 'OFF'}`;
     nvgEl.classList.toggle('active', player.nvgOn);
   }
   document.getElementById('touch-btn-nvg-quick')?.classList.toggle('active', player.nvgOn);
@@ -2872,9 +3027,9 @@ function updateObjectiveHud() {
             ? `奪還北側主控終端並肅清守軍 (${killed}/${total})`
             : '目標達成：港務主控終端已奪還！';
       } else if (player.raidStage === 4) {
-        objText.textContent = '⚠️ 全域紅色警報：消滅巨型起重機重裝兵 [GOLIATH-01]！';
+        objText.textContent = '全域紅色警報：消滅巨型起重機重裝兵 [GOLIATH-01]！';
       } else {
-        objText.textContent = '🚁 全員熱撤離：迅速撤退至西側碼頭停機坪 (LZ-DELTA) 登機！';
+        objText.textContent = '全員熱撤離：迅速撤退至西側碼頭停機坪 (LZ-DELTA) 登機！';
       }
     }
     const distEl = document.getElementById('objective-dist');
@@ -2928,25 +3083,25 @@ function setGameMode(mode: 'RAID' | 'SURVIVAL' | 'SNIPER' | 'BLITZ') {
     player.yaw = 0.12;
     player.pitch = -0.14;
     equipWeapon(3); // SR-9 Sniper
-    showKillBanner('🎯 高空狙擊獵殺模式 — SR-9 8X');
+    showKillBanner('高空狙擊獵殺模式 — SR-9 8X');
   } else if (mode === 'SURVIVAL') {
     player.pos.set(-1.5, 0.0, 18.0);
     player.yaw = 0.0;
     player.pitch = 0.0;
     equipWeapon(2); // SG-12 Pump Shotgun
-    showKillBanner('🌊 波次防衛生存戰 — WAVE 1');
+    showKillBanner('波次防衛生存戰 — WAVE 1');
   } else if (mode === 'BLITZ') {
     player.pos.set(-1.5, 0.0, 22.0);
     player.yaw = 0.0;
     player.pitch = 0.0;
     equipWeapon(1); // SMG-9 Tactical
-    showKillBanner('⏱️ 90秒極速肅清計時賽 START!');
+    showKillBanner('90秒極速肅清計時賽 START!');
   } else {
     player.pos.set(blueprint.spawn.position[0], 0.0, blueprint.spawn.position[2]);
     player.yaw = blueprint.spawn.yaw;
     player.pitch = 0.0;
     equipWeapon(0); // AR-7 Carbine
-    showKillBanner('⚔️ 戰術突襲 (3階段連鎖任務)');
+    showKillBanner('戰術突襲 (3階段連鎖任務)');
   }
 
   document.querySelectorAll('.touch-mode-btn').forEach((btn) => {
@@ -2972,7 +3127,7 @@ function pushKillfeed(weaponName: string, victimName: string, headshot: boolean)
   if (!feed) return;
   const item = document.createElement('div');
   item.className = 'killfeed-item';
-  item.innerHTML = `<span class="kf-killer">YOU</span><span class="kf-weapon">[${weaponName}${headshot ? ' 🎯' : ''}]</span><span class="kf-victim">${victimName}</span>`;
+  item.innerHTML = `<span class="kf-killer">YOU</span><span class="kf-weapon">[${weaponName}${headshot ? ' [HS]' : ''}]</span><span class="kf-victim">${victimName}</span>`;
   feed.prepend(item);
   const isMobilePortrait = window.innerWidth <= 768;
   const maxItems = isMobilePortrait ? 1 : 4;
@@ -3259,7 +3414,7 @@ function damageEnemy(enemy: EnemyActor, amount: number, isHeadshot: boolean, wea
     if (bossHpText) bossHpText.textContent = `${Math.max(0, Math.round(enemy.hp))} / 1200 HP`;
     if (bossHpFill) bossHpFill.style.width = `${Math.max(0, (enemy.hp / 1200) * 100)}%`;
     if (bossShieldInd) {
-      bossShieldInd.textContent = enemy.isStaggered ? '⚠️ 核心暴露中: 破防 (易傷40%)' : '🛡️ 防彈重盾: 啟用中 (減傷80%)';
+      bossShieldInd.textContent = enemy.isStaggered ? 'CORE EXPOSED: BREACHED (+40% DMG)' : 'BALLISTIC SHIELD: ACTIVE (-80% DMG)';
       bossShieldInd.style.color = enemy.isStaggered ? '#ef4444' : '#38bdf8';
     }
   }
@@ -3809,10 +3964,10 @@ function renderGunsmithAttachmentsList(weaponId: string, wState: any) {
   listEl.innerHTML = '';
 
   const slotLabels: Record<string, string> = {
-    optic: '🎯 瞄具配件庫 (OPTICS CATALOG)',
-    muzzle: '🔇 槍口制動配件庫 (MUZZLE CATALOG)',
-    grip: '握 戰術握把配件庫 (GRIP CATALOG)',
-    mag: '🔋 供彈系統配件庫 (MAGAZINE CATALOG)',
+    optic: '瞄具配件庫 (OPTICS CATALOG)',
+    muzzle: '槍口制動配件庫 (MUZZLE CATALOG)',
+    grip: '戰術握把配件庫 (GRIP CATALOG)',
+    mag: '供彈系統配件庫 (MAGAZINE CATALOG)',
   };
   if (titleEl) titleEl.textContent = slotLabels[activeGunsmithSlot] || '配件庫';
 
@@ -3824,11 +3979,11 @@ function renderGunsmithAttachmentsList(weaponId: string, wState: any) {
   noneCard.innerHTML = `
     <div class="att-card-header">
       <span class="att-card-name">標準原廠規格 (DEFAULT)</span>
-      ${!equippedId ? '<span class="att-badge-equipped">✓ ACTIVE</span>' : ''}
+      ${!equippedId ? '<span class="att-badge-equipped">ACTIVE</span>' : ''}
     </div>
     <p class="att-card-desc">移除此槽位改裝配件，恢復原廠原裝設定。</p>
     <button class="btn-att-action ${!equippedId ? 'btn-att-unequip' : 'btn-att-equip'}">
-      ${!equippedId ? '✓ 已裝備 (EQUIPPED)' : '恢復原廠 (DEFAULT)'}
+      ${!equippedId ? '已裝備 (EQUIPPED)' : '恢復原廠 (DEFAULT)'}
     </button>
   `;
   const handleDefaultTap = (e: Event) => {
@@ -3864,18 +4019,18 @@ function renderGunsmithAttachmentsList(weaponId: string, wState: any) {
       deltaHtml += `<span class="${delta.magDelta > 0 ? 'att-delta-pos' : 'att-delta-neg'}">${delta.magDelta > 0 ? '+' : ''}${delta.magDelta} 彈容</span>`;
     }
     if (delta.isSilenced) {
-      deltaHtml += `<span class="att-delta-pos">🔇 匿蹤消音</span>`;
+      deltaHtml += `<span class="att-delta-pos">匿蹤消音</span>`;
     }
 
     card.innerHTML = `
       <div class="att-card-header">
         <span class="att-card-name">${att.name}</span>
-        ${isEq ? '<span class="att-badge-equipped">✓ EQUIPPED</span>' : `<span class="att-card-cost text-gold">${att.cost} CR</span>`}
+        ${isEq ? '<span class="att-badge-equipped">EQUIPPED</span>' : `<span class="att-card-cost text-gold">${att.cost} CR</span>`}
       </div>
       <p class="att-card-desc">${att.desc}</p>
       <div class="att-stat-deltas">${deltaHtml}</div>
       <button class="btn-att-action ${isEq ? 'btn-att-unequip' : isUnlocked ? 'btn-att-equip' : canAfford ? 'btn-att-equip' : 'btn-att-locked'}">
-        ${isEq ? '卸除 (REMOVE)' : isUnlocked ? '裝備 (EQUIP)' : canAfford ? `購買並裝備 (${att.cost} CR)` : `🔒 LV.${att.unlockLevel} 解鎖`}
+        ${isEq ? '卸除 (REMOVE)' : isUnlocked ? '裝備 (EQUIP)' : canAfford ? `購買並裝備 (${att.cost} CR)` : `LV.${att.unlockLevel} 解鎖`}
       </button>
     `;
 
@@ -4315,7 +4470,7 @@ function updateGyroHudButtons() {
   const autoBtn = document.getElementById('btn-autofire-toggle');
   const minBtn = document.getElementById('btn-hud-minimal');
   if (toggleBtn) {
-    toggleBtn.textContent = gyroController.enabled ? '🧭 陀螺儀: ON' : '🧭 陀螺儀瞄準: 點擊開啟';
+    toggleBtn.textContent = gyroController.enabled ? 'GYRO: ON' : 'GYRO: 點擊開啟';
     toggleBtn.classList.toggle('active', gyroController.enabled);
   }
   document.getElementById('touch-btn-gyro-quick')?.classList.toggle('active', gyroController.enabled);
@@ -4323,11 +4478,11 @@ function updateGyroHudButtons() {
     sensBtn.textContent = `${gyroController.sensitivity.toFixed(1)}x`;
   }
   if (autoBtn) {
-    autoBtn.textContent = `🤖 自動開火: ${player.autoFireOn ? 'ON' : 'OFF'}`;
+    autoBtn.textContent = `AUTO-FIRE: ${player.autoFireOn ? 'ON' : 'OFF'}`;
     autoBtn.classList.toggle('active', player.autoFireOn);
   }
   if (minBtn) {
-    minBtn.textContent = player.hudMinimal ? '👁️ 完整' : '👁️ 精簡';
+    minBtn.textContent = player.hudMinimal ? 'HUD: 完整' : 'HUD: 精簡';
     minBtn.classList.toggle('active', player.hudMinimal);
   }
 }
@@ -4362,10 +4517,10 @@ async function toggleGyroAiming(forceState?: boolean) {
     }
     gyroController.enabled = true;
     calibrateGyroCenter();
-    showKillBanner('🧭 陀螺儀體感瞄準：已開啟 (2.2x 非線性加速)');
+    showKillBanner('GYRO AIM: ENGAGED (2.2x)');
   } else {
     gyroController.enabled = false;
-    showKillBanner('🧭 陀螺儀體感瞄準：已關閉');
+    showKillBanner('GYRO AIM: DISENGAGED');
   }
   audioSys.play2D('assets/audio/fire_mode_click.wav', 0.75);
   updateGyroHudButtons();
@@ -4374,7 +4529,7 @@ async function toggleGyroAiming(forceState?: boolean) {
 function toggleAutoFireAssist(forceState?: boolean) {
   player.autoFireOn = forceState !== undefined ? forceState : !player.autoFireOn;
   audioSys.play2D('assets/audio/fire_mode_click.wav', 0.75);
-  showKillBanner(player.autoFireOn ? '🤖 準星自動開火：ON' : '🤖 準星自動開火：OFF');
+  showKillBanner(player.autoFireOn ? 'AUTO-FIRE: ACTIVE' : 'AUTO-FIRE: DISABLED');
   updateGyroHudButtons();
 }
 
@@ -5621,6 +5776,11 @@ function stepSimulation(dt: number, elapsedSec: number) {
     // Dynamic Thunderstorm Lightning & Distant Thunder Engine
     updateLightningAndThunder(dt, moonLight);
 
+    // Revolving Port Lighthouse Beam Sweeping over Harbor
+    if (revolvingLighthouseHead) {
+      revolvingLighthouseHead.rotation.y += dt * 0.75;
+    }
+
     if (!operationStarted && !isAutomatedQa) {
       // Live 3D Title Screen Cinematic Orbit along the harbor
       const tTitle = performance.now() * 0.00035;
@@ -5789,7 +5949,7 @@ function stepSimulation(dt: number, elapsedSec: number) {
       if (keys['KeyE'] || distToTerminal <= 2.6) {
         player.terminalHackProgress = Math.min(1.0, player.terminalHackProgress + dt * 0.55);
         if (termFill) termFill.style.width = `${(player.terminalHackProgress * 100).toFixed(0)}%`;
-        if (termTitle) termTitle.textContent = `⚡ 正在駭入奪還港務主控終端... ${Math.round(player.terminalHackProgress * 100)}%`;
+        if (termTitle) termTitle.textContent = `正在駭入奪還港務主控終端... ${Math.round(player.terminalHackProgress * 100)}%`;
         if (player.terminalHackProgress >= 1.0) {
           player.terminalHacked = true;
           audioSys.play2D('assets/audio/fire_mode_click.wav', 0.95);
@@ -5803,7 +5963,7 @@ function stepSimulation(dt: number, elapsedSec: number) {
           setTimeout(() => termBox?.classList.add('hidden'), 1400);
         }
       } else {
-        if (termTitle) termTitle.textContent = '⚡ [E] 按住駭入奪還港務主控終端 // HOLD [E] TO HACK';
+        if (termTitle) termTitle.textContent = '[E] 按住駭入奪還港務主控終端 // HOLD [E] TO HACK';
       }
     } else if (!player.terminalHacked) {
       termBox?.classList.add('hidden');
@@ -5877,7 +6037,7 @@ function stepSimulation(dt: number, elapsedSec: number) {
   for (let i = activeShells.length - 1; i >= 0; i--) {
     const sh = activeShells[i];
     sh.age += dt;
-    if (sh.age > 0.75) {
+    if (sh.age > 2.2) {
       scene.remove(sh.mesh);
       activeShells.splice(i, 1);
       continue;
@@ -5889,9 +6049,10 @@ function stepSimulation(dt: number, elapsedSec: number) {
     sh.mesh.rotation.z += sh.rotVel.z * dt;
     if (sh.mesh.position.y < 0.02) {
       sh.mesh.position.y = 0.02;
-      sh.vel.y = Math.abs(sh.vel.y) * 0.45;
-      sh.vel.x *= 0.6;
-      sh.vel.z *= 0.6;
+      sh.vel.y = Math.abs(sh.vel.y) * 0.42;
+      sh.vel.x *= 0.72;
+      sh.vel.z *= 0.72;
+      sh.rotVel.multiplyScalar(0.75);
     }
   }
 
@@ -6109,7 +6270,7 @@ function stepSimulation(dt: number, elapsedSec: number) {
             if (e.shieldGroup) e.shieldGroup.rotation.y = 0.22;
             const shieldInd = document.getElementById('boss-shield-indicator');
             if (shieldInd) {
-              shieldInd.textContent = '🛡️ 防彈重盾: 啟用中 (減傷80%)';
+              shieldInd.textContent = 'BALLISTIC SHIELD: ACTIVE (-80% DMG)';
               shieldInd.style.color = '#38bdf8';
             }
           }
@@ -6329,6 +6490,9 @@ function renderSceneWithWater(forceReflection = true) {
 }
 
 function animate(now: number) {
+  if ((window as unknown as { __freezeRender?: boolean }).__freezeRender) {
+    return;
+  }
   requestAnimationFrame(animate);
   const rawDt = now - lastTime;
   lastTime = now;
