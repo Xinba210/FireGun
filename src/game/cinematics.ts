@@ -34,6 +34,11 @@ export class InfiltrationDirector {
   public helicopterRotY = 0;
   public helicopterPitch = 0.08;
   public cabinLightColor = new THREE.Color('#ff2222');
+  public flaresActive = false;
+
+  private hasTriggeredThreatAlert = false;
+  private hasTriggeredFastRope = false;
+  private hasTriggeredTouchdown = false;
 
   constructor(camera: THREE.PerspectiveCamera) {
     this.camera = camera;
@@ -69,10 +74,10 @@ export class InfiltrationDirector {
           <button id="btn-skip-cutscene" class="btn-skip-cutscene">SKIP [SPACE / TAP]</button>
         </div>
         <div class="cutscene-hud-boot hidden" id="cutscene-hud-boot">
-          <div class="boot-line">TACTICAL VISOR FIRMWARE v4.19 ENGAGED...</div>
-          <div class="boot-line">OPTICS: ONLINE // BALLISTICS: SYNCED</div>
-          <div class="boot-line">SQUAD LINK: ACTIVE (GHOST & ROACH ON SIX)</div>
-          <div class="boot-line boot-green">WEAPONS FREE — YOU ARE GREEN TO ENGAGE</div>
+          <div class="boot-line">TACTICAL VISOR FIRMWARE v1.8.2 ENGAGED...</div>
+          <div class="boot-line">LZ SECURED: WEST CONTAINER BERM (31M TO PATROL ALPHA)</div>
+          <div class="boot-line">SQUAD LINK: ACTIVE (GHOST & ROACH COVERING FLANK)</div>
+          <div class="boot-line boot-green">STEALTH INSERTION CONFIRMED — FREE TO ENGAGE</div>
         </div>
       `;
       document.body.appendChild(overlay);
@@ -98,91 +103,91 @@ export class InfiltrationDirector {
 
   private setupKeyframes() {
     this.keyframes = [
-      // Act 1 (0.0s ~ 14.0s): Maritime low-altitude skimming cruise over stormy sea
+      // Act 1 (0.0s ~ 10.0s): Maritime low-altitude skimming cruise over stormy sea
       {
         timeSec: 0.0,
-        pos: new THREE.Vector3(-28.0, 22.0, 130.0),
-        target: new THREE.Vector3(-16.0, 16.0, 110.0),
-        fov: 65,
-        camLabel: 'INFIL-BIRD // LOW-ALTITUDE MARITIME CRUISE (02:40)',
-        radioSpeaker: '[PILOT]',
-        radioText: '"Holding 35 feet off the deck. Pacific Fleet Recon vector 0-4-0 engaged."',
-        cabinLight: 'red',
-      },
-      // Act 2 (14.0s ~ 26.0s): Approaching harbor breakwater, distant cranes silhouette & storm
-      {
-        timeSec: 14.0,
-        pos: new THREE.Vector3(-22.0, 18.0, 85.0),
-        target: new THREE.Vector3(-12.0, 14.0, 60.0),
-        fov: 64,
-        camLabel: 'APPROACHING BREAKWATER // RADAR EVASION',
-        radioSpeaker: '[COMMAND]',
-        radioText: '"Command to Task Force 141. Satellite confirms heavy PMC lockdown on Basin 4."',
-        cabinLight: 'red',
-      },
-      // Act 3 (26.0s ~ 38.0s): Harbor breach & searchlight avoidance
-      {
-        timeSec: 26.0,
-        pos: new THREE.Vector3(-16.0, 12.0, 50.0),
-        target: new THREE.Vector3(-8.0, 9.0, 36.0),
-        fov: 66,
-        camLabel: 'PORT PERIMETER // SEARCHLIGHT EVASION',
-        radioSpeaker: '[GHOST]',
-        radioText: '"Passing outer buoy. Watch the catwalks. PMC sniper teams on the gantry crane."',
-        cabinLight: 'red',
-      },
-      // Act 4 (38.0s ~ 48.0s): Container alley flare deceleration & LZ approach
-      {
-        timeSec: 38.0,
-        pos: new THREE.Vector3(-12.0, 6.5, 30.0),
-        target: new THREE.Vector3(-6.5, 5.0, 25.5),
-        fov: 68,
-        camLabel: 'DROP ZONE // FINAL DECELERATION FLARE',
-        radioSpeaker: '[PILOT]',
-        radioText: '"Container corridor in sight. Braking hard. 10 seconds to insertion."',
-        cabinLight: 'red',
-      },
-      // Act 5 (48.0s ~ 54.0s): Low hover, green light on, fast-ropes drop
-      {
-        timeSec: 48.0,
-        pos: new THREE.Vector3(-9.5, 3.2, 25.5),
-        target: new THREE.Vector3(-6.5, 2.8, 24.5),
+        pos: new THREE.Vector3(-42.0, 26.0, 136.0),
+        target: new THREE.Vector3(-22.0, 20.0, 110.0),
         fov: 62,
-        camLabel: 'DROP ZONE CONFIRMED // GREEN LIGHT ENGAGED',
+        camLabel: 'INFIL-BIRD // LOW-ALTITUDE STORMY INGRESS (02:40)',
+        radioSpeaker: '[PILOT]',
+        radioText: '"Falcon 1-1 to Task Force 141. Low-level ingress under storm cover. Keep heads down."',
+        cabinLight: 'red',
+      },
+      // Act 2 (10.0s ~ 22.0s): Hostile SAM radar lock! Emergency RWR alarm, evasion bank & defensive flares
+      {
+        timeSec: 10.0,
+        pos: new THREE.Vector3(-40.0, 22.0, 96.0),
+        target: new THREE.Vector3(-18.0, 16.0, 78.0),
+        fov: 65,
+        camLabel: 'THREAT WARNING // HOSTILE SAM LOCK DETECTED',
+        radioSpeaker: '[OVERWATCH]',
+        radioText: '"WARNING! SAM radar pinged from crane battery! BREAK RIGHT! DEPLOY COUNTERMEASURES!"',
+        cabinLight: 'red',
+      },
+      // Act 3 (22.0s ~ 36.0s): Breakwater penetration, avoiding enemy patrol Alpha on main lane
+      {
+        timeSec: 22.0,
+        pos: new THREE.Vector3(-32.0, 14.0, 60.0),
+        target: new THREE.Vector3(-18.0, 10.0, 44.0),
+        fov: 64,
+        camLabel: 'PORT PERIMETER // DIVERTING TO WEST BERM LZ',
+        radioSpeaker: '[COMMAND]',
+        radioText: '"141, divert to Western Container Berm LZ. Hostile patrol Alpha is in the main alley. Silent insertion only."',
+        cabinLight: 'red',
+      },
+      // Act 4 (36.0s ~ 46.0s): Container blind approach, flare deceleration over Western Berm
+      {
+        timeSec: 36.0,
+        pos: new THREE.Vector3(-19.5, 6.5, 36.0),
+        target: new THREE.Vector3(-18.5, 4.0, 31.0),
+        fov: 64,
+        camLabel: 'DROP ZONE // WESTERN CONTAINER BERM APPROACH',
+        radioSpeaker: '[PILOT]',
+        radioText: '"Western Berm in sight behind container wall. Braking hard to hover. Fast-ropes ready!"',
+        cabinLight: 'red',
+      },
+      // Act 5 (46.0s ~ 54.0s): Low hover over berm, green light on, fast-ropes drop
+      {
+        timeSec: 46.0,
+        pos: new THREE.Vector3(-19.0, 3.8, 32.0),
+        target: new THREE.Vector3(-18.5, 2.5, 30.5),
+        fov: 62,
+        camLabel: 'SAFE DROP ZONE CONFIRMED // GREEN LIGHT ENGAGED',
         radioSpeaker: '[GHOST]',
-        radioText: '"Green light! Go, go, go! Deploy ropes! Disembark!"',
+        radioText: '"Green light! Go, go, go! Deploy ropes! Disembark into the blind alley!"',
         cabinLight: 'green',
       },
-      // Act 6 (54.0s ~ 58.0s): Touchdown impact & perimeter security established
+      // Act 6 (54.0s ~ 58.0s): Touchdown behind containers, boots on ground, helicopter dust-off
       {
         timeSec: 54.0,
-        pos: new THREE.Vector3(-6.5, 1.72, 24.0),
-        target: new THREE.Vector3(-6.5, 2.6, 22.0),
+        pos: new THREE.Vector3(-18.5, 1.72, 30.5),
+        target: new THREE.Vector3(-18.5, 2.2, 26.0),
         fov: 62,
-        camLabel: 'TOUCHDOWN // INSERTION FOOTPRINT ZERO',
+        camLabel: 'TOUCHDOWN // INSERTION FOOTPRINT ZERO (CONCEALED)',
         radioSpeaker: '[PILOT]',
-        radioText: '"Boots on deck. Infil-Bird dusting off to carrier. Good hunting 141!"',
+        radioText: '"Boots on deck. Falcon 1-1 dusting off to sea. Good hunting 141!"',
         cabinLight: 'off',
       },
-      // Act 7 (58.0s ~ 62.0s): Helicopter roars away over crane, HUD firmware online, weapons free
+      // Act 7 (58.0s ~ 62.0s): Visor HUD boot online, squad in cover, weapons free
       {
         timeSec: 58.0,
-        pos: new THREE.Vector3(-6.5, 1.72, 24.0),
-        target: new THREE.Vector3(-6.5, 1.72, 10.0),
+        pos: new THREE.Vector3(-18.5, 1.72, 30.5),
+        target: new THREE.Vector3(-18.5, 1.72, 16.0),
         fov: 60,
-        camLabel: 'SYSTEM READY // WEAPONS HOT',
+        camLabel: 'SYSTEM READY // WEAPONS HOT // RECON PHASE',
         radioSpeaker: '[COMMAND]',
-        radioText: '"Weapons free. Execute Operation Cold Harbor!"',
+        radioText: '"LZ secure behind container stack. Ghost and Roach on your flank. Weapons free."',
         cabinLight: 'off',
       },
       {
         timeSec: 62.0,
-        pos: new THREE.Vector3(-6.5, 1.72, 24.0),
-        target: new THREE.Vector3(-6.5, 1.72, 8.0),
+        pos: new THREE.Vector3(-18.5, 1.72, 30.5),
+        target: new THREE.Vector3(-18.5, 1.72, 12.0),
         fov: 60,
         camLabel: 'SYSTEM READY // WEAPONS HOT',
         radioSpeaker: '[COMMAND]',
-        radioText: '"Move out."',
+        radioText: '"Move out silent."',
         cabinLight: 'off',
       },
     ];
@@ -191,6 +196,10 @@ export class InfiltrationDirector {
   public play(onComplete: () => void, onFrame?: (t: number) => void) {
     this.isPlaying = true;
     this.elapsedSec = 0;
+    this.hasTriggeredThreatAlert = false;
+    this.hasTriggeredFastRope = false;
+    this.hasTriggeredTouchdown = false;
+    this.flaresActive = false;
     this.onCompleteCallback = onComplete;
     this.onFrameCallback = onFrame || null;
     if (this.cutsceneOverlay) {
@@ -212,57 +221,85 @@ export class InfiltrationDirector {
       this.onFrameCallback(t);
     }
 
+    // Dynamic landing coordinates based on targetSpawnPos (fallback to Western Container Berm)
+    const destX = targetSpawnPos ? targetSpawnPos.x : -18.5;
+    const destY = targetSpawnPos ? targetSpawnPos.y : 0.0;
+    const destZ = targetSpawnPos ? targetSpawnPos.z : 30.5;
+
     // Update real-time military timestamp
     if (this.clockEl) {
       const ms = Math.floor((t * 100) % 100);
       this.clockEl.textContent = `02:40:${String(12 + Math.floor(t)).padStart(2, '0')}:${String(ms).padStart(2, '0')}`;
     }
 
+    // Dynamic High-Tension Audio & FX Triggers
+    if (t >= 10.0 && t < 22.0) {
+      this.flaresActive = true;
+      if (!this.hasTriggeredThreatAlert) {
+        this.hasTriggeredThreatAlert = true;
+        tacticalRadioAudio.playRwrThreatAlarm(3.6);
+        tacticalRadioAudio.playEmergencySiren(4.0);
+      }
+    } else {
+      this.flaresActive = false;
+    }
+
+    if (t >= 46.0 && !this.hasTriggeredFastRope) {
+      this.hasTriggeredFastRope = true;
+      tacticalRadioAudio.playFastRopeDeploy();
+    }
+
+    if (t >= 54.0 && !this.hasTriggeredTouchdown) {
+      this.hasTriggeredTouchdown = true;
+      tacticalRadioAudio.playCombatTouchdown();
+    }
+
     // Update helicopter position along insertion flight path
-    if (t < 26.0) {
-      // Act 1 & 2: Gliding across water toward harbor
-      const p = t / 26.0;
+    if (t < 22.0) {
+      // Act 1 & 2: Gliding across stormy water, evasive jink at t >= 10.0
+      const p = t / 22.0;
+      const bankJink = t >= 10.0 ? Math.sin((t - 10.0) * 0.7) * 4.0 : 0;
       this.helicopterPos.set(
-        THREE.MathUtils.lerp(-24.0, -16.0, p),
-        THREE.MathUtils.lerp(22.0, 12.0, p),
-        THREE.MathUtils.lerp(120.0, 52.0, p)
+        THREE.MathUtils.lerp(-26.0, -20.0, p) + bankJink,
+        THREE.MathUtils.lerp(22.0, 14.0, p),
+        THREE.MathUtils.lerp(120.0, 62.0, p)
       );
-      this.helicopterRotY = -0.15 * (1 - p);
-      this.helicopterPitch = 0.06; // nose slightly down while flying forward
-    } else if (t < 38.0) {
-      // Act 3: Flare and begin deceleration approach
-      const p = (t - 26.0) / 12.0;
+      this.helicopterRotY = -0.15 * (1 - p) + (t >= 10.0 ? 0.22 : 0);
+      this.helicopterPitch = 0.06;
+    } else if (t < 36.0) {
+      // Act 3: Breakwater low skim under radar
+      const p = (t - 22.0) / 14.0;
       this.helicopterPos.set(
-        THREE.MathUtils.lerp(-16.0, -10.0, p),
-        THREE.MathUtils.lerp(12.0, 6.0, p),
-        THREE.MathUtils.lerp(52.0, 30.0, p)
+        THREE.MathUtils.lerp(-20.0, destX + 1.5, p),
+        THREE.MathUtils.lerp(14.0, 6.5, p),
+        THREE.MathUtils.lerp(62.0, destZ + 6.0, p)
       );
       this.helicopterRotY = 0;
       this.helicopterPitch = -0.04 * (1 - p); // flare nose up to brake!
-    } else if (t < 48.0) {
-      // Act 4: Precision deceleration over container alley LZ
-      const p = (t - 38.0) / 10.0;
+    } else if (t < 46.0) {
+      // Act 4: Precision deceleration over destination LZ
+      const p = (t - 36.0) / 10.0;
       this.helicopterPos.set(
-        THREE.MathUtils.lerp(-10.0, -6.5, p),
-        THREE.MathUtils.lerp(6.0, 3.5, p),
-        THREE.MathUtils.lerp(30.0, 24.5, p)
+        THREE.MathUtils.lerp(destX + 1.5, destX, p),
+        THREE.MathUtils.lerp(6.5, 3.5, p),
+        THREE.MathUtils.lerp(destZ + 6.0, destZ + 0.5, p)
       );
       this.helicopterRotY = 0;
       this.helicopterPitch = -0.05 * (1 - p);
     } else if (t < 54.0) {
       // Act 5: Low-hover insertion hold (gentle rotor wash bob)
-      this.helicopterPos.set(-6.5, 3.2 + Math.sin(t * 7) * 0.05, 24.5);
+      this.helicopterPos.set(destX, 3.2 + Math.sin(t * 7) * 0.05, destZ + 0.5);
       this.helicopterRotY = 0;
       this.helicopterPitch = 0;
     } else {
       // Act 6 & 7: Helicopter lifts off, pitches nose down, and roars away into stormy ocean!
       const p = (t - 54.0) / 8.0;
       this.helicopterPos.set(
-        -6.5 + p * 38.0,
-        3.2 + p * 42.0,
-        24.5 - p * 65.0
+        destX - p * 35.0,
+        3.2 + p * 38.0,
+        (destZ + 0.5) + p * 55.0
       );
-      this.helicopterRotY = p * 0.45;
+      this.helicopterRotY = -p * 0.35;
       this.helicopterPitch = 0.16; // nose down accelerating forward!
       tacticalRadioAudio.setHelicopterVolume(Math.max(0.01, 0.42 * (1 - p)));
     }
@@ -328,7 +365,7 @@ export class InfiltrationDirector {
 
   public skip() {
     if (!this.isPlaying) return;
-    this.finish(new THREE.Vector3(-6.5, 1.72, 24.0));
+    this.finish(new THREE.Vector3(-18.5, 1.72, 30.5));
   }
 
   private finish(spawnPos: THREE.Vector3) {
@@ -341,6 +378,9 @@ export class InfiltrationDirector {
 
     if (this.cutsceneOverlay) {
       this.cutsceneOverlay.classList.add('hidden');
+    }
+    if (typeof document !== 'undefined') {
+      document.getElementById('hud')?.classList.remove('hidden');
     }
 
     const cb = this.onCompleteCallback;

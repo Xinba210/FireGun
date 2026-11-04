@@ -375,6 +375,81 @@ export class TacticalRadioAudioEngine {
   }
 
   /**
+   * Radar Warning Receiver (RWR) Threat Lock-On Staccato Alarm
+   * High-pitch staccato double-beeps alerting to active hostile SAM tracking
+   */
+  public playRwrThreatAlarm(durationSec = 3.6): void {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const pulseCount = Math.floor(durationSec / 0.16);
+
+    for (let i = 0; i < pulseCount; i++) {
+      const pTime = now + i * 0.16;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(i % 2 === 0 ? 2200 : 2750, pTime);
+      gain.gain.setValueAtTime(0.001, pTime);
+      gain.gain.linearRampToValueAtTime(0.32, pTime + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.001, pTime + 0.09);
+
+      osc.connect(gain).connect(this.masterGain!);
+      osc.start(pTime);
+      osc.stop(pTime + 0.095);
+    }
+  }
+
+  /**
+   * Fast-Rope Rappel Deployment Friction & Boom Deploy Sound
+   */
+  public playFastRopeDeploy(): void {
+    if (!this.ctx) return;
+    this.playWhiteNoiseBurst(0.55, 0.35);
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(440, now);
+    osc.frequency.exponentialRampToValueAtTime(110, now + 0.45);
+    gain.gain.setValueAtTime(0.28, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+
+    osc.connect(gain).connect(this.masterGain!);
+    osc.start(now);
+    osc.stop(now + 0.5);
+  }
+
+  /**
+   * Boots-on-Ground Tactical Touchdown & Weapon Ready Rack
+   */
+  public playCombatTouchdown(): void {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Heavy foot impact thud
+    const subOsc = this.ctx.createOscillator();
+    const subGain = this.ctx.createGain();
+    subOsc.type = 'triangle';
+    subOsc.frequency.setValueAtTime(140, now);
+    subOsc.frequency.exponentialRampToValueAtTime(38, now + 0.28);
+    subGain.gain.setValueAtTime(0.65, now);
+    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+    subOsc.connect(subGain).connect(this.masterGain!);
+    subOsc.start(now);
+    subOsc.stop(now + 0.32);
+
+    // Gravel / pavement rustle
+    this.playWhiteNoiseBurst(0.18, 0.25);
+
+    // Mechanical weapon slide rack click
+    setTimeout(() => {
+      this.playMechanicalGunsmithClick('slide');
+    }, 120);
+  }
+
+  /**
    * Heavy Ballistic Shield Metal Ricochet / Deflection
    */
   public playHeavyShieldImpact(): void {

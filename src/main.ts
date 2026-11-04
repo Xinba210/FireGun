@@ -720,121 +720,322 @@ function setupFireBarrels() {
 }
 
 // ---------------------------------------------------------------------------
-// Tactical Stealth Helicopter (MH-60 Blackhawk / Stealth Little Bird)
+// Tactical Stealth Helicopter (MH-60M Silent Hawk / Ghost Infil-Bird)
 // ---------------------------------------------------------------------------
 function createStealthHelicopter() {
   const group = new THREE.Group();
+
+  // Radar-absorbent CARC military matte materials
   const matBody = new THREE.MeshStandardMaterial({
-    color: 0x141a24,
-    metalness: 0.85,
-    roughness: 0.35,
+    color: 0x151a24,
+    metalness: 0.82,
+    roughness: 0.42,
   });
-  const matRotor = new THREE.MeshStandardMaterial({
-    color: 0x0a0d12,
+  const matAccent = new THREE.MeshStandardMaterial({
+    color: 0x0c1017,
     metalness: 0.9,
-    roughness: 0.2,
+    roughness: 0.3,
   });
   const matGlass = new THREE.MeshStandardMaterial({
-    color: 0x0f2027,
-    metalness: 0.95,
-    roughness: 0.1,
+    color: 0x09141f,
+    metalness: 0.96,
+    roughness: 0.06,
     transparent: true,
-    opacity: 0.65,
+    opacity: 0.82,
+  });
+  const matTurbine = new THREE.MeshStandardMaterial({
+    color: 0x221e1a,
+    metalness: 0.85,
+    roughness: 0.5,
+  });
+  const matRotor = new THREE.MeshStandardMaterial({
+    color: 0x0d1117,
+    metalness: 0.75,
+    roughness: 0.25,
+  });
+  const matWeapon = new THREE.MeshStandardMaterial({
+    color: 0x222a22,
+    metalness: 0.65,
+    roughness: 0.4,
+  });
+  const matRotorBlur = new THREE.MeshBasicMaterial({
+    color: 0x16202c,
+    transparent: true,
+    opacity: 0.35,
+    depthWrite: false,
+    side: THREE.DoubleSide,
   });
 
-  // Fuselage (chiseled stealth body)
-  const bodyGeo = new THREE.BoxGeometry(2.2, 2.0, 7.5);
-  const bodyMesh = new THREE.Mesh(bodyGeo, matBody);
-  bodyMesh.castShadow = true;
-  group.add(bodyMesh);
+  // 1. Chiseled Low-RCS Stealth Fuselage
+  const mainHullGeo = new THREE.BoxGeometry(2.3, 1.85, 7.2);
+  const mainHull = new THREE.Mesh(mainHullGeo, matBody);
+  mainHull.castShadow = true;
+  group.add(mainHull);
 
-  // Cockpit Nose (slanted)
-  const noseGeo = new THREE.ConeGeometry(1.3, 2.5, 4);
+  // Deflective angular lower belly (boat-tail V-keel)
+  const keelGeo = new THREE.CylinderGeometry(1.05, 0.72, 6.8, 4);
+  keelGeo.rotateX(Math.PI / 2);
+  keelGeo.rotateZ(Math.PI / 4);
+  const keel = new THREE.Mesh(keelGeo, matAccent);
+  keel.position.set(0, -0.92, -0.1);
+  group.add(keel);
+
+  // 2. Cockpit Canopy & Avionics Cockpit
+  const canopyGeo = new THREE.BoxGeometry(1.9, 1.4, 2.6);
+  canopyGeo.translate(0, 0, -1.3);
+  const canopy = new THREE.Mesh(canopyGeo, matGlass);
+  canopy.position.set(0, 0.15, -3.6);
+  canopy.scale.set(0.95, 0.85, 1.0);
+  group.add(canopy);
+
+  // Slanted chiseled nose cone
+  const noseGeo = new THREE.ConeGeometry(1.25, 2.4, 4);
   noseGeo.rotateX(-Math.PI / 2);
   noseGeo.rotateY(Math.PI / 4);
-  const noseMesh = new THREE.Mesh(noseGeo, matGlass);
-  noseMesh.position.set(0, -0.15, -4.6);
+  const noseMesh = new THREE.Mesh(noseGeo, matBody);
+  noseMesh.position.set(0, -0.18, -5.2);
   group.add(noseMesh);
 
-  // Tail Boom
-  const tailGeo = new THREE.CylinderGeometry(0.35, 0.6, 6.2, 6);
+  // Cockpit interior: dual glowing green/cyan MFD flight displays
+  for (const cx of [-0.38, 0.38]) {
+    const mfdGeo = new THREE.PlaneGeometry(0.24, 0.16);
+    const mfdMat = new THREE.MeshBasicMaterial({ color: 0x00ffaa });
+    const mfd = new THREE.Mesh(mfdGeo, mfdMat);
+    mfd.position.set(cx, 0.2, -4.2);
+    mfd.rotation.x = -0.35;
+    group.add(mfd);
+
+    // Pilot & Copilot helmet silhouettes
+    const helmetGeo = new THREE.SphereGeometry(0.18, 8, 8);
+    const pilotHead = new THREE.Mesh(helmetGeo, matAccent);
+    pilotHead.position.set(cx, 0.35, -3.4);
+    group.add(pilotHead);
+  }
+
+  // Chin-Mounted 3-Lens FLIR Electro-Optical Targeting Gimbal
+  const flirTurret = new THREE.Group();
+  flirTurret.position.set(0, -0.75, -5.3);
+  const flirBallGeo = new THREE.SphereGeometry(0.32, 12, 10);
+  const flirBall = new THREE.Mesh(flirBallGeo, matAccent);
+  flirTurret.add(flirBall);
+  for (const [lx, ly, lrad] of [[-0.08, 0.05, 0.07], [0.09, 0.06, 0.055], [0, -0.09, 0.06]]) {
+    const lensGeo = new THREE.CylinderGeometry(lrad, lrad, 0.05, 8);
+    lensGeo.rotateX(Math.PI / 2);
+    const lensMat = new THREE.MeshStandardMaterial({ color: 0x052e16, metalness: 0.95, roughness: 0.05 });
+    const lens = new THREE.Mesh(lensGeo, lensMat);
+    lens.position.set(lx, ly, -0.3);
+    flirTurret.add(lens);
+  }
+  group.add(flirTurret);
+
+  // 3. Twin Overhead Turboshaft Engines & HIRSS Exhaust Suppressors
+  for (const ex of [-0.62, 0.62]) {
+    const nacelleGeo = new THREE.CylinderGeometry(0.42, 0.46, 3.8, 8);
+    nacelleGeo.rotateX(Math.PI / 2);
+    const nacelle = new THREE.Mesh(nacelleGeo, matBody);
+    nacelle.position.set(ex, 1.25, -0.4);
+    group.add(nacelle);
+
+    // Intake cowls with black honeycomb mesh
+    const intakeGeo = new THREE.CylinderGeometry(0.38, 0.42, 0.3, 8);
+    intakeGeo.rotateX(Math.PI / 2);
+    const intake = new THREE.Mesh(intakeGeo, matAccent);
+    intake.position.set(ex, 1.25, -2.4);
+    group.add(intake);
+
+    // Downward-canted ceramic infrared exhaust suppressors (HIRSS)
+    const exhaustGeo = new THREE.CylinderGeometry(0.28, 0.36, 1.1, 6);
+    exhaustGeo.rotateX(Math.PI / 3);
+    const exhaust = new THREE.Mesh(exhaustGeo, matTurbine);
+    exhaust.position.set(ex, 1.15, 1.7);
+    group.add(exhaust);
+  }
+
+  // 4. Tactical Stub Wings (ESSS Pylons) & Ordnance
+  for (const sx of [-1, 1]) {
+    const pylonGeo = new THREE.BoxGeometry(1.6, 0.12, 0.65);
+    pylonGeo.rotateZ(sx * 0.08);
+    const pylon = new THREE.Mesh(pylonGeo, matBody);
+    pylon.position.set(sx * 1.95, 0.35, -0.4);
+    group.add(pylon);
+
+    // M261 19-tube Hydra-70 Rocket Pod
+    const podGeo = new THREE.CylinderGeometry(0.26, 0.26, 1.5, 12);
+    podGeo.rotateX(Math.PI / 2);
+    const pod = new THREE.Mesh(podGeo, matWeapon);
+    pod.position.set(sx * 2.3, 0.05, -0.4);
+    group.add(pod);
+
+    // AGM-114 Hellfire Dual-Rail Launchers
+    const mRailGeo = new THREE.BoxGeometry(0.08, 0.06, 1.4);
+    const mRail = new THREE.Mesh(mRailGeo, matAccent);
+    mRail.position.set(sx * 1.65, 0.1, -0.4);
+    group.add(mRail);
+    for (const mz of [-0.3, 0.3]) {
+      const missileGeo = new THREE.CylinderGeometry(0.06, 0.06, 1.3, 8);
+      missileGeo.rotateX(Math.PI / 2);
+      const missile = new THREE.Mesh(missileGeo, matWeapon);
+      missile.position.set(sx * 1.65, -0.06, mz);
+      group.add(missile);
+    }
+  }
+
+  // 5. Tactical Sliding Door Rappel Boom & Braided Fast-Rope Rig
+  const rappelBoomGeo = new THREE.CylinderGeometry(0.04, 0.04, 1.2, 6);
+  rappelBoomGeo.rotateZ(Math.PI / 2);
+  const rappelBoom = new THREE.Mesh(rappelBoomGeo, matAccent);
+  rappelBoom.position.set(1.45, 0.85, 0.2);
+  group.add(rappelBoom);
+
+  const fastRopeGeo = new THREE.CylinderGeometry(0.032, 0.032, 8.5, 6);
+  const fastRopeMat = new THREE.MeshStandardMaterial({ color: 0x5a5246, roughness: 0.9 });
+  const fastRope = new THREE.Mesh(fastRopeGeo, fastRopeMat);
+  fastRope.position.set(1.85, -3.4, 0.2);
+  fastRope.visible = false;
+  group.add(fastRope);
+
+  // 6. Tail Boom & Canted Ducted Fenestron Tail Rotor
+  const tailGeo = new THREE.CylinderGeometry(0.32, 0.58, 6.6, 6);
   tailGeo.rotateX(Math.PI / 2);
   const tailMesh = new THREE.Mesh(tailGeo, matBody);
-  tailMesh.position.set(0, 0.45, 5.8);
+  tailMesh.position.set(0, 0.52, 6.2);
   group.add(tailMesh);
 
-  // Vertical Tail Fin
-  const finGeo = new THREE.BoxGeometry(0.18, 1.8, 1.2);
+  // Swept-back vertical stabilizer with Fenestron ducted shroud ring
+  const finGeo = new THREE.BoxGeometry(0.22, 2.2, 1.6);
+  finGeo.rotateX(-0.15);
   const finMesh = new THREE.Mesh(finGeo, matBody);
-  finMesh.position.set(0, 1.2, 8.6);
+  finMesh.position.set(0, 1.45, 9.2);
   group.add(finMesh);
 
-  // Main Rotor Hub & 4 Blades
-  const mainRotor = new THREE.Group();
-  mainRotor.position.set(0, 1.45, -0.4);
-  const hubGeo = new THREE.CylinderGeometry(0.45, 0.45, 0.5, 8);
-  mainRotor.add(new THREE.Mesh(hubGeo, matRotor));
-  for (let b = 0; b < 4; b++) {
-    const bladeGeo = new THREE.BoxGeometry(0.35, 0.05, 5.8);
-    const bladeMesh = new THREE.Mesh(bladeGeo, matRotor);
-    bladeMesh.rotation.y = (b * Math.PI) / 2;
-    bladeMesh.position.set(
-      Math.sin((b * Math.PI) / 2) * 2.8,
-      0.15,
-      Math.cos((b * Math.PI) / 2) * 2.8
-    );
-    mainRotor.add(bladeMesh);
-  }
-  group.add(mainRotor);
-
-  // Tail Rotor Hub & 2 Blades
+  // Fenestron Tail Fan (8 blades inside ducted tunnel)
   const tailRotor = new THREE.Group();
-  tailRotor.position.set(0.35, 1.6, 8.8);
+  tailRotor.position.set(0.12, 1.6, 9.35);
   tailRotor.rotation.z = Math.PI / 2;
-  const tHubGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.25, 6);
-  tailRotor.add(new THREE.Mesh(tHubGeo, matRotor));
-  const tBladeGeo = new THREE.BoxGeometry(0.18, 0.04, 1.6);
-  tailRotor.add(new THREE.Mesh(tBladeGeo, matRotor));
+  const fenestronRingGeo = new THREE.TorusGeometry(0.55, 0.08, 6, 16);
+  const fenestronRing = new THREE.Mesh(fenestronRingGeo, matAccent);
+  tailRotor.add(fenestronRing);
+  for (let tb = 0; tb < 8; tb++) {
+    const tBladeGeo = new THREE.BoxGeometry(0.12, 0.02, 0.52);
+    const tBlade = new THREE.Mesh(tBladeGeo, matRotor);
+    tBlade.rotation.y = (tb * Math.PI) / 4;
+    tBlade.position.set(Math.sin((tb * Math.PI) / 4) * 0.25, 0, Math.cos((tb * Math.PI) / 4) * 0.25);
+    tailRotor.add(tBlade);
+  }
   group.add(tailRotor);
 
-  // Landing Skids
-  const skidMat = new THREE.MeshStandardMaterial({ color: 0x22262c, metalness: 0.8, roughness: 0.3 });
-  for (const sx of [-1.25, 1.25]) {
-    const skidGeo = new THREE.CylinderGeometry(0.08, 0.08, 5.5, 6);
+  // All-moving horizontal stabilator wing with endplate fins
+  const stabGeo = new THREE.BoxGeometry(2.5, 0.07, 0.72);
+  const stabMesh = new THREE.Mesh(stabGeo, matBody);
+  stabMesh.position.set(0, 0.85, 9.4);
+  group.add(stabMesh);
+  for (const ex of [-1.22, 1.22]) {
+    const endplateGeo = new THREE.BoxGeometry(0.06, 0.55, 0.65);
+    const endplate = new THREE.Mesh(endplateGeo, matAccent);
+    endplate.position.set(ex, 0.85, 9.4);
+    group.add(endplate);
+  }
+
+  // 7. 5-Blade Composite Main Rotor & Dynamic Rotor Blur Disc
+  const mainRotor = new THREE.Group();
+  mainRotor.position.set(0, 1.72, -0.4);
+
+  // Mast & Swashplate Hub
+  const hubGeo = new THREE.CylinderGeometry(0.52, 0.52, 0.55, 10);
+  const hubCapGeo = new THREE.ConeGeometry(0.48, 0.35, 10);
+  hubCapGeo.translate(0, 0.35, 0);
+  mainRotor.add(new THREE.Mesh(hubGeo, matAccent));
+  mainRotor.add(new THREE.Mesh(hubCapGeo, matAccent));
+
+  // 5 Articulated Blades with Swept Anhedral Tips
+  for (let b = 0; b < 5; b++) {
+    const bladeAngle = (b * Math.PI * 2) / 5;
+    const bladeArm = new THREE.Group();
+    bladeArm.rotation.y = bladeAngle;
+
+    const bladeGeo = new THREE.BoxGeometry(0.32, 0.045, 6.2);
+    const bladeMesh = new THREE.Mesh(bladeGeo, matRotor);
+    bladeMesh.position.set(0, 0.08, 3.2);
+
+    // Tip hazard yellow strip
+    const tipGeo = new THREE.BoxGeometry(0.33, 0.05, 0.45);
+    const tipMat = new THREE.MeshBasicMaterial({ color: 0xeab308 });
+    const tipMesh = new THREE.Mesh(tipGeo, tipMat);
+    tipMesh.position.set(0, 0.08, 6.1);
+    bladeArm.add(bladeMesh);
+    bladeArm.add(tipMesh);
+    mainRotor.add(bladeArm);
+  }
+
+  // Semi-transparent High-RPM Motion Blur Disc
+  const blurDiscGeo = new THREE.CylinderGeometry(6.3, 6.3, 0.02, 32);
+  const blurDisc = new THREE.Mesh(blurDiscGeo, matRotorBlur);
+  blurDisc.position.y = 0.12;
+  mainRotor.add(blurDisc);
+  group.add(mainRotor);
+
+  // 8. Heavy Landing Gear Skids & Shock Absorbers
+  const skidMat = new THREE.MeshStandardMaterial({ color: 0x1a1e24, metalness: 0.85, roughness: 0.35 });
+  for (const sx of [-1.35, 1.35]) {
+    const skidGeo = new THREE.CylinderGeometry(0.09, 0.09, 5.8, 8);
     skidGeo.rotateX(Math.PI / 2);
     const skid = new THREE.Mesh(skidGeo, skidMat);
-    skid.position.set(sx, -1.35, -0.4);
+    skid.position.set(sx, -1.45, -0.3);
     group.add(skid);
 
-    for (const sz of [-1.5, 1.2]) {
-      const strutGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.7, 6);
+    // Curved front curved bow tip
+    const bowGeo = new THREE.TorusGeometry(0.42, 0.08, 6, 8, Math.PI / 2);
+    bowGeo.rotateZ(sx > 0 ? 0 : Math.PI);
+    const bow = new THREE.Mesh(bowGeo, skidMat);
+    bow.position.set(sx, -1.05, -3.15);
+    bow.rotation.x = -Math.PI / 2;
+    group.add(bow);
+
+    for (const sz of [-1.6, 1.4]) {
+      const strutGeo = new THREE.CylinderGeometry(0.07, 0.07, 0.8, 6);
       const strut = new THREE.Mesh(strutGeo, skidMat);
-      strut.position.set(sx * 0.75, -1.0, sz);
-      strut.rotation.z = (sx > 0 ? -1 : 1) * 0.45;
+      strut.position.set(sx * 0.78, -1.08, sz);
+      strut.rotation.z = (sx > 0 ? -1 : 1) * 0.42;
       group.add(strut);
     }
   }
 
-  // Interior Jump Cabin Point Light
-  const cabinLight = new THREE.PointLight(0xff2222, 3.5, 8);
-  cabinLight.position.set(0, 0.2, 0.5);
+  // 9. Defensive Flare Countermeasure Ejection Particle System (M-130 Dispensers)
+  const flareGroup = new THREE.Group();
+  flareGroup.position.set(0, 0.2, 3.8);
+  group.add(flareGroup);
+
+  const flareSparks: { mesh: THREE.Mesh; vel: THREE.Vector3; life: number }[] = [];
+  const flareSparkGeo = new THREE.SphereGeometry(0.18, 6, 6);
+  const flareSparkMat = new THREE.MeshBasicMaterial({ color: 0xffe066 });
+
+  for (let f = 0; f < 12; f++) {
+    const fm = new THREE.Mesh(flareSparkGeo, flareSparkMat);
+    fm.visible = false;
+    flareGroup.add(fm);
+    flareSparks.push({ mesh: fm, vel: new THREE.Vector3(), life: 0 });
+  }
+
+  // 10. Tactical Lighting & FLIR Searchlight
+  const cabinLight = new THREE.PointLight(0xff2222, 4.0, 9);
+  cabinLight.position.set(0, 0.35, 0.4);
   group.add(cabinLight);
 
-  // Nose-Mounted Tactical FLIR Searchlight Beam pointing downward
-  const searchLight = new THREE.SpotLight(0xfff5ea, 12.0, 52, Math.PI / 5, 0.45);
-  searchLight.position.set(0, -0.6, -3.8);
+  const searchLight = new THREE.SpotLight(0xf8fafc, 16.0, 65, Math.PI / 5.2, 0.55);
+  searchLight.position.set(0, -0.85, -4.2);
   const searchTarget = new THREE.Object3D();
-  searchTarget.position.set(0, -14, -18);
+  searchTarget.position.set(0, -16, -20);
   group.add(searchTarget);
   searchLight.target = searchTarget;
   group.add(searchLight);
 
-  // Wingtip Navigation Strobes (Red on Left, Green on Right)
-  const leftStrobe = new THREE.PointLight(0xff2222, 2.5, 12);
-  leftStrobe.position.set(-1.8, 0.2, 0.2);
-  const rightStrobe = new THREE.PointLight(0x22c55e, 2.5, 12);
-  rightStrobe.position.set(1.8, 0.2, 0.2);
-  group.add(leftStrobe, rightStrobe);
+  const leftStrobe = new THREE.PointLight(0xff2222, 3.0, 14);
+  leftStrobe.position.set(-2.8, 0.4, -0.4);
+  const rightStrobe = new THREE.PointLight(0x22c55e, 3.0, 14);
+  rightStrobe.position.set(2.8, 0.4, -0.4);
+  const tailBeacon = new THREE.PointLight(0xff1111, 4.0, 16);
+  tailBeacon.position.set(0, 2.5, 9.3);
+  group.add(leftStrobe, rightStrobe, tailBeacon);
 
   return {
     group,
@@ -842,16 +1043,53 @@ function createStealthHelicopter() {
     tailRotor,
     cabinLight,
     searchLight,
-    update(dt: number, pos: THREE.Vector3, rotY: number, pitch: number, lightColor: THREE.Color) {
+    fastRope,
+    update(dt: number, pos: THREE.Vector3, rotY: number, pitch: number, lightColor: THREE.Color, flaresActive = false) {
       group.position.copy(pos);
       group.rotation.y = rotY;
       group.rotation.x = pitch;
-      mainRotor.rotation.y += dt * 44;
-      tailRotor.rotation.x += dt * 48;
+
+      // Realistic turbine spin rates
+      mainRotor.rotation.y += dt * 52;
+      tailRotor.rotation.x += dt * 64;
+
+      // FLIR gimbal subtly scans toward harbor
+      flirTurret.rotation.y = Math.sin(performance.now() * 0.0012) * 0.35;
+      flirTurret.rotation.x = 0.22 + Math.cos(performance.now() * 0.0009) * 0.12;
+
       cabinLight.color.copy(lightColor);
-      const strobeOn = Math.sin(performance.now() * 0.008) > 0.15;
-      leftStrobe.intensity = strobeOn ? 2.5 : 0.2;
-      rightStrobe.intensity = strobeOn ? 2.5 : 0.2;
+
+      // Fast rope shows when low altitude & green light active
+      fastRope.visible = lightColor.g > 0.6 && pos.y < 6.0;
+
+      // Military anti-collision strobe sequence
+      const timeMs = performance.now();
+      const strobeOn = Math.sin(timeMs * 0.007) > 0.3;
+      leftStrobe.intensity = strobeOn ? 3.5 : 0.15;
+      rightStrobe.intensity = strobeOn ? 3.5 : 0.15;
+      tailBeacon.intensity = (timeMs % 800 < 90) ? 5.0 : 0.2;
+
+      // Defensive thermal flares ejection during evasive maneuver
+      if (flaresActive && Math.random() < dt * 14) {
+        const deadSpark = flareSparks.find((s) => s.life <= 0);
+        if (deadSpark) {
+          const side = Math.random() > 0.5 ? 1 : -1;
+          deadSpark.mesh.position.set(side * 0.9, 0, 0);
+          deadSpark.vel.set(side * (4 + Math.random() * 3), -(2 + Math.random() * 2), 12 + Math.random() * 6);
+          deadSpark.life = 0.9 + Math.random() * 0.4;
+          deadSpark.mesh.visible = true;
+        }
+      }
+
+      for (const spark of flareSparks) {
+        if (spark.life > 0) {
+          spark.life -= dt;
+          spark.mesh.position.addScaledVector(spark.vel, dt);
+          spark.vel.y -= dt * 9.8;
+          spark.mesh.scale.setScalar(Math.max(0.01, spark.life));
+          if (spark.life <= 0) spark.mesh.visible = false;
+        }
+      }
     },
   };
 }
@@ -861,8 +1099,10 @@ let operationStarted = false;
 function launchInfiltrationCutscene() {
   operationStarted = true;
   screensMgr.hidePortal();
+  document.getElementById('hud')?.classList.add('hidden');
   if (stealthHeli) stealthHeli.group.visible = true;
   infiltrationDirector.play(() => {
+    document.getElementById('hud')?.classList.remove('hidden');
     if (playerTpsRoot) playerTpsRoot.visible = false;
     fpRig.visible = true;
     if (stealthHeli) stealthHeli.group.visible = false;
@@ -1797,11 +2037,15 @@ async function loadAllAssets() {
     percent: 85,
     hint: '預先載入 Web Audio 緩衝區並在零音量下試運行，避免首次槍聲解碼卡頓...',
   });
-  // Fire audio preload non-blockingly with 250ms race guard to guarantee mobile WebKit never stalls
-  await Promise.race([
-    audioSys.unlockAndPreload().catch(() => {}),
-    new Promise((resolve) => setTimeout(resolve, 250)),
-  ]);
+  // Fire audio preload non-blockingly with 160ms race guard to guarantee mobile WebKit never stalls
+  try {
+    await Promise.race([
+      audioSys.unlockAndPreload().catch(() => {}),
+      new Promise((resolve) => setTimeout(resolve, 160)),
+    ]);
+  } catch (err) {
+    console.warn('Audio preload non-fatal fallback:', err);
+  }
 
   // Step 6 [85%~98%]: Multi-angle offscreen warmup renders
   screensMgr.updatePreload({
@@ -4381,22 +4625,21 @@ function updateSetupScreenState() {
 const bindQuickTouchBtn = (id: string, action: () => void) => {
   const btn = document.getElementById(id);
   if (!btn) return;
-  let lastTouchTime = 0;
+  let lastTriggerTime = 0;
   const handler = (e: Event) => {
     const now = performance.now();
-    if (now - lastTouchTime < 240) {
+    if (now - lastTriggerTime < 280) {
       e.preventDefault();
       e.stopPropagation();
       return;
     }
-    lastTouchTime = now;
+    lastTriggerTime = now;
     e.preventDefault();
     e.stopPropagation();
     action();
   };
-  btn.addEventListener('pointerup', handler);
+  btn.addEventListener('pointerdown', handler, { passive: false });
   btn.addEventListener('click', handler);
-  btn.addEventListener('touchend', handler);
 };
 
 // Bind Mid-Right Vertical Utility Icon Stack (100% Reliable on Mobile Touch!)
@@ -4418,6 +4661,20 @@ bindQuickTouchBtn('touch-btn-drawer', () => {
 bindQuickTouchBtn('touch-btn-swap', () => {
   const next = (activeWeaponIdx + 1) % WEAPONS.length;
   equipWeapon(next);
+});
+
+// Bind Collapsible Tactical Drawer Game Mode Buttons
+document.querySelectorAll<HTMLElement>('.touch-mode-btn').forEach((btn) => {
+  const mode = btn.dataset.mode as 'RAID' | 'SURVIVAL' | 'SNIPER' | 'BLITZ';
+  if (!mode) return;
+  const onSelectMode = (e: Event) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setGameMode(mode);
+    toggleTacticalDrawer(false);
+  };
+  btn.addEventListener('pointerdown', onSelectMode);
+  btn.addEventListener('click', onSelectMode);
 });
 
 // Bind Ammunition HUD Card Tap to Trigger Quick Reload
@@ -4539,10 +4796,6 @@ document.getElementById('btn-autofire-toggle')?.addEventListener('click', (e) =>
 document.getElementById('btn-hud-minimal')?.addEventListener('click', (e) => {
   e.stopPropagation();
   toggleMinimalHud();
-});
-document.getElementById('touch-btn-drawer')?.addEventListener('click', (e) => {
-  e.stopPropagation();
-  toggleTacticalDrawer();
 });
 
 // ---------------------------------------------------------------------------
@@ -5392,7 +5645,8 @@ function stepSimulation(dt: number, elapsedSec: number) {
           infiltrationDirector.helicopterPos,
           infiltrationDirector.helicopterRotY,
           infiltrationDirector.helicopterPitch,
-          infiltrationDirector.cabinLightColor
+          infiltrationDirector.cabinLightColor,
+          infiltrationDirector.flaresActive
         );
         stealthHeli.group.visible = true;
       }
@@ -5406,7 +5660,8 @@ function stepSimulation(dt: number, elapsedSec: number) {
           evacuationDirector.helicopterPos,
           evacuationDirector.helicopterRotY,
           evacuationDirector.helicopterPitch,
-          new THREE.Color('#22c55e')
+          new THREE.Color('#22c55e'),
+          evacuationDirector.flaresActive
         );
         stealthHeli.group.visible = true;
       }
@@ -5432,14 +5687,12 @@ function stepSimulation(dt: number, elapsedSec: number) {
       camera.rotation.x = player.pitch + player.recoilPitch + shakeY * 0.35 - 0.04;
       camera.rotation.z = leanRollRad * 0.6;
     } else {
-      // First-Person Mode: Unified Model (True First-Person Body Awareness)
+      // First-Person Mode: Viewmodel Rig (Tactical Hands & Weapons) 100% Active & Visible
       if (stealthHeli) stealthHeli.group.visible = false;
       if (playerTpsRoot) {
-        playerTpsRoot.visible = !loadoutOpen && !missionModalOpen;
-        const headBone = playerTpsRoot.getObjectByName('Head') || playerTpsRoot.getObjectByName('neck_01');
-        if (headBone) headBone.scale.set(0.0001, 0.0001, 0.0001);
+        playerTpsRoot.visible = false; // Hide 3rd person full body so it never clips camera
       }
-      fpRig.visible = false;
+      fpRig.visible = !loadoutOpen && !missionModalOpen && !player.fixedCameraKey && !infiltrationDirector.active && !evacuationDirector.active;
       camera.position.set(
         player.pos.x + bobX + shakeX + leanOffsetX,
         player.pos.y + eyeHeight + bobY + shakeY - Math.abs(player.leanAmount) * 0.06,

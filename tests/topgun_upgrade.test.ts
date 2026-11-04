@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { InfiltrationDirector, EvacuationDirector } from '../src/game/cinematics.ts';
 
-describe('FireGun v1.8.0 - TopGun Architecture & Upgrade Suite', () => {
+describe('FireGun v1.8.2 - TopGun Architecture & Upgrade Suite', () => {
   it('verifies 62-second Infiltration Director with multi-stage keyframes', () => {
     const cam = new THREE.PerspectiveCamera();
     const director = new InfiltrationDirector(cam);
