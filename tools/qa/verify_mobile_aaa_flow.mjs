@@ -2,7 +2,7 @@ import { chromium, devices } from 'playwright';
 import path from 'node:path';
 import fs from 'node:fs';
 
-const EVIDENCE_DIR = path.resolve('docs/evidence/v1.7.0');
+const EVIDENCE_DIR = path.resolve('docs/evidence/v1.8.0');
 fs.mkdirSync(EVIDENCE_DIR, { recursive: true });
 
 async function safeScreenshot(page, filePath) {
@@ -64,12 +64,28 @@ async function run() {
   // 4. Verify Preload Screen appears
   await page.waitForSelector('#screen-preload:not(.hidden)', { timeout: 8000 });
   console.log('✓ Stage 2: Preload Screen is active');
+  await safeScreenshot(page, path.join(EVIDENCE_DIR, '02_preload_centered.png'));
 
   // 5. Wait for Preload to complete and Tactical Setup Hub to open
   console.log('3. Waiting for Tactical Setup Hub to open...');
   await page.waitForSelector('#screen-tactical-setup:not(.hidden)', { timeout: 60000 });
   console.log('✓ Stage 3: Tactical Setup Hub is open');
   await safeScreenshot(page, path.join(EVIDENCE_DIR, '03_tactical_setup_hub.png'));
+
+  // Test Operator Showcase tab
+  console.log('3b. Testing Operator Showcase Tab...');
+  await page.evaluate(() => {
+    document.getElementById('setup-tab-btn-operator')?.click();
+  });
+  await page.waitForTimeout(500);
+  await safeScreenshot(page, path.join(EVIDENCE_DIR, '03b_operator_showcase.png'));
+  console.log('✓ Operator Showcase rendered');
+
+  // Return to Briefing tab
+  await page.evaluate(() => {
+    document.getElementById('setup-tab-btn-briefing')?.click();
+  });
+  await page.waitForTimeout(300);
 
   // 6. Test opening Gunsmith from Setup Hub
   console.log('4. Clicking Gunsmith Tab and Workbench from Setup Hub...');

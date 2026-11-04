@@ -20,6 +20,7 @@ import { WeaponsAttachmentVisualizer, PictureInPictureScope } from './game/weapo
 import { WorldDetailsManager } from './world/details.ts';
 import { tacticalRadioAudio } from './game/audio.ts';
 import { hapticEngine } from './game/haptics.ts';
+import { OperatorShowcase, OperatorCamoScheme } from './game/operator_showcase.ts';
 
 interface WeaponSpec {
   id: string;
@@ -1841,20 +1842,13 @@ async function loadAllAssets() {
 
   setTimeout(() => {
     screensMgr.hidePreload();
-    if (isAutomatedQa) {
+    if (isAutomatedQa && (captureMode || initialCamParam)) {
       operationStarted = true;
       if (!captureMode && !initialCamParam) {
         launchInfiltrationCutscene();
       }
     } else {
-      screensMgr.showPortal(
-        () => {
-          launchInfiltrationCutscene();
-        },
-        () => {
-          toggleLoadoutModal(true);
-        }
-      );
+      openTacticalSetupScreen();
     }
   }, 450);
 
@@ -2063,8 +2057,15 @@ function updateFirstPersonCc0HandsIk() {
   solveTwoBoneIk(upperL, lowerL, handL, leftTarget, poleL);
 }
 
-function playPlayerTpsClip(clipName: string, loop = true) {
-  if (!playerTpsMixer || playerTpsActiveClip === clipName) return;
+function playPlayerTpsClip(clipName: string, loop = true, timeScale = 1.0) {
+  if (!playerTpsMixer) return;
+  const currentAction = playerTpsActions[playerTpsActiveClip];
+  if (playerTpsActiveClip === clipName && currentAction) {
+    if (currentAction.timeScale !== timeScale) {
+      currentAction.timeScale = timeScale;
+    }
+    return;
+  }
   const next = playerTpsActions[clipName] || playerTpsActions['Idle_Loop'];
   if (!next) return;
   const prev = playerTpsActions[playerTpsActiveClip];
@@ -2072,6 +2073,7 @@ function playPlayerTpsClip(clipName: string, loop = true) {
     prev.fadeOut(0.16);
   }
   next.reset();
+  next.timeScale = timeScale;
   next.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
   next.clampWhenFinished = !loop;
   next.fadeIn(0.16).play();
@@ -4248,6 +4250,44 @@ window.addEventListener('devicemotion', (ev) => {
 let currentDifficulty: 'STANDARD' | 'HARDCORE' | 'NIGHTMARE' = 'STANDARD';
 let tacticalSetupOpen = false;
 
+let activeOperatorShowcase: OperatorShowcase | null = null;
+
+function setupOperatorShowcaseUi() {
+  const mount = document.getElementById('showcase-mount-point');
+  if (!mount || !soldierTemplateGltf) return;
+  if (!activeOperatorShowcase) {
+    activeOperatorShowcase = new OperatorShowcase({
+      container: mount,
+      templateGltf: soldierTemplateGltf,
+      weaponModels,
+    });
+  }
+
+  // Stance buttons
+  document.querySelectorAll<HTMLElement>('.btn-pose-pill').forEach((btn) => {
+    btn.onclick = () => {
+      document.querySelectorAll('.btn-pose-pill').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      const pose = btn.dataset.pose;
+      if (pose && activeOperatorShowcase) {
+        activeOperatorShowcase.setPose(pose);
+      }
+    };
+  });
+
+  // Camo buttons
+  document.querySelectorAll<HTMLElement>('.btn-camo-pill').forEach((btn) => {
+    btn.onclick = () => {
+      document.querySelectorAll('.btn-camo-pill').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      const camo = btn.dataset.camo as OperatorCamoScheme;
+      if (camo && activeOperatorShowcase) {
+        activeOperatorShowcase.setCamo(camo);
+      }
+    };
+  });
+}
+
 function openTacticalSetupScreen() {
   tacticalSetupOpen = true;
   const w = WEAPONS[activeWeaponIdx];
@@ -4280,6 +4320,9 @@ function openTacticalSetupScreen() {
     onOpenGunsmith: () => {
       screensMgr.hideTacticalSetup();
       toggleLoadoutModal(true);
+    },
+    onOpenOperatorShowcase: () => {
+      setupOperatorShowcaseUi();
     },
     onOpenHudEditor: () => {
       screensMgr.hideTacticalSetup();
@@ -5188,12 +5231,16 @@ function stepSimulation(dt: number, elapsedSec: number) {
     const fwd = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
     const right = new THREE.Vector3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
     const move = new THREE.Vector3();
-    if (keys['KeyW'] || keys['ArrowUp']) move.add(fwd);
-    if (keys['KeyS'] || keys['ArrowDown']) move.sub(fwd);
-    if (keys['KeyD'] || keys['ArrowRight']) move.add(right);
-    if (keys['KeyA'] || keys['ArrowLeft']) move.sub(right);
+    let moveInputFwd = 0;
+    let moveInputRight = 0;
+    if (keys['KeyW'] || keys['ArrowUp']) { move.add(fwd); moveInputFwd += 1; }
+    if (keys['KeyS'] || keys['ArrowDown']) { move.sub(fwd); moveInputFwd -= 1; }
+    if (keys['KeyD'] || keys['ArrowRight']) { move.add(right); moveInputRight += 1; }
+    if (keys['KeyA'] || keys['ArrowLeft']) { move.sub(right); moveInputRight -= 1; }
     if (touchMoveVec.lengthSq() > 0.01) {
       move.addScaledVector(fwd, touchMoveVec.y).addScaledVector(right, touchMoveVec.x);
+      moveInputFwd += touchMoveVec.y;
+      moveInputRight += touchMoveVec.x;
     }
 
     const isMoving = move.lengthSq() > 0;
@@ -5269,17 +5316,29 @@ function stepSimulation(dt: number, elapsedSec: number) {
       playerTpsRoot.position.set(player.pos.x, player.pos.y, player.pos.z);
       playerTpsRoot.rotation.y = Math.PI + player.yaw;
       if (!player.grounded) {
-        playPlayerTpsClip('Jump_Loop', true);
+        playPlayerTpsClip('Jump_Loop', true, 1.0);
       } else if (isMoving) {
+        const isBackwards = moveInputFwd < -0.15;
+        const isStrafeLeft = moveInputRight < -0.3 && Math.abs(moveInputFwd) < 0.3;
+        const isStrafeRight = moveInputRight > 0.3 && Math.abs(moveInputFwd) < 0.3;
+
         if (player.crouching) {
-          playPlayerTpsClip('Crouch_Fwd_Loop', true);
+          playPlayerTpsClip('Crouch_Fwd_Loop', true, isBackwards ? -1.0 : 1.0);
+        } else if (isBackwards) {
+          // TopGun motion policy: Never use Walk_Back which deforms the pelvis and knees!
+          // Use Walk_Loop in reverse playback (timeScale = -1.0)
+          playPlayerTpsClip('Walk_Loop', true, -1.0);
+        } else if (isStrafeLeft) {
+          playPlayerTpsClip('Strafe_Left', true, 1.0);
+        } else if (isStrafeRight) {
+          playPlayerTpsClip('Strafe_Right', true, 1.0);
         } else if (player.sprinting) {
-          playPlayerTpsClip('Sprint_Loop', true);
+          playPlayerTpsClip('Sprint_Loop', true, 1.0);
         } else {
-          playPlayerTpsClip('Jog_Fwd_Loop', true);
+          playPlayerTpsClip('Jog_Fwd_Loop', true, 1.0);
         }
       } else {
-        playPlayerTpsClip(player.crouching ? 'Crouch_Idle_Loop' : 'Idle_Loop', true);
+        playPlayerTpsClip(player.crouching ? 'Crouch_Idle_Loop' : 'Idle_Loop', true, 1.0);
       }
       if (playerTpsMixer) {
         playerTpsMixer.update(dt);
@@ -5353,7 +5412,11 @@ function stepSimulation(dt: number, elapsedSec: number) {
       }
     } else if (player.thirdPerson) {
       if (stealthHeli) stealthHeli.group.visible = false;
-      if (playerTpsRoot) playerTpsRoot.visible = !loadoutOpen && !missionModalOpen;
+      if (playerTpsRoot) {
+        playerTpsRoot.visible = !loadoutOpen && !missionModalOpen;
+        const headBone = playerTpsRoot.getObjectByName('Head') || playerTpsRoot.getObjectByName('neck_01');
+        if (headBone) headBone.scale.set(1, 1, 1);
+      }
       fpRig.visible = false;
       // Over-the-Shoulder Third-Person Tactical Camera
       const camBack = player.ads ? 1.38 : 2.38;
@@ -5369,10 +5432,14 @@ function stepSimulation(dt: number, elapsedSec: number) {
       camera.rotation.x = player.pitch + player.recoilPitch + shakeY * 0.35 - 0.04;
       camera.rotation.z = leanRollRad * 0.6;
     } else {
-      // First-Person Mode: NEVER RENDER 3RD PERSON HEAD/BODY MODEL!
+      // First-Person Mode: Unified Model (True First-Person Body Awareness)
       if (stealthHeli) stealthHeli.group.visible = false;
-      if (playerTpsRoot) playerTpsRoot.visible = false;
-      fpRig.visible = !loadoutOpen && !missionModalOpen;
+      if (playerTpsRoot) {
+        playerTpsRoot.visible = !loadoutOpen && !missionModalOpen;
+        const headBone = playerTpsRoot.getObjectByName('Head') || playerTpsRoot.getObjectByName('neck_01');
+        if (headBone) headBone.scale.set(0.0001, 0.0001, 0.0001);
+      }
+      fpRig.visible = false;
       camera.position.set(
         player.pos.x + bobX + shakeX + leanOffsetX,
         player.pos.y + eyeHeight + bobY + shakeY - Math.abs(player.leanAmount) * 0.06,
@@ -6249,7 +6316,7 @@ window.addEventListener('resize', () => {
 };
 
 // Boot
-const isAutomatedQa = captureMode || Boolean(navigator.webdriver) || Boolean(initialCamParam) || Boolean(initialUiParam);
+const isAutomatedQa = captureMode || Boolean(initialCamParam) || Boolean(initialUiParam);
 
 const startOperationPipeline = () => {
   if (isAutomatedQa) {

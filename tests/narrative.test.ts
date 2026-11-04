@@ -19,8 +19,8 @@ describe('Narrative & Cinematics Engine (v1.5.0)', () => {
     // At t = 0
     expect(director.helicopterPos.z).toBeGreaterThan(40);
 
-    // Update to low hover (t = 4.0s)
-    director.update(4.0, new THREE.Vector3(-6.5, 1.72, 24.0));
+    // Update to low hover (t = 50.0s in 62s extended cutscene)
+    director.update(50.0, new THREE.Vector3(-6.5, 1.72, 24.0));
     expect(director.helicopterPos.x).toBeCloseTo(-6.5, 0.1);
     expect(director.helicopterPos.z).toBeCloseTo(24.5, 0.1);
     expect(director.active).toBe(true);

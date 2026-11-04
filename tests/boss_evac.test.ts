@@ -14,22 +14,22 @@ describe('Goal B: Boss Encounter & Evacuation Director', () => {
 
     expect(evac.active).toBe(true);
 
-    // Initial phase (touchdown at helipad)
-    evac.update(1.0);
-    expect(evac.helicopterPos.y).toBeLessThan(12);
+    // Initial phase (approach toward helipad)
+    evac.update(3.0);
+    expect(evac.helicopterPos.y).toBeLessThan(18);
     expect(evac.helicopterPos.y).toBeGreaterThanOrEqual(1.8);
 
     // Mid phase (player boarding)
-    evac.update(1.5); // t = 2.5s
+    evac.update(3.5); // t = 6.5s
     expect(evac.helicopterPos.y).toBeCloseTo(1.8, 1);
 
     // Climb out phase into storm
-    evac.update(2.0); // t = 4.5s
+    evac.update(4.5); // t = 11.0s
     expect(evac.helicopterPos.y).toBeGreaterThan(5.0);
     expect(evac.helicopterPitch).toBeLessThan(0); // Nose pitched down for forward speed
 
     // Finish
-    evac.update(1.5); // t = 6.0s >= 5.5s
+    evac.update(6.0); // t = 17.0s >= 16.0s
     expect(evac.active).toBe(false);
     expect(completed).toBe(true);
   });

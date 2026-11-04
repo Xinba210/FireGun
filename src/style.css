@@ -1641,18 +1641,21 @@ body, html {
 }
 
 .preload-content-center {
-  position: relative;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   z-index: 20;
-  margin: 0 auto;
+  margin: 0;
   width: 92%;
   max-width: 580px;
-  background: rgba(10, 15, 29, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(10, 15, 29, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 16px;
   padding: 24px 28px;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75), 0 0 24px rgba(56, 189, 248, 0.15);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.85), 0 0 32px rgba(250, 204, 21, 0.2);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -4517,6 +4520,267 @@ body, html {
   color: #fef08a !important;
   box-shadow: 0 0 16px rgba(250, 204, 21, 0.65) !important;
 }
+
+/* =========================================================================
+   Cycle 14: Four Game Modes Visual Cards & 3D Operator Showcase
+   ========================================================================= */
+.setup-mode-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+@media (max-width: 640px) {
+  .setup-mode-cards-grid {
+    grid-template-columns: 1fr;
+    max-height: 44vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+.mode-visual-card {
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  text-align: left;
+  overflow: hidden;
+}
+
+.mode-visual-card:hover {
+  border-color: rgba(250, 204, 21, 0.6);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 16px rgba(250, 204, 21, 0.2);
+}
+
+.mode-visual-card.active {
+  border-color: #facc15 !important;
+  box-shadow: 0 0 20px rgba(250, 204, 21, 0.45) !important;
+  outline: 2px solid rgba(250, 204, 21, 0.8) !important;
+}
+
+.mode-badge-pill {
+  align-self: flex-start;
+  font-size: 9.5px;
+  font-weight: 900;
+  padding: 2px 8px;
+  border-radius: 3px;
+  background: rgba(56, 189, 248, 0.2);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  color: #38bdf8;
+  letter-spacing: 1px;
+}
+
+.mode-badge-pill.gold {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: rgba(245, 158, 11, 0.55);
+  color: #facc15;
+}
+
+.mode-badge-pill.cyan {
+  background: rgba(6, 182, 212, 0.2);
+  border-color: rgba(6, 182, 212, 0.55);
+  color: #22d3ee;
+}
+
+.mode-badge-pill.red {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.55);
+  color: #f87171;
+}
+
+.mode-card-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: #ffffff;
+  letter-spacing: 0.5px;
+}
+
+.mode-card-desc {
+  font-size: 11px;
+  color: #cbd5e1;
+  line-height: 1.4;
+}
+
+.mode-card-rec {
+  font-size: 10px;
+  color: #facc15;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+/* 3D Operator Showcase Workshop Layout */
+.operator-showcase-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 16px;
+  min-height: 380px;
+}
+
+@media (max-width: 768px) {
+  .operator-showcase-layout {
+    grid-template-columns: 1fr;
+    max-height: 55vh;
+    overflow-y: auto;
+  }
+}
+
+.showcase-3d-viewport {
+  position: relative;
+  min-height: 300px;
+  background: radial-gradient(circle at center, rgba(15, 23, 42, 0.8) 0%, rgba(2, 6, 23, 0.95) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.showcase-mount-point {
+  flex: 1;
+  width: 100%;
+  min-height: 280px;
+}
+
+.showcase-drag-hint {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(10, 16, 26, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 3px 12px;
+  border-radius: 12px;
+  font-size: 10px;
+  color: #94a3b8;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.showcase-controls-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: rgba(10, 15, 26, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.showcase-sec-title {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  color: #facc15;
+}
+
+.showcase-camo-pills,
+.showcase-pose-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.btn-camo-pill,
+.btn-pose-pill {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #cbd5e1;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-camo-pill.active,
+.btn-pose-pill.active {
+  background: rgba(245, 158, 11, 0.25);
+  border-color: #facc15;
+  color: #facc15;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.35);
+}
+
+.showcase-gear-manifest {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 10px;
+}
+
+.gear-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.gear-k {
+  color: #94a3b8;
+  font-weight: 700;
+}
+
+.gear-v {
+  color: #e2e8f0;
+}
+
+/* =========================================================================
+   Mobile Touch Controls Ergonomic Arc & Anti-Overlap Layout
+   ========================================================================= */
+@media (max-width: 768px) {
+  #touch-btn-fire {
+    position: absolute !important;
+    right: 20px !important;
+    bottom: 22px !important;
+    width: 66px !important;
+    height: 66px !important;
+    z-index: 30 !important;
+  }
+  #touch-btn-jump {
+    position: absolute !important;
+    right: 98px !important;
+    bottom: 88px !important;
+    width: 46px !important;
+    height: 46px !important;
+    z-index: 30 !important;
+  }
+  #touch-btn-crouch {
+    position: absolute !important;
+    right: 22px !important;
+    bottom: 104px !important;
+    width: 46px !important;
+    height: 46px !important;
+    z-index: 30 !important;
+  }
+  #touch-btn-reload {
+    position: absolute !important;
+    right: 98px !important;
+    bottom: 24px !important;
+    width: 46px !important;
+    height: 46px !important;
+    z-index: 30 !important;
+  }
+  #touch-btn-ads {
+    position: absolute !important;
+    right: 98px !important;
+    bottom: 150px !important;
+    width: 46px !important;
+    height: 46px !important;
+    z-index: 30 !important;
+  }
+}
+
 
 
 
