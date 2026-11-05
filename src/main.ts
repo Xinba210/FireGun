@@ -6026,10 +6026,11 @@ function stepSimulation(dt: number, elapsedSec: number) {
     }
 
     const eyeHeight = player.crouching ? 1.15 : 1.72;
-    const bobY = Math.sin(player.bobPhase) * (player.ads ? 0.006 : 0.025);
-    const bobX = Math.cos(player.bobPhase * 0.5) * (player.ads ? 0.004 : 0.018);
-    const shakeX = player.cameraShake > 0.005 ? Math.sin(t * 58) * player.cameraShake * 0.14 : 0;
-    const shakeY = player.cameraShake > 0.005 ? Math.cos(t * 67) * player.cameraShake * 0.14 : 0;
+    const bobY = isMoving ? Math.sin(player.bobPhase) * (player.ads ? 0.006 : 0.025) : 0;
+    const bobX = isMoving ? Math.cos(player.bobPhase * 0.5) * (player.ads ? 0.004 : 0.018) : 0;
+    // 嚴格門檻值過濾：避免低於 0.05 的噪聲震顫，只在真實受擊與爆炸時啟動相機震撼
+    const shakeX = player.cameraShake > 0.05 ? Math.sin(t * 36) * player.cameraShake * 0.12 : 0;
+    const shakeY = player.cameraShake > 0.05 ? Math.cos(t * 42) * player.cameraShake * 0.12 : 0;
 
     // Smooth Tactical Corner Lean ([Q] Left / [E] Right)
     player.leanAmount += (player.leanTarget - player.leanAmount) * Math.min(1, dt * 11.5);

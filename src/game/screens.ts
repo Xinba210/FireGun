@@ -171,10 +171,16 @@ export class GameScreensManager {
             <span class="p-chip">ALLIED SQUAD</span>
           </div>
 
-          <button id="btn-portal-deploy" class="btn-portal-deploy btn-portal-start-hero">
-            <span class="btn-portal-glow"></span>
-            <span class="btn-portal-text">開始遊戲 // START OPERATION</span>
-          </button>
+          <div class="portal-cta-group">
+            <button id="btn-portal-operator" class="btn-portal-deploy btn-portal-operator-hero">
+              <span class="btn-portal-glow"></span>
+              <span class="btn-portal-text">特戰幹員與裝備 // SELECT OPERATOR & LOADOUT</span>
+            </button>
+            <button id="btn-portal-deploy" class="btn-portal-deploy btn-portal-start-hero">
+              <span class="btn-portal-glow"></span>
+              <span class="btn-portal-text">快速進入戰役 // QUICK DEPLOY</span>
+            </button>
+          </div>
 
           <div class="portal-footer-note">PRESS ENTER OR TAP ANYWHERE TO START · CLIENT v2.0.0-TACTICAL</div>
         </div>
@@ -247,16 +253,62 @@ export class GameScreensManager {
             </div>
           </div>
 
-          <!-- 4 Nav Tabs -->
+          <!-- 4 Nav Tabs (Default on OPERATOR for direct character showcase) -->
           <div class="setup-nav-tabs">
-            <button id="setup-tab-btn-briefing" class="setup-tab-nav active">作戰情報 (MODES)</button>
-            <button id="setup-tab-btn-operator" class="setup-tab-nav">裝備預覽 (OPERATOR)</button>
+            <button id="setup-tab-btn-operator" class="setup-tab-nav active">裝備與角色 (OPERATOR)</button>
+            <button id="setup-tab-btn-briefing" class="setup-tab-nav">作戰情報 (MODES)</button>
             <button id="setup-tab-btn-gunsmith" class="setup-tab-nav">武器軍械庫 (GUNSMITH)</button>
             <button id="setup-tab-btn-settings" class="setup-tab-nav">體感操作 (SETTINGS)</button>
           </div>
 
-          <!-- Panel 1: Briefing & 4 Mode Visual Cards -->
-          <div id="setup-panel-briefing" class="setup-panel-content active">
+          <!-- Panel 1: Operator Showcase 3D Workshop (Default Active) -->
+          <div id="setup-panel-operator" class="setup-panel-content active">
+            <div class="operator-showcase-layout">
+              <div class="showcase-3d-viewport">
+                <div id="showcase-mount-point" class="showcase-mount-point"></div>
+                <div class="showcase-drag-hint">滑鼠拖曳 / 單指滑動 360° 旋轉檢視特戰隊員</div>
+                
+                <!-- 3D 導覽相機特寫按鈕 -->
+                <div class="showcase-tour-controls">
+                  <button data-tour="full" class="btn-tour-pill active">全景 (FULL)</button>
+                  <button data-tour="helmet" class="btn-tour-pill">頭盔 (HELMET)</button>
+                  <button data-tour="chest" class="btn-tour-pill">背心 (VEST)</button>
+                  <button data-tour="waist" class="btn-tour-pill">腰際 (WAIST)</button>
+                  <button data-tour="legs" class="btn-tour-pill">槍套 (LEGS)</button>
+                </div>
+              </div>
+              <div class="showcase-controls-panel">
+                <div class="showcase-sec-title">SELECT OPERATOR // 特戰幹員選擇</div>
+                <div class="showcase-operator-pills">
+                  <button data-operator="ROACH" class="btn-operator-pill active">鬼影 ROACH (暗潮特遣隊)</button>
+                  <button data-operator="MAVERICK" class="btn-operator-pill">遊俠 MAVERICK (TopGun特種空勤)</button>
+                </div>
+
+                <div class="showcase-sec-title">TACTICAL GRENADE // 戰術投擲裝備</div>
+                <div class="showcase-grenade-pills">
+                  <button data-grenade="FRAG" class="btn-grenade-pill active">M67 破片雷 (FRAG)</button>
+                  <button data-grenade="FLASH" class="btn-grenade-pill">M84 散光彈 (FLASH)</button>
+                  <button data-grenade="SMOKE" class="btn-grenade-pill">M18 煙幕彈 (SMOKE)</button>
+                </div>
+
+                <div class="showcase-sec-title">TACTICAL UNIFORM // 戰術部隊迷彩</div>
+                <div class="showcase-camo-pills">
+                  <button data-camo="MIDNIGHT" class="btn-camo-pill active">暗夜特勤 (MIDNIGHT)</button>
+                  <button data-camo="URBAN_WOLF" class="btn-camo-pill">城市灰狼 (URBAN)</button>
+                  <button data-camo="DESERT_OPS" class="btn-camo-pill">沙漠突擊 (DESERT)</button>
+                </div>
+
+                <div class="showcase-sec-title">SECONDARY MOTION // 次級動態物理預覽</div>
+                <div class="showcase-motion-pills">
+                  <button data-motion="stop" class="btn-motion-impulse">衝刺急停甩動 (INERTIA STOP)</button>
+                  <button data-motion="jump_land" class="btn-motion-impulse">跳躍著地震動 (LAND IMPACT)</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Panel 2: Briefing & 4 Mode Visual Cards -->
+          <div id="setup-panel-briefing" class="setup-panel-content hidden">
             <div class="setup-briefing-layout">
               <div class="setup-intel-card">
                 <div class="intel-tag">MISSION BRIEFING // 作戰目標</div>
@@ -311,67 +363,6 @@ export class GameScreensManager {
                     <button data-setup-diff="HARDCORE" class="btn-setup-diff-opt">困難 (HARDCORE)</button>
                     <button data-setup-diff="NIGHTMARE" class="btn-setup-diff-opt">極限 (NIGHTMARE)</button>
                   </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Panel 2: Operator Showcase 3D Workshop -->
-          <div id="setup-panel-operator" class="setup-panel-content hidden">
-            <div class="operator-showcase-layout">
-              <div class="showcase-3d-viewport">
-                <div id="showcase-mount-point" class="showcase-mount-point"></div>
-                <div class="showcase-drag-hint">滑鼠拖曳 / 單指滑動 360° 旋轉檢視特戰隊員</div>
-                
-                <!-- 3D 導覽相機特寫按鈕 -->
-                <div class="showcase-tour-controls">
-                  <button data-tour="full" class="btn-tour-pill active">全景 (FULL)</button>
-                  <button data-tour="helmet" class="btn-tour-pill">頭盔 (HELMET)</button>
-                  <button data-tour="chest" class="btn-tour-pill">背心 (VEST)</button>
-                  <button data-tour="waist" class="btn-tour-pill">腰際 (WAIST)</button>
-                  <button data-tour="legs" class="btn-tour-pill">槍套 (LEGS)</button>
-                </div>
-              </div>
-              <div class="showcase-controls-panel">
-                <div class="showcase-sec-title">SELECT OPERATOR // 特戰幹員選擇</div>
-                <div class="showcase-operator-pills">
-                  <button data-operator="ROACH" class="btn-operator-pill active">鬼影 ROACH (暗潮特遣隊)</button>
-                  <button data-operator="MAVERICK" class="btn-operator-pill">遊俠 MAVERICK (TopGun特種空勤)</button>
-                </div>
-
-                <div class="showcase-sec-title">TACTICAL GRENADE // 戰術投擲裝備</div>
-                <div class="showcase-grenade-pills">
-                  <button data-grenade="FRAG" class="btn-grenade-pill active">M67 破片雷 (FRAG)</button>
-                  <button data-grenade="FLASH" class="btn-grenade-pill">M84 散光彈 (FLASH)</button>
-                  <button data-grenade="SMOKE" class="btn-grenade-pill">M18 煙幕彈 (SMOKE)</button>
-                </div>
-
-                <div class="showcase-sec-title">TACTICAL UNIFORM // 戰術部隊迷彩</div>
-                <div class="showcase-camo-pills">
-                  <button data-camo="MIDNIGHT" class="btn-camo-pill active">暗夜特勤 (MIDNIGHT)</button>
-                  <button data-camo="URBAN_WOLF" class="btn-camo-pill">城市灰狼 (URBAN)</button>
-                  <button data-camo="DESERT_OPS" class="btn-camo-pill">沙漠突擊 (DESERT)</button>
-                </div>
-
-                <div class="showcase-sec-title">SECONDARY MOTION // 次級動態物理預覽</div>
-                <div class="showcase-motion-pills">
-                  <button data-motion="stop" class="btn-motion-impulse">衝刺急停甩動 (INERTIA STOP)</button>
-                  <button data-motion="jump_land" class="btn-motion-impulse">跳躍著地震動 (LAND IMPACT)</button>
-                </div>
-
-                <div class="showcase-sec-title">OPERATOR STANCE // 戰術動作姿勢</div>
-                <div class="showcase-pose-pills">
-                  <button data-pose="Rifle_Aim" class="btn-pose-pill active">舉槍瞄準 (AIM)</button>
-                  <button data-pose="Idle_Loop" class="btn-pose-pill">戰術警戒 (IDLE)</button>
-                  <button data-pose="Walk_Loop" class="btn-pose-pill">戰術步態 (WALK)</button>
-                  <button data-pose="Crouch_Idle_Loop" class="btn-pose-pill">戰術蹲伏 (CROUCH)</button>
-                  <button data-pose="Sprint_Loop" class="btn-pose-pill">戰術疾跑 (SPRINT)</button>
-                </div>
-
-                <div class="showcase-gear-manifest">
-                  <div class="gear-row"><span class="gear-k">防彈頭盔:</span><span class="gear-v">FAST High-Cut Level IIIA · GPNVG-18 四目夜視儀</span></div>
-                  <div class="gear-row"><span class="gear-k">戰術背心:</span><span class="gear-v">JPC 2.0 輕量防彈板 · 三聯裝彈匣快拔包</span></div>
-                  <div class="gear-row"><span class="gear-k">次級動態:</span><span class="gear-v">槍背帶・彈性無線電天線・垂掛手套・水管物理晃動</span></div>
                 </div>
               </div>
             </div>
@@ -771,6 +762,9 @@ export class GameScreensManager {
     const deployBtn = document.getElementById('btn-portal-deploy');
     this.bindPortalTap(deployBtn, (e) => this.triggerDeployAction(e));
 
+    const operatorBtn = document.getElementById('btn-portal-operator');
+    this.bindPortalTap(operatorBtn, (e) => this.triggerDeployAction(e));
+
     // Tap anywhere on the portal backdrop/screen to start
     this.bindPortalTap(this.titlePortal, (e) => {
       this.triggerDeployAction(e);
@@ -872,6 +866,11 @@ export class GameScreensManager {
     if (tabSettings) {
       tabSettings.onclick = () => switchTab('settings');
       tabSettings.ontouchend = () => switchTab('settings');
+    }
+
+    // Default trigger Operator Showcase if operator tab is active initially
+    if (tabOperator?.classList.contains('active')) {
+      options.onOpenOperatorShowcase?.();
     }
 
     // Bind Mode buttons

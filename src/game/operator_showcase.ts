@@ -226,7 +226,8 @@ export class OperatorShowcase {
 
     const defaultClip = this.actions['Rifle_Aim'] || this.actions['Idle_Loop'];
     if (defaultClip) {
-      defaultClip.play();
+      defaultClip.reset();
+      defaultClip.fadeIn(0.25).play();
       this.activeAction = defaultClip;
       this.currentActiveClipName = 'Idle_Loop';
     }

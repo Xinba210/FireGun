@@ -151,6 +151,20 @@ export class SecondaryMotionManager {
       state.currentAngle.y = THREE.MathUtils.clamp(state.currentAngle.y, -cfg.maxAngleRad, cfg.maxAngleRad);
       state.currentAngle.z = THREE.MathUtils.clamp(state.currentAngle.z, -cfg.maxAngleRad, cfg.maxAngleRad);
 
+      // Deadzone 濾波：當微小角度與角速度低於門檻時歸零，杜絕待機下的高頻抽搐與浮點微抖
+      if (Math.abs(state.angularVelocity.x) < 0.002 && Math.abs(state.currentAngle.x) < 0.001) {
+        state.angularVelocity.x = 0;
+        state.currentAngle.x = 0;
+      }
+      if (Math.abs(state.angularVelocity.y) < 0.002 && Math.abs(state.currentAngle.y) < 0.001) {
+        state.angularVelocity.y = 0;
+        state.currentAngle.y = 0;
+      }
+      if (Math.abs(state.angularVelocity.z) < 0.002 && Math.abs(state.currentAngle.z) < 0.001) {
+        state.angularVelocity.z = 0;
+        state.currentAngle.z = 0;
+      }
+
       // 若有身體防穿模碰撞約束 (例如避免槍背帶或腰包穿入胸甲內部)
       if (cfg.hasCollisionCapsule) {
         // 限制 Pitch 不能向內過度穿入身體 (X 限制不能小於 -0.05)
