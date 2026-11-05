@@ -342,6 +342,16 @@ export class OperatorShowcase {
     });
   }
 
+  public resize() {
+    const width = this.container.clientWidth || 360;
+    const height = this.container.clientHeight || 420;
+    if (width > 0 && height > 0) {
+      this.camera.aspect = width / height;
+      this.camera.updateProjectionMatrix();
+      this.renderer.setSize(width, height);
+    }
+  }
+
   public destroy() {
     if (this.rafId !== null) {
       cancelAnimationFrame(this.rafId);

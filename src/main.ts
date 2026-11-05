@@ -1246,13 +1246,43 @@ function setupExpandedPortInfrastructure() {
   pierMesh.castShadow = true;
   pierGroup.add(pierMesh);
 
-  // Safety curbs with hazard stripes
+  // Safety curbs with hazard stripes & high-fidelity steel guardrails
   const curbMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.8 });
   const curbLeft = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.45, 54), curbMat);
   curbLeft.position.set(-30.8, 0.95, 58.0);
   const curbRight = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.45, 54), curbMat);
   curbRight.position.set(-21.2, 0.95, 58.0);
   pierGroup.add(curbLeft, curbRight);
+
+  // High-Fidelity Dockside Rubber Fender Tires (防撞靠球輪胎，掛於兩側水泥壁)
+  const tireGeo = new THREE.TorusGeometry(0.42, 0.16, 8, 16);
+  const tireMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.92, metalness: 0.05 });
+  for (let tz = 34; tz <= 82; tz += 5.5) {
+    const tireL = new THREE.Mesh(tireGeo, tireMat);
+    tireL.position.set(-31.1, 0.35, tz);
+    tireL.rotation.y = Math.PI / 2;
+    const tireR = new THREE.Mesh(tireGeo, tireMat);
+    tireR.position.set(-20.9, 0.35, tz);
+    tireR.rotation.y = Math.PI / 2;
+    pierGroup.add(tireL, tireR);
+  }
+
+  // Industrial Yellow-Black Safety Guardrails (金屬防護欄桿)
+  const railMat = new THREE.MeshStandardMaterial({ color: 0xeab308, metalness: 0.7, roughness: 0.4 });
+  const railBarGeo = new THREE.CylinderGeometry(0.025, 0.025, 54, 8);
+  railBarGeo.rotateX(Math.PI / 2);
+  const topRailL = new THREE.Mesh(railBarGeo, railMat);
+  topRailL.position.set(-30.8, 1.65, 58.0);
+  const midRailL = new THREE.Mesh(railBarGeo, railMat);
+  midRailL.position.set(-30.8, 1.35, 58.0);
+  pierGroup.add(topRailL, midRailL);
+
+  for (let pz = 32; pz <= 84; pz += 4.5) {
+    const postGeo = new THREE.CylinderGeometry(0.035, 0.035, 0.85, 8);
+    const postL = new THREE.Mesh(postGeo, railMat);
+    postL.position.set(-30.8, 1.35, pz);
+    pierGroup.add(postL);
+  }
 
   // Amber dock safety beacons along breakwater
   const amberBeaconGeo = new THREE.SphereGeometry(0.18, 8, 8);
@@ -1271,10 +1301,20 @@ function setupExpandedPortInfrastructure() {
   lighthouseGroup.name = 'PortLighthouse';
   lighthouseGroup.position.set(-26.0, 0.9, 82.0);
 
-  const towerGeo = new THREE.CylinderGeometry(1.8, 2.8, 18, 16);
+  // 1. Heavy Stone Masonry Base (重裝石砌防潮基座)
+  const basePedestal = new THREE.Mesh(
+    new THREE.CylinderGeometry(3.6, 4.2, 3.2, 16),
+    new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.95, metalness: 0.15 })
+  );
+  basePedestal.position.y = 1.6;
+  basePedestal.receiveShadow = true;
+  basePedestal.castShadow = true;
+  lighthouseGroup.add(basePedestal);
+
+  const towerGeo = new THREE.CylinderGeometry(1.8, 2.8, 16, 16);
   const towerMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.65, metalness: 0.1 });
   const towerMesh = new THREE.Mesh(towerGeo, towerMat);
-  towerMesh.position.y = 9.0;
+  towerMesh.position.y = 10.6;
   towerMesh.castShadow = true;
   towerMesh.receiveShadow = true;
   lighthouseGroup.add(towerMesh);
@@ -1283,13 +1323,30 @@ function setupExpandedPortInfrastructure() {
   const stripeGeo = new THREE.CylinderGeometry(2.1, 2.4, 3.5, 16);
   const redStripeMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.6 });
   const stripeMesh = new THREE.Mesh(stripeGeo, redStripeMat);
-  stripeMesh.position.y = 11.5;
+  stripeMesh.position.y = 12.5;
   lighthouseGroup.add(stripeMesh);
+
+  // Steel Inspection Catwalk & Spiral Ladder (外掛鋼構檢修貓道)
+  const catwalkRingGeo = new THREE.RingGeometry(1.9, 2.7, 24);
+  catwalkRingGeo.rotateX(-Math.PI / 2);
+  const catwalkMesh = new THREE.Mesh(
+    catwalkRingGeo,
+    new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8, roughness: 0.3, side: THREE.DoubleSide })
+  );
+  catwalkMesh.position.y = 17.8;
+  lighthouseGroup.add(catwalkMesh);
+
+  // Catwalk Railing (貓道護欄)
+  const catwalkRailGeo = new THREE.TorusGeometry(2.65, 0.035, 8, 24);
+  catwalkRailGeo.rotateX(Math.PI / 2);
+  const catwalkRail = new THREE.Mesh(catwalkRailGeo, new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.7 }));
+  catwalkRail.position.y = 18.6;
+  lighthouseGroup.add(catwalkRail);
 
   // Lantern room
   const lanternBaseGeo = new THREE.CylinderGeometry(2.2, 2.2, 0.8, 16);
   const lanternBase = new THREE.Mesh(lanternBaseGeo, new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8 }));
-  lanternBase.position.y = 18.4;
+  lanternBase.position.y = 18.6;
   lighthouseGroup.add(lanternBase);
 
   // Revolving searchlight head
@@ -1845,6 +1902,7 @@ for (let i = 0; i < MAX_IMPACT_DECALS; i++) {
 }
 
 let soldierTemplateGltf: { scene: THREE.Group; animations: THREE.AnimationClip[] } | null = null;
+let playerTpsGearNodes: TacticalGearNodes | null = null;
 
 function registerStaticColliders() {
   // Container stacks & warehouse walls & barriers for player AABB collision
@@ -2369,13 +2427,23 @@ function poseCharacterTwoHandRifleIk(
   let magWellWorld: THREE.Vector3;
 
   if (rifleHolder) {
+    const curWep = WEAPONS[activeWeaponIdx] || WEAPONS[0];
+    const offsets: Record<string, { gx: number; gy: number; gz: number; fx: number; fy: number; fz: number; mx: number; my: number; mz: number }> = {
+      ar7: { gx: 0.0, gy: -0.055, gz: -0.02, fx: 0.01, fy: -0.048, fz: 0.25, mx: 0.0, my: -0.11, mz: 0.07 },
+      sg12: { gx: 0.0, gy: -0.060, gz: -0.01, fx: 0.015, fy: -0.052, fz: 0.28, mx: 0.0, my: -0.10, mz: 0.08 },
+      sr9: { gx: 0.0, gy: -0.050, gz: -0.03, fx: 0.012, fy: -0.044, fz: 0.36, mx: 0.0, my: -0.12, mz: 0.06 },
+      smg9: { gx: 0.0, gy: -0.052, gz: -0.01, fx: 0.010, fy: -0.042, fz: 0.19, mx: 0.0, my: -0.11, mz: 0.05 },
+      rl7: { gx: 0.0, gy: -0.040, gz: -0.05, fx: 0.030, fy: -0.020, fz: 0.22, mx: 0.0, my: -0.08, mz: 0.04 },
+    };
+    const c = offsets[curWep.id] || offsets.ar7;
+
     rifleHolder.position.set(-0.11, 0.04, 0.16 - recoilZ * 0.65);
     rifleHolder.rotation.set(-aimPitch, 0, 0);
     rifleHolder.updateMatrixWorld(true);
     // Note: weaponModels face -Z in their own local frame, so inside rifleHolder we rotated weapon Clones by Math.PI around Y
-    gripWorld = rifleHolder.localToWorld(new THREE.Vector3(0.0, -0.055, -0.02));
-    foregripWorld = rifleHolder.localToWorld(new THREE.Vector3(0.01, -0.048, 0.25));
-    magWellWorld = rifleHolder.localToWorld(new THREE.Vector3(0.0, -0.11, 0.07));
+    gripWorld = rifleHolder.localToWorld(new THREE.Vector3(c.gx, c.gy, c.gz));
+    foregripWorld = rifleHolder.localToWorld(new THREE.Vector3(c.fx, c.fy, c.fz));
+    magWellWorld = rifleHolder.localToWorld(new THREE.Vector3(c.mx, c.my, c.mz));
   } else {
     // Built-in enemy rifle ('Soldier_AR7_Rifle_Rigid' attached to spine_03)
     const builtIn = charRoot.getObjectByName('Soldier_AR7_Rifle_Rigid');
@@ -2593,6 +2661,10 @@ function setupPlayerCc0ArmsAndThirdPerson() {
   }
   playPlayerTpsClip('Idle_Loop', true);
   playerTpsMixer.update(0.2);
+
+  // 實裝全身戰術裝具與次級動態 (Tactical Gear & Secondary Motion)
+  playerTpsGearNodes = attachTacticalGear(playerTpsRoot, playerTpsRoot);
+
   poseCharacterTwoHandRifleIk(playerTpsRoot, playerTpsWeaponMount, 0, 0, 0);
   scene.add(playerTpsRoot);
 }
@@ -4763,6 +4835,8 @@ function setupOperatorShowcaseUi() {
       topgunGltf: (window as any).topgunTemplateGltf || null,
       weaponModels,
     });
+  } else {
+    activeOperatorShowcase.resize();
   }
 
   // 3D 導覽相機特寫視角按鈕 (Tour Focus)
@@ -5934,6 +6008,13 @@ function stepSimulation(dt: number, elapsedSec: number) {
       if (playerTpsMixer) {
         playerTpsMixer.update(dt);
       }
+
+      // 更新第三人稱次級動態物理 (Secondary Motion in TPS Combat)
+      if (playerTpsGearNodes) {
+        const speed = player.sprinting ? 6.4 : isMoving ? 4.3 : 0.0;
+        playerTpsGearNodes.secondaryMotionMgr.update(dt, speed, player.sprinting);
+      }
+
       const reloadPct = player.reloading ? Math.min(1, player.reloadTimer / WEAPONS[activeWeaponIdx].reloadTime) : 0;
       poseCharacterTwoHandRifleIk(
         playerTpsRoot,
@@ -6070,12 +6151,23 @@ function stepSimulation(dt: number, elapsedSec: number) {
       meleePitch = 0.32 * mPhase;
     }
 
-    const targetRigX = player.ads ? 0.0 : 0.22;
-    const targetRigY = player.ads ? -0.145 : -0.24;
-    const targetRigZ = (player.ads ? -0.28 : -0.38) + player.recoilOffsetZ + meleeLungeZ;
-    fpRig.position.x += (targetRigX - fpRig.position.x) * Math.min(1, dt * 16);
-    fpRig.position.y += (targetRigY - fpRig.position.y) * Math.min(1, dt * 16);
-    fpRig.position.z += (targetRigZ - fpRig.position.z) * Math.min(1, dt * 16);
+    // 3A 級光學軸心精準對齊 (AAA Optical ADS Sight Alignment Matrix)
+    // 讓武器光學照門 / 紅點中心 100% 精準穿過螢幕中央 (0, 0)
+    const adsSightOffsets: Record<string, { x: number; y: number; z: number }> = {
+      ar7: { x: -0.0018, y: -0.118, z: -0.24 },  // EOTech 全息鏡片中心完美重疊
+      sg12: { x: 0.0000, y: -0.098, z: -0.22 },  // 散彈槍圓形照門居中
+      sr9: { x: 0.0000, y: -0.122, z: -0.20 },   // 高倍率狙擊鏡中心
+      smg9: { x: -0.0012, y: -0.108, z: -0.23 }, // 戰術衝鋒槍紅點
+      rl7: { x: 0.0000, y: -0.088, z: -0.26 },
+    };
+    const curAdsOff = adsSightOffsets[w.id] || adsSightOffsets.ar7;
+
+    const targetRigX = player.ads ? curAdsOff.x : 0.22;
+    const targetRigY = player.ads ? curAdsOff.y : -0.24;
+    const targetRigZ = (player.ads ? curAdsOff.z : -0.38) + player.recoilOffsetZ + meleeLungeZ;
+    fpRig.position.x += (targetRigX - fpRig.position.x) * Math.min(1, dt * 18);
+    fpRig.position.y += (targetRigY - fpRig.position.y) * Math.min(1, dt * 18);
+    fpRig.position.z += (targetRigZ - fpRig.position.z) * Math.min(1, dt * 18);
 
     // 依據不同槍枝呈現專屬 ADS 特色光學瞄具 (Holo Red-Dot / Shotgun Ring / Sniper Scope)
     const holoEl = document.getElementById('reticle-holo-eotech');
