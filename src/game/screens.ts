@@ -322,13 +322,41 @@ export class GameScreensManager {
               <div class="showcase-3d-viewport">
                 <div id="showcase-mount-point" class="showcase-mount-point"></div>
                 <div class="showcase-drag-hint">滑鼠拖曳 / 單指滑動 360° 旋轉檢視特戰隊員</div>
+                
+                <!-- 3D 導覽相機特寫按鈕 -->
+                <div class="showcase-tour-controls">
+                  <button data-tour="full" class="btn-tour-pill active">全景 (FULL)</button>
+                  <button data-tour="helmet" class="btn-tour-pill">頭盔 (HELMET)</button>
+                  <button data-tour="chest" class="btn-tour-pill">背心 (VEST)</button>
+                  <button data-tour="waist" class="btn-tour-pill">腰際 (WAIST)</button>
+                  <button data-tour="legs" class="btn-tour-pill">槍套 (LEGS)</button>
+                </div>
               </div>
               <div class="showcase-controls-panel">
+                <div class="showcase-sec-title">SELECT OPERATOR // 特戰幹員選擇</div>
+                <div class="showcase-operator-pills">
+                  <button data-operator="ROACH" class="btn-operator-pill active">鬼影 ROACH (暗潮特遣隊)</button>
+                  <button data-operator="MAVERICK" class="btn-operator-pill">遊俠 MAVERICK (TopGun特種空勤)</button>
+                </div>
+
+                <div class="showcase-sec-title">TACTICAL GRENADE // 戰術投擲裝備</div>
+                <div class="showcase-grenade-pills">
+                  <button data-grenade="FRAG" class="btn-grenade-pill active">M67 破片雷 (FRAG)</button>
+                  <button data-grenade="FLASH" class="btn-grenade-pill">M84 散光彈 (FLASH)</button>
+                  <button data-grenade="SMOKE" class="btn-grenade-pill">M18 煙幕彈 (SMOKE)</button>
+                </div>
+
                 <div class="showcase-sec-title">TACTICAL UNIFORM // 戰術部隊迷彩</div>
                 <div class="showcase-camo-pills">
                   <button data-camo="MIDNIGHT" class="btn-camo-pill active">暗夜特勤 (MIDNIGHT)</button>
                   <button data-camo="URBAN_WOLF" class="btn-camo-pill">城市灰狼 (URBAN)</button>
                   <button data-camo="DESERT_OPS" class="btn-camo-pill">沙漠突擊 (DESERT)</button>
+                </div>
+
+                <div class="showcase-sec-title">SECONDARY MOTION // 次級動態物理預覽</div>
+                <div class="showcase-motion-pills">
+                  <button data-motion="stop" class="btn-motion-impulse">衝刺急停甩動 (INERTIA STOP)</button>
+                  <button data-motion="jump_land" class="btn-motion-impulse">跳躍著地震動 (LAND IMPACT)</button>
                 </div>
 
                 <div class="showcase-sec-title">OPERATOR STANCE // 戰術動作姿勢</div>
@@ -341,9 +369,9 @@ export class GameScreensManager {
                 </div>
 
                 <div class="showcase-gear-manifest">
-                  <div class="gear-row"><span class="gear-k">防彈頭盔:</span><span class="gear-v">FAST High-Cut Level IIIA · 四目夜視儀支架</span></div>
-                  <div class="gear-row"><span class="gear-k">戰術背心:</span><span class="gear-v">JPC 輕量化抗彈板 · 模組化彈匣快拔袋</span></div>
-                  <div class="gear-row"><span class="gear-k">通訊配備:</span><span class="gear-v">骨傳導抗噪耳機 · 戰術即時小隊加密電台</span></div>
+                  <div class="gear-row"><span class="gear-k">防彈頭盔:</span><span class="gear-v">FAST High-Cut Level IIIA · GPNVG-18 四目夜視儀</span></div>
+                  <div class="gear-row"><span class="gear-k">戰術背心:</span><span class="gear-v">JPC 2.0 輕量防彈板 · 三聯裝彈匣快拔包</span></div>
+                  <div class="gear-row"><span class="gear-k">次級動態:</span><span class="gear-v">槍背帶・彈性無線電天線・垂掛手套・水管物理晃動</span></div>
                 </div>
               </div>
             </div>

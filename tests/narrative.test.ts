@@ -20,9 +20,9 @@ describe('Narrative & Cinematics Engine (v1.5.0)', () => {
     expect(director.helicopterPos.z).toBeGreaterThan(40);
 
     // Update to low hover / fast-rope drop (t = 19.9s in 24s high-speed insertion)
-    director.update(19.9, new THREE.Vector3(-6.5, 1.72, 24.0));
-    expect(director.helicopterPos.x).toBeCloseTo(-6.5, 0.2);
-    expect(director.helicopterPos.z).toBeCloseTo(24.5, 0.2);
+    director.update(19.9, new THREE.Vector3(-26.0, 0.9, 62.0));
+    expect(director.helicopterPos.x).toBeCloseTo(-26.0, 0.5);
+    expect(director.helicopterPos.z).toBeCloseTo(62.5, 0.5);
     expect(director.active).toBe(true);
   });
 

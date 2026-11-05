@@ -20,7 +20,9 @@ import { WeaponsAttachmentVisualizer, PictureInPictureScope } from './game/weapo
 import { WorldDetailsManager } from './world/details.ts';
 import { tacticalRadioAudio } from './game/audio.ts';
 import { hapticEngine } from './game/haptics.ts';
-import { OperatorShowcase, OperatorCamoScheme } from './game/operator_showcase.ts';
+import { OperatorShowcase, OperatorCamoScheme, OperatorId, TourFocusTarget } from './game/operator_showcase.ts';
+import { attachTacticalGear, TacticalGearNodes } from './game/tactical_gear.ts';
+import { createGrenadeMesh, GrenadeType, GRENADE_CONFIGS } from './game/grenades.ts';
 
 interface WeaponSpec {
   id: string;
@@ -2783,6 +2785,8 @@ const player = {
   meleeTimer: 0,
   grenades: 3,
   maxGrenades: 3,
+  activeGrenadeType: 'FRAG' as GrenadeType,
+  operatorId: 'ROACH' as OperatorId,
   stims: 2,
   maxStims: 2,
   flashlightOn: false,
@@ -2820,7 +2824,30 @@ const player = {
 const keys: Record<string, boolean> = {};
 let mouseDownLeft = false;
 
+function checkLineOfSight(fromPos: THREE.Vector3, toPos: THREE.Vector3): boolean {
+  const dir = toPos.clone().sub(fromPos);
+  const maxDist = dir.length();
+  if (maxDist < 0.2) return true;
+  dir.normalize();
+  const ray = new THREE.Ray(fromPos, dir);
+  const hitPoint = new THREE.Vector3();
+
+  for (let i = 0; i < colliders.length; i++) {
+    const box = colliders[i];
+    const hit = ray.intersectBox(box, hitPoint);
+    if (hit) {
+      const hitDist = fromPos.distanceTo(hit);
+      if (hitDist > 0.15 && hitDist < maxDist - 0.25) {
+        return false; // LOS blocked by cargo container or wall!
+      }
+    }
+  }
+  return true;
+}
+
 function getGroundHeightAt(x: number, z: number): number {
+  // South Breakwater Lighthouse & Pier deck
+  if (x >= -36.0 && x <= -18.0 && z >= 45.0 && z <= 75.0) return 0.9;
   // Overhead Catwalk & Cross-Bridge + Staircases
   if (x >= 5.0 && x <= 7.4 && z >= -18.0 && z <= 14.0) return 5.34;
   if (x >= -7.5 && x <= 6.5 && z >= 0.8 && z <= 3.2 && player.pos.y > 3.2) return 5.34;
@@ -2913,7 +2940,11 @@ function updateWeaponHud() {
   if (magEl) magEl.textContent = String(w.mag);
   if (resEl) resEl.textContent = String(w.reserve);
   if (modeEl) modeEl.textContent = w.fireMode;
-  if (grenEl) grenEl.textContent = `G-FRAG [G] x${player.grenades}`;
+  if (grenEl) {
+    const gType = player.activeGrenadeType || 'FRAG';
+    const cfg = GRENADE_CONFIGS[gType];
+    grenEl.textContent = `${cfg.code} [G] x${player.grenades}`;
+  }
   if (slotGCount) slotGCount.textContent = `×${player.grenades}`;
   if (stimEl) stimEl.textContent = `STIM [X] x${player.stims}`;
   if (lightEl) {
@@ -3822,7 +3853,80 @@ function fireCurrentWeapon() {
 // ---------------------------------------------------------------------------
 // Tactical Grenade Throw ([G]), Quick Melee Buttstock Bash ([F]) & Damage Arc
 // ---------------------------------------------------------------------------
-function throwFragGrenade() {
+function triggerFlashbangExplosion(pos: THREE.Vector3) {
+  // 1. 全屏刺眼白光 (Flashbang Whiteout Overlay)
+  const flashOverlay = document.getElementById('flashbang-overlay');
+  if (flashOverlay) {
+    const camDir = new THREE.Vector3();
+    camera.getWorldDirection(camDir);
+    const toGrenade = pos.clone().sub(camera.position);
+    const dist = toGrenade.length();
+    const dot = camDir.dot(toGrenade.normalize());
+
+    // 依據玩家與手榴彈距離與視線朝向計算致盲程度
+    let blindIntensity = 0;
+    if (dist < 18.0) {
+      if (dot > 0.25) {
+        blindIntensity = Math.min(1.0, 1.25 * (1 - dist / 18.0));
+      } else {
+        blindIntensity = Math.min(0.5, 0.6 * (1 - dist / 18.0)); // 背對亦有爆震盲目
+      }
+    }
+    if (blindIntensity > 0.05) {
+      flashOverlay.style.opacity = String(blindIntensity);
+      setTimeout(() => {
+        flashOverlay.style.opacity = '0';
+      }, 1200 + blindIntensity * 1800);
+    }
+  }
+
+  // 2. 劇烈耳鳴與震撼音效
+  audioSys.play2D('assets/audio/fire_mode_click.wav', 1.0);
+  tacticalRadioAudio.playEmergencySiren(2.0);
+
+  // 3. 半徑 14m 內敵軍進入 STUNNED 抱頭硬直
+  for (const e of enemies) {
+    if (e.state === 'DEAD') continue;
+    const d = e.root.position.distanceTo(pos);
+    if (d <= 14.0) {
+      e.state = 'COVER';
+      e.stateTimer = 4.5; // 盲目 4.5 秒無法開火
+      e.fireCooldown = 4.8;
+      playEnemyClip(e, 'Hit_Head', false);
+      showKillBanner(`TACTICAL FLASHBANG // ${e.name} BLINDED & STUNNED!`);
+    }
+  }
+}
+
+function triggerSmokeExplosion(pos: THREE.Vector3) {
+  audioSys.play3D('assets/audio/grenade_bounce.wav', pos, player.pos, 8, 45, 0.9);
+  // 噴發 24 團大型濃煙粒子 (持續 14 秒)
+  for (let s = 0; s < 24; s++) {
+    const spMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.85 + Math.random() * 0.45, 8, 8),
+      new THREE.MeshStandardMaterial({
+        color: 0x475569,
+        roughness: 0.95,
+        transparent: true,
+        opacity: 0.65,
+      })
+    );
+    const offset = new THREE.Vector3(
+      (Math.random() - 0.5) * 4.2,
+      0.35 + Math.random() * 1.8,
+      (Math.random() - 0.5) * 4.2
+    );
+    spMesh.position.copy(pos).add(offset);
+    scene.add(spMesh);
+    activeSmokePuffs.push({
+      mesh: spMesh,
+      age: 0,
+      maxAge: 14.0 + Math.random() * 3.0,
+    });
+  }
+}
+
+function throwTacticalGrenade() {
   if (player.grenades <= 0 || loadoutOpen || missionModalOpen) return;
   player.grenades--;
   updateWeaponHud();
@@ -3831,36 +3935,23 @@ function throwFragGrenade() {
   const camDir = new THREE.Vector3();
   camera.getWorldDirection(camDir);
 
-  const gGroup = new THREE.Group();
-  const body = new THREE.Mesh(
-    new THREE.SphereGeometry(0.068, 12, 10),
-    new THREE.MeshStandardMaterial({ color: 0x3b4d28, roughness: 0.52, metalness: 0.45 })
-  );
-  body.scale.set(1.0, 1.22, 1.0);
-  const lever = new THREE.Mesh(
-    new THREE.BoxGeometry(0.025, 0.09, 0.035),
-    new THREE.MeshStandardMaterial({ color: 0x22262a, roughness: 0.4, metalness: 0.8 })
-  );
-  lever.position.set(0.03, 0.04, 0);
-  const blinkLed = new THREE.Mesh(
-    new THREE.SphereGeometry(0.024, 8, 8),
-    new THREE.MeshBasicMaterial({ color: 0xff3311 })
-  );
-  blinkLed.position.set(0, 0.09, 0);
-  gGroup.add(body, lever, blinkLed);
+  const gType = player.activeGrenadeType || 'FRAG';
+  const gGroup = createGrenadeMesh(gType);
 
   gGroup.position.copy(camera.position).addScaledVector(camDir, 0.65);
   scene.add(gGroup);
 
-  const throwVel = camDir.clone().multiplyScalar(17.5);
-  throwVel.y += 4.2;
+  const cfg = GRENADE_CONFIGS[gType];
+  const throwVel = camDir.clone().multiplyScalar(18.0);
+  throwVel.y += 4.5;
   activeGrenades.push({
     mesh: gGroup,
     vel: throwVel,
     age: 0,
-    fuseTime: 1.85,
+    fuseTime: cfg.fuseTime,
     bounced: false,
-  });
+    grenadeType: gType,
+  } as any);
 }
 
 function triggerMeleeBash() {
@@ -4669,9 +4760,61 @@ function setupOperatorShowcaseUi() {
     activeOperatorShowcase = new OperatorShowcase({
       container: mount,
       templateGltf: soldierTemplateGltf,
+      topgunGltf: (window as any).topgunTemplateGltf || null,
       weaponModels,
     });
   }
+
+  // 3D 導覽相機特寫視角按鈕 (Tour Focus)
+  document.querySelectorAll<HTMLElement>('.btn-tour-pill').forEach((btn) => {
+    btn.onclick = () => {
+      document.querySelectorAll('.btn-tour-pill').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      const tour = btn.dataset.tour as TourFocusTarget;
+      if (tour && activeOperatorShowcase) {
+        activeOperatorShowcase.focusTourTarget(tour);
+      }
+    };
+  });
+
+  // 主角切換 (ROACH 鬼影 vs MAVERICK 遊俠)
+  document.querySelectorAll<HTMLElement>('.btn-operator-pill').forEach((btn) => {
+    btn.onclick = () => {
+      document.querySelectorAll('.btn-operator-pill').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      const op = btn.dataset.operator as OperatorId;
+      if (op && activeOperatorShowcase) {
+        activeOperatorShowcase.loadCharacter(op);
+        player.operatorId = op;
+        showKillBanner(`OPERATOR SELECTED // ${op === 'ROACH' ? 'ROACH (暗潮特遣隊)' : 'MAVERICK (TopGun特種空勤)'}`);
+      }
+    };
+  });
+
+  // 戰術手榴彈配備切換 (FRAG / FLASH / SMOKE)
+  document.querySelectorAll<HTMLElement>('.btn-grenade-pill').forEach((btn) => {
+    btn.onclick = () => {
+      document.querySelectorAll('.btn-grenade-pill').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      const gren = btn.dataset.grenade as GrenadeType;
+      if (gren && activeOperatorShowcase) {
+        activeOperatorShowcase.setGrenadeAttachment(gren);
+        player.activeGrenadeType = gren;
+        updateWeaponHud();
+        showKillBanner(`TACTICAL GRENADE EQUIPPED // ${GRENADE_CONFIGS[gren].name}`);
+      }
+    };
+  });
+
+  // 次級動態物理衝量按鈕 (Secondary Motion Impulse)
+  document.querySelectorAll<HTMLElement>('.btn-motion-impulse').forEach((btn) => {
+    btn.onclick = () => {
+      const motion = btn.dataset.motion as 'stop' | 'jump_land';
+      if (motion && activeOperatorShowcase) {
+        activeOperatorShowcase.triggerImpulse(motion);
+      }
+    };
+  });
 
   // Stance buttons
   document.querySelectorAll<HTMLElement>('.btn-pose-pill').forEach((btn) => {
@@ -5111,7 +5254,7 @@ document.getElementById('touch-btn-reload')?.addEventListener('click', (e) => {
 });
 document.getElementById('touch-btn-grenade')?.addEventListener('click', (e) => {
   e.stopPropagation();
-  throwFragGrenade();
+  throwTacticalGrenade();
   toggleTacticalDrawer(false);
 });
 document.getElementById('touch-btn-melee')?.addEventListener('click', (e) => {
@@ -5256,7 +5399,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Digit5') equipWeapon(4);
   if (e.code === 'KeyR') startReload();
   if (e.code === 'KeyB') cycleFireMode();
-  if (e.code === 'KeyG') throwFragGrenade();
+  if (e.code === 'KeyG') throwTacticalGrenade();
   if (e.code === 'KeyF') triggerMeleeBash();
   if (e.code === 'KeyT') toggleTacticalFlashlight();
   if (e.code === 'KeyN') toggleNvgMode();
@@ -5496,9 +5639,33 @@ function renderMinimap() {
     );
   }
 
-  // Enemy Blips
+  // 360° 旋轉動態綠色雷達波束線 (Rotating Radar Sweep Line)
+  const radarSweepAngle = (performance.now() * 0.0028) % (Math.PI * 2);
+  mmCtx.save();
+  mmCtx.rotate(radarSweepAngle);
+  const sweepGrad = mmCtx.createLinearGradient(0, 0, 75, 0);
+  sweepGrad.addColorStop(0, 'rgba(34, 197, 94, 0.45)');
+  sweepGrad.addColorStop(1, 'rgba(34, 197, 94, 0.0)');
+  mmCtx.strokeStyle = sweepGrad;
+  mmCtx.lineWidth = 2.0;
+  mmCtx.beginPath();
+  mmCtx.moveTo(0, 0);
+  mmCtx.lineTo(75, 0);
+  mmCtx.stroke();
+  mmCtx.restore();
+
+  // Enemy Blips (非全知雷達：需在目視 LOS 範圍內、開火警戒或近距被掃過才顯示)
+  const playerEye = player.pos.clone().add(new THREE.Vector3(0, 1.6, 0));
   for (const e of enemies) {
     if (e.state === 'DEAD') continue;
+    const enemyEye = e.root.position.clone().add(new THREE.Vector3(0, 1.6, 0));
+    const distToPlayer = e.root.position.distanceTo(player.pos);
+    const hasLOS = checkLineOfSight(playerEye, enemyEye);
+    const isAlerted = e.state === 'COMBAT' || e.state === 'COVER';
+
+    // 若被高大貨櫃遮擋且未開火且距離 > 8m，迷霧過濾不顯示！
+    if (!hasLOS && !isAlerted && distToPlayer > 8.0) continue;
+
     mmCtx.fillStyle = e.archetype === 'SNIPER' ? '#f43f5e' : e.archetype === 'BREACHER' ? '#fb923c' : '#ef4444';
     mmCtx.beginPath();
     mmCtx.arc(tx(e.root.position.x), tz(e.root.position.z), 3.6, 0, Math.PI * 2);
@@ -5669,9 +5836,14 @@ function stepSimulation(dt: number, elapsedSec: number) {
       nextPos.x = Math.max(-28, Math.min(24.5, nextPos.x));
       nextPos.z = Math.max(-32, Math.min(34, nextPos.z));
 
-      // Check AABB colliders only when on ground level (y < 2.4)
+      // Check AABB colliders and real physical climb limit (max step-up height <= 1.15m)
       let blocked = false;
-      if (player.pos.y < 2.4) {
+      const targetGroundY = getGroundHeightAt(nextPos.x, nextPos.z);
+      // 禁止凌空爬上 2.6m 貨櫃頂面（除非高度差在 1.15m 以內，即階梯或矮箱墊腳）
+      if (targetGroundY - player.pos.y > 1.15) {
+        blocked = true;
+      }
+      if (!blocked && player.pos.y < 2.4) {
         const pBox = new THREE.Box3(
           new THREE.Vector3(nextPos.x - 0.38, player.pos.y, nextPos.z - 0.38),
           new THREE.Vector3(nextPos.x + 0.38, player.pos.y + 1.7, nextPos.z + 0.38)
@@ -5905,6 +6077,30 @@ function stepSimulation(dt: number, elapsedSec: number) {
     fpRig.position.y += (targetRigY - fpRig.position.y) * Math.min(1, dt * 16);
     fpRig.position.z += (targetRigZ - fpRig.position.z) * Math.min(1, dt * 16);
 
+    // 依據不同槍枝呈現專屬 ADS 特色光學瞄具 (Holo Red-Dot / Shotgun Ring / Sniper Scope)
+    const holoEl = document.getElementById('reticle-holo-eotech');
+    const sgRingEl = document.getElementById('reticle-shotgun-ring');
+    const sniperScopeEl = document.getElementById('sniper-scope');
+    if (player.ads) {
+      if (w.id === 'ar7') {
+        holoEl?.classList.remove('hidden');
+        sgRingEl?.classList.add('hidden');
+        sniperScopeEl?.classList.add('hidden');
+      } else if (w.id === 'sg12') {
+        holoEl?.classList.add('hidden');
+        sgRingEl?.classList.remove('hidden');
+        sniperScopeEl?.classList.add('hidden');
+      } else if (w.id === 'sr9') {
+        holoEl?.classList.add('hidden');
+        sgRingEl?.classList.add('hidden');
+        sniperScopeEl?.classList.remove('hidden');
+      }
+    } else {
+      holoEl?.classList.add('hidden');
+      sgRingEl?.classList.add('hidden');
+      sniperScopeEl?.classList.add('hidden');
+    }
+
     // Reload Animation & Progress
     if (player.reloading) {
       player.reloadTimer += dt;
@@ -6132,7 +6328,14 @@ function stepSimulation(dt: number, elapsedSec: number) {
     }
 
     if (gr.age >= gr.fuseTime) {
-      triggerExplosionAt(gr.mesh.position.clone(), 8.2, 180);
+      const gType = (gr as any).grenadeType || 'FRAG';
+      if (gType === 'FLASH') {
+        triggerFlashbangExplosion(gr.mesh.position.clone());
+      } else if (gType === 'SMOKE') {
+        triggerSmokeExplosion(gr.mesh.position.clone());
+      } else {
+        triggerExplosionAt(gr.mesh.position.clone(), 8.5, 185);
+      }
       scene.remove(gr.mesh);
       activeGrenades.splice(i, 1);
     }
@@ -6180,8 +6383,34 @@ function stepSimulation(dt: number, elapsedSec: number) {
       suspendedCargo.group.position.y = 0;
       suspendedCargo.velY = 0;
       suspendedCargo.state = 'LANDED';
-      player.cameraShake = Math.max(player.cameraShake, 0.72);
-      audioSys.play3D('assets/audio/rl7_explosion.wav', suspendedCargo.group.position, player.pos, 10, 85, 1.1);
+      player.cameraShake = Math.max(player.cameraShake, 1.35); // 強烈屏幕震動
+      audioSys.play3D('assets/audio/rl7_explosion.wav', suspendedCargo.group.position, player.pos, 10, 85, 1.3);
+
+      // 巨量灰塵爆風環 (36 團多角度噴湧塵霧粒子)
+      for (let d = 0; d < 36; d++) {
+        const ang = (d / 36) * Math.PI * 2;
+        const dustMesh = new THREE.Mesh(
+          new THREE.SphereGeometry(0.7 + Math.random() * 0.5, 8, 8),
+          new THREE.MeshStandardMaterial({
+            color: 0x64748b,
+            roughness: 0.98,
+            transparent: true,
+            opacity: 0.72,
+          })
+        );
+        dustMesh.position.set(
+          suspendedCargo.group.position.x + Math.cos(ang) * 1.8,
+          0.3 + Math.random() * 0.4,
+          suspendedCargo.group.position.z + Math.sin(ang) * 1.8
+        );
+        scene.add(dustMesh);
+        activeSmokePuffs.push({
+          mesh: dustMesh,
+          age: 0,
+          maxAge: 7.5 + Math.random() * 3.5,
+        });
+      }
+
       // Register new permanent cover AABB collider where the container landed
       colliders.push(
         new THREE.Box3(
@@ -6368,23 +6597,52 @@ function stepSimulation(dt: number, elapsedSec: number) {
         // 1. If player is in covered LZ staging zone (player.pos.z > 20.0), heavy shipping containers completely block line of sight
         // 2. Vision cone: enemy must face player (dotSight > 0.52, ~60 deg cone) and dist < 18m
         // 3. Proximity footstep sound alert: dist < 4.0m (or 2.5m if crouching)
-        const inStagingArea = player.pos.z > 20.0;
-        if (!inStagingArea) {
-          const enemyFacing = new THREE.Vector3(Math.sin(e.root.rotation.y), 0, Math.cos(e.root.rotation.y));
-          const toPlayerNorm = toPlayer.clone().normalize();
-          const dotSight = enemyFacing.dot(toPlayerNorm);
-          const hasVisual = dotSight > 0.52 && dist < (player.crouching ? 11.0 : 18.0);
-          const hasCloseProximity = dist < (player.crouching ? 2.5 : 4.0);
+        const enemyFacing = new THREE.Vector3(Math.sin(e.root.rotation.y), 0, Math.cos(e.root.rotation.y));
+        const toPlayerNorm = toPlayer.clone().normalize();
+        const dotSight = enemyFacing.dot(toPlayerNorm);
+        const hasVisualRange = dotSight > 0.48 && dist < (player.crouching ? 12.0 : 22.0);
+        const hasCloseProximity = dist < (player.crouching ? 2.5 : 4.5);
 
-          if (hasVisual || hasCloseProximity) {
-            e.state = 'COMBAT';
-            e.fireCooldown = 0.9 + Math.random() * 0.5; // Reaction pause before opening fire!
-            audioSys.play2D('assets/audio/fire_mode_click.wav', 0.6);
-            showKillBanner(`ALERT: ${e.name.split(' ')[0]} SPOTTED TARGET!`);
-          }
+        // 嚴格射線檢測：若中間有貨櫃或障礙物阻擋 (checkLineOfSight === false)，敵人絕對看不到！
+        const eyePos = e.root.position.clone().add(new THREE.Vector3(0, 1.6, 0));
+        const playerEye = player.pos.clone().add(new THREE.Vector3(0, player.crouching ? 1.0 : 1.65, 0));
+        const hasClearLOS = checkLineOfSight(eyePos, playerEye);
+
+        if ((hasVisualRange || hasCloseProximity) && hasClearLOS) {
+          e.state = 'COMBAT';
+          (e as any).lastKnownPlayerPos = player.pos.clone();
+          (e as any).lostSightTimer = 0;
+          e.fireCooldown = 0.9 + Math.random() * 0.5; // 反應時間
+          audioSys.play2D('assets/audio/fire_mode_click.wav', 0.6);
+          showKillBanner(`ALERT: ${e.name.split(' ')[0]} SPOTTED TARGET!`);
         }
       } else if (e.state === 'COMBAT' || e.state === 'COVER') {
-        e.root.rotation.y = Math.atan2(toPlayer.x, toPlayer.z);
+        const eyePos = e.root.position.clone().add(new THREE.Vector3(0, 1.6, 0));
+        const playerEye = player.pos.clone().add(new THREE.Vector3(0, player.crouching ? 1.0 : 1.65, 0));
+        const hasClearLOS = checkLineOfSight(eyePos, playerEye);
+
+        if (hasClearLOS) {
+          (e as any).lastKnownPlayerPos = player.pos.clone();
+          (e as any).lostSightTimer = 0;
+          e.root.rotation.y = Math.atan2(toPlayer.x, toPlayer.z);
+        } else {
+          // 視線被貨櫃切斷！進入警戒搜索 (Alert Search towards LKP)
+          (e as any).lostSightTimer = ((e as any).lostSightTimer || 0) + dt;
+          if ((e as any).lastKnownPlayerPos) {
+            const lkp = (e as any).lastKnownPlayerPos as THREE.Vector3;
+            const toLkp = lkp.clone().sub(e.root.position);
+            if (toLkp.length() > 1.2 && (e as any).lostSightTimer < 6.0) {
+              e.root.rotation.y = Math.atan2(toLkp.x, toLkp.z);
+              e.root.position.x += Math.sin(e.root.rotation.y) * 1.8 * dt;
+              e.root.position.z += Math.cos(e.root.rotation.y) * 1.8 * dt;
+              playEnemyClip(e, 'Walk_Loop', true);
+            } else if ((e as any).lostSightTimer >= 6.0) {
+              // 6秒未發現玩家，恢復巡邏
+              e.state = 'PATROL';
+              (e as any).lastKnownPlayerPos = null;
+            }
+          }
+        }
         if (e.state === 'COVER') {
           e.stateTimer -= dt;
           playEnemyClip(e, 'Crouch_Idle_Loop', true);
@@ -6590,7 +6848,7 @@ window.addEventListener('resize', () => {
     renderSceneWithWater();
   },
   throwGrenade: (advanceSec = 0.45) => {
-    throwFragGrenade();
+    throwTacticalGrenade();
     stepSimulation(advanceSec, 1.5);
     renderSceneWithWater();
   },
