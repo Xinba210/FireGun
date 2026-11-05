@@ -1251,6 +1251,17 @@ function setupExpandedPortInfrastructure() {
   const curbRight = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.45, 54), curbMat);
   curbRight.position.set(-21.2, 0.95, 58.0);
   pierGroup.add(curbLeft, curbRight);
+
+  // Amber dock safety beacons along breakwater
+  const amberBeaconGeo = new THREE.SphereGeometry(0.18, 8, 8);
+  const amberBeaconMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b });
+  for (let bz = 36; bz <= 80; bz += 11) {
+    const bLeft = new THREE.Mesh(amberBeaconGeo, amberBeaconMat);
+    bLeft.position.set(-30.8, 1.25, bz);
+    const bRight = new THREE.Mesh(amberBeaconGeo, amberBeaconMat);
+    bRight.position.set(-21.2, 1.25, bz);
+    pierGroup.add(bLeft, bRight);
+  }
   scene.add(pierGroup);
 
   // B. Revolving Port Lighthouse (x: -26, y: 0.9, z: 82)

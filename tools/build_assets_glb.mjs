@@ -151,38 +151,42 @@ const TEX_SETS = {
     const macro = fbm(u, v, 4, 4, 11);
     const micro = fbm(u, v, 28, 3, 29);
     const asphaltGrain = fbm(u * 2.5, v * 2.5, 42, 2, 77);
+    const pebbleGrit = fbm(u * 8, v * 8, 32, 2, 88);
     const puddleField = fbm(u, v, 3, 4, 99);
     // Smooth rain-slicked tarmac wetness transition without marbled cracks
-    const wetness = Math.max(0, Math.min(1, (puddleField - 0.50) * 4.5));
+    const wetness = Math.max(0, Math.min(1, (puddleField - 0.48) * 4.8));
     const crackVal = Math.abs(fbm(u, v, 10, 3, 42) - 0.5);
-    const crack = crackVal < 0.008 ? 0.90 : 1.0;
-    const tireTrack = Math.sin(u * Math.PI * 16) > 0.88 ? 0.95 : 1.0;
-    const dryLuma = (0.16 + macro * 0.05 + micro * 0.03 + asphaltGrain * 0.025) * crack * tireTrack;
-    const base = dryLuma * (1.0 - wetness * 0.36);
-    const dryHeight = (0.42 + macro * 0.16 + micro * 0.12 + asphaltGrain * 0.10) * crack;
+    const crack = crackVal < 0.009 ? 0.86 : 1.0;
+    const tireTrack = Math.sin(u * Math.PI * 16) > 0.86 ? 0.94 : 1.0;
+    const oilSheen = Math.max(0, Math.sin(u * 14 + v * 9)) * 0.04 * wetness;
+    const dryLuma = (0.16 + macro * 0.05 + micro * 0.03 + asphaltGrain * 0.025 + pebbleGrit * 0.02) * crack * tireTrack;
+    const base = dryLuma * (1.0 - wetness * 0.40);
+    const dryHeight = (0.42 + macro * 0.16 + micro * 0.12 + asphaltGrain * 0.10 + pebbleGrit * 0.08) * crack;
     return {
-      r: base * 0.92,
-      g: base * 0.97,
-      b: base * 1.08,
-      roughness: 0.62 - wetness * 0.50 - micro * 0.03,
-      metallic: 0.08 + wetness * 0.26,
-      height: dryHeight * (1.0 - wetness * 0.85) + 0.5 * (wetness * 0.85),
-      ao: crack * (0.94 + micro * 0.06),
+      r: base * 0.90 + oilSheen * 1.2,
+      g: base * 0.96 + oilSheen * 0.8,
+      b: base * 1.06 + oilSheen * 1.5,
+      roughness: 0.60 - wetness * 0.52 - micro * 0.03,
+      metallic: 0.08 + wetness * 0.32,
+      height: dryHeight * (1.0 - wetness * 0.88) + 0.5 * (wetness * 0.88),
+      ao: crack * (0.92 + micro * 0.08),
     };
   }),
   container_red: generatePbrSet('container_red', 256, (u, v) => {
     const ribWave = Math.sin(u * Math.PI * 44);
     const rib = Math.sign(ribWave) * Math.pow(Math.abs(ribWave), 0.55);
     const streak = fbm(u * 6, v * 1.8, 8, 3, 19);
-    const edgeWear = (v < 0.05 || v > 0.95 || u < 0.03 || u > 0.97) ? 0.35 : 0.0;
-    const rustNoise = fbm(u, v, 16, 4, 21) + edgeWear * 0.45 - Math.abs(rib) * 0.15;
-    const rust = Math.max(0, Math.min(1, (rustNoise - 0.74) * 6.0));
+    const rainDrip = Math.pow(Math.max(0, fbm(u * 14, v * 1.2, 6, 2, 81) - 0.55) * 2.2, 2.0);
+    const edgeWear = (v < 0.05 || v > 0.95 || u < 0.03 || u > 0.97) ? 0.38 : 0.0;
+    const rustNoise = fbm(u, v, 16, 4, 21) + edgeWear * 0.45 + rainDrip * 0.35 - Math.abs(rib) * 0.15;
+    const rust = Math.max(0, Math.min(1, (rustNoise - 0.72) * 6.5));
     const grime = fbm(u, v, 10, 3, 33) * 0.7 + streak * 0.3;
+    const stencilWhite = (v > 0.78 && v < 0.88 && Math.abs(Math.sin(u * Math.PI * 8)) > 0.82) ? 0.22 : 0.0;
     const shade = (0.82 + rib * 0.14) * (0.76 + grime * 0.28) * (1.0 - v * 0.12);
     return {
-      r: (1 - rust) * (0.52 * shade) + rust * 0.31,
-      g: (1 - rust) * (0.13 * shade) + rust * 0.15,
-      b: (1 - rust) * (0.12 * shade) + rust * 0.11,
+      r: (1 - rust) * (0.52 * shade + stencilWhite) + rust * 0.31,
+      g: (1 - rust) * (0.13 * shade + stencilWhite) + rust * 0.15,
+      b: (1 - rust) * (0.12 * shade + stencilWhite) + rust * 0.11,
       roughness: 0.38 + grime * 0.22 + rust * 0.32,
       metallic: (1 - rust) * 0.38 + rust * 0.12,
       height: 0.5 + rib * 0.38 - rust * 0.08,
@@ -193,15 +197,17 @@ const TEX_SETS = {
     const ribWave = Math.sin(u * Math.PI * 44);
     const rib = Math.sign(ribWave) * Math.pow(Math.abs(ribWave), 0.55);
     const streak = fbm(u * 6, v * 1.8, 8, 3, 49);
-    const edgeWear = (v < 0.05 || v > 0.95 || u < 0.03 || u > 0.97) ? 0.35 : 0.0;
-    const rustNoise = fbm(u, v, 16, 4, 51) + edgeWear * 0.45 - Math.abs(rib) * 0.15;
-    const rust = Math.max(0, Math.min(1, (rustNoise - 0.75) * 6.0));
+    const rainDrip = Math.pow(Math.max(0, fbm(u * 14, v * 1.2, 6, 2, 85) - 0.55) * 2.2, 2.0);
+    const edgeWear = (v < 0.05 || v > 0.95 || u < 0.03 || u > 0.97) ? 0.38 : 0.0;
+    const rustNoise = fbm(u, v, 16, 4, 51) + edgeWear * 0.45 + rainDrip * 0.35 - Math.abs(rib) * 0.15;
+    const rust = Math.max(0, Math.min(1, (rustNoise - 0.73) * 6.5));
     const grime = fbm(u, v, 10, 3, 63) * 0.7 + streak * 0.3;
+    const stencilWhite = (v > 0.78 && v < 0.88 && Math.abs(Math.sin(u * Math.PI * 8)) > 0.82) ? 0.22 : 0.0;
     const shade = (0.82 + rib * 0.14) * (0.76 + grime * 0.28) * (1.0 - v * 0.12);
     return {
-      r: (1 - rust) * (0.13 * shade) + rust * 0.29,
-      g: (1 - rust) * (0.26 * shade) + rust * 0.16,
-      b: (1 - rust) * (0.46 * shade) + rust * 0.12,
+      r: (1 - rust) * (0.13 * shade + stencilWhite) + rust * 0.29,
+      g: (1 - rust) * (0.26 * shade + stencilWhite) + rust * 0.16,
+      b: (1 - rust) * (0.46 * shade + stencilWhite) + rust * 0.12,
       roughness: 0.38 + grime * 0.22 + rust * 0.32,
       metallic: (1 - rust) * 0.38 + rust * 0.12,
       height: 0.5 + rib * 0.38 - rust * 0.08,
@@ -1271,8 +1277,14 @@ function buildPortEnvironmentGlb() {
     appendBox(gSteel, bx, 22.4, craneZ, 0.5, 0.8, 4.4, 0.25);
     if (bx < 4) {
       appendBeam(gSteel, bx, 22.4, craneZ - 2.2, bx + 4.2, 22.4, craneZ + 2.2, 0.14, 5);
+      appendBeam(gSteel, bx, 22.4, craneZ + 2.2, bx + 4.2, 22.4, craneZ - 2.2, 0.14, 5); // Dual X-Truss bracing!
+      appendBeam(gDarkSteel, bx + 2.1, 23.0, craneZ - 2.1, bx + 2.1, 23.0, craneZ + 2.1, 0.08, 4); // Catwalk handrails across boom
     }
   }
+  // Crane Service Walkway along upper boom with safety cage
+  appendBox(gDarkSteel, -15.0, 23.05, craneZ, 45.0, 0.08, 1.2, 0.3);
+  appendBox(gDarkSteel, -15.0, 23.85, craneZ - 0.6, 45.0, 0.04, 0.04, 0.3);
+  appendBox(gDarkSteel, -15.0, 23.85, craneZ + 0.6, 45.0, 0.04, 0.04, 0.3);
   // Upper A-Frame Tower & Stay Cables + Operator Cab + Suspended Container Spreader
   appendBox(gSteel, -7.5, 27.5, craneZ - 2.0, 0.8, 9.5, 0.8, 0.25);
   appendBox(gSteel, -7.5, 27.5, craneZ + 2.0, 0.8, 9.5, 0.8, 0.25);
@@ -1484,6 +1496,42 @@ function buildPortEnvironmentGlb() {
   }
   addTacticalHumvee(11.8, 10.5, false); // Humvee 1 parked beside elevated staircase & warehouse
   addTacticalHumvee(18.5, 12.2, true);  // Humvee 2 parked facing plaza outside guard post
+
+  // 8b. Harbor Micro-Props: Industrial Electrical Substation Cabinets, Fire Hydrants, Warning Cones & Heavy Spool Racks
+  const elecCabinets = [
+    [-10.5, 0.85, 23.5, 0.8, 1.7, 1.4, 0],
+    [-1.2, 0.85, 20.5, 0.8, 1.7, 1.2, Math.PI / 2],
+    [10.2, 0.85, 14.5, 0.9, 1.7, 1.5, 0],
+    [10.2, 0.85, -12.0, 0.8, 1.7, 1.3, 0],
+    [-7.2, 0.85, -20.5, 0.8, 1.7, 1.4, Math.PI / 2],
+  ];
+  for (const [ex, ey, ez, sx, sy, sz, ry] of elecCabinets) {
+    appendRotatedYBox(gDarkSteel, ex, ey, ez, sx, sy, sz, ry, 0.4);
+    appendRotatedYBox(gHazard, ex, ey + sy * 0.45, ez, sx * 1.05, 0.08, sz * 1.05, ry, 0.5); // Hazard warning lid
+    appendRotatedYBox(gWindows, ex + (ry === 0 ? sx * 0.51 : 0), ey + 0.3, ez + (ry !== 0 ? sz * 0.51 : 0), 0.04, 0.25, 0.35, ry, 1); // Status panel indicator
+  }
+
+  // Industrial Heavy Red Dock Fire Hydrants with Dual Outlets
+  const hydrants = [
+    [-15.5, 18.0], [-15.5, 2.0], [9.5, 18.0], [9.5, -2.0], [14.0, 20.0]
+  ];
+  for (const [hx, hz] of hydrants) {
+    appendCylinder(gExplosive, hx, 0.42, hz, 0.16, 0.18, 0.84, 10, 'y'); // Hydrant barrel
+    appendCylinder(gExplosive, hx, 0.88, hz, 0.20, 0.20, 0.12, 10, 'y'); // Top bonnet nut
+    appendCylinder(gDarkSteel, hx, 0.55, hz, 0.08, 0.08, 0.46, 8, 'x'); // Dual side valve ports
+  }
+
+  // Tactical High-Visibility Traffic Warning Cones with White Reflective Collars
+  const cones = [
+    [-11.2, 21.5], [-10.5, 22.2], [-9.8, 21.7],
+    [0.5, 11.8], [1.2, 11.2], [-6.2, 1.5], [-5.5, 2.2],
+    [13.2, 15.2], [13.2, 17.5]
+  ];
+  for (const [cx, cz] of cones) {
+    appendBox(gHazard, cx, 0.03, cz, 0.38, 0.06, 0.38, 0.5); // Square base
+    appendCylinder(gHazard, cx, 0.38, cz, 0.04, 0.15, 0.70, 10, 'y'); // Orange conical body
+    appendCylinder(gConcrete, cx, 0.42, cz, 0.09, 0.12, 0.16, 10, 'y'); // White reflective band
+  }
 
   // Industrial Port Forklift & Cable Reels & Wooden Pallets
   appendBox(gHazard, -8.8, 0.65, -18.5, 1.4, 1.1, 2.3, 0.4); // Forklift body
@@ -1889,7 +1937,16 @@ function buildTacticalSoldierGlb() {
   appendCylinder(gHelmet, 0, 0.198, -0.006, 0.064, 0.102, 0.036, 16, 'y'); // Top crown dome
   appendBox(gHelmet, -0.102, 0.135, -0.01, 0.014, 0.026, 0.11, 1);        // Left ARC Accessory Rail & Comms Headset
   appendBox(gHelmet, 0.102, 0.135, -0.01, 0.014, 0.026, 0.11, 1);         // Right ARC Accessory Rail & Comms Headset
+  // Tactical Helmet Velcro ID Patches (Top & Sides)
+  appendBox(gHelmet, 0, 0.208, -0.01, 0.048, 0.006, 0.075, 1); // Top strobe velcro patch
+  appendBox(gHelmet, -0.088, 0.165, -0.01, 0.006, 0.035, 0.055, 1); // Left IR callsign patch
+  appendBox(gHelmet, 0.088, 0.165, -0.01, 0.006, 0.035, 0.055, 1); // Right IR callsign patch
   appendBox(gHelmet, 0, 0.155, 0.098, 0.042, 0.036, 0.024, 1);            // Wilcox NVG Shroud Mount
+  // Comms Headset Boom Mic & Ear Cups
+  appendCylinder(gHelmet, -0.098, 0.105, -0.015, 0.026, 0.026, 0.022, 10, 'x'); // Left ear cup
+  appendCylinder(gHelmet, 0.098, 0.105, -0.015, 0.026, 0.026, 0.022, 10, 'x');  // Right ear cup
+  appendBeam(gHelmet, -0.098, 0.105, -0.015, -0.045, 0.075, 0.065, 0.006, 5); // Flexible boom mic
+  appendCylinder(gHelmet, -0.045, 0.075, 0.065, 0.010, 0.010, 0.018, 6, 'z'); // Mic wind screen
   // Dual-Tube Night Vision Goggles (GPNVG / PVS-31) mounted on helmet front
   appendCylinder(gHelmet, -0.028, 0.145, 0.135, 0.016, 0.018, 0.065, 10, 'z');
   appendCylinder(gHelmet, 0.028, 0.145, 0.135, 0.016, 0.018, 0.065, 10, 'z');
