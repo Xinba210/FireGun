@@ -286,8 +286,9 @@ export class OperatorShowcase {
       this.camTargetPos.set(0.1, 0.95, 1.2);
       this.camTargetLook.set(0, 0.92, 0);
     } else if (target === 'legs') {
-      this.camTargetPos.set(0.25, 0.55, 1.35);
-      this.camTargetLook.set(0.1, 0.5, 0);
+      // 腳部特寫：鏡頭大幅拉近至靴子高度 (y=0.18)，視角直視靴面
+      this.camTargetPos.set(0.18, 0.28, 0.85);
+      this.camTargetLook.set(0.05, 0.16, 0);
     }
   }
 
