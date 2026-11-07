@@ -650,7 +650,14 @@ body, html {
   margin-bottom: 10px;
 }
 
-.btn-operator-pill, .btn-grenade-pill, .btn-motion-impulse {
+.showcase-operator-pills, .showcase-loadout-pills, .showcase-grenade-pills, .showcase-camo-pills, .showcase-motion-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.btn-operator-pill, .btn-loadout-pill, .btn-grenade-pill, .btn-motion-impulse {
   background: rgba(15, 23, 42, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: #cbd5e1;
@@ -662,7 +669,7 @@ body, html {
   transition: all 0.15s ease;
 }
 
-.btn-operator-pill.active, .btn-grenade-pill.active {
+.btn-operator-pill.active, .btn-loadout-pill.active, .btn-grenade-pill.active {
   background: rgba(202, 138, 4, 0.35);
   border-color: #facc15;
   color: #facc15;

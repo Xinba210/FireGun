@@ -284,6 +284,14 @@ export class GameScreensManager {
                   <button data-operator="MAVERICK" class="btn-operator-pill">遊俠 MAVERICK (TopGun特種空勤)</button>
                 </div>
 
+                <div class="showcase-sec-title">TACTICAL LOADOUT // 戰術裝備套組</div>
+                <div class="showcase-loadout-pills">
+                  <button data-loadout="ASSAULT" class="btn-loadout-pill active">突擊先鋒 (ASSAULT)</button>
+                  <button data-loadout="RECON" class="btn-loadout-pill">輕裝特偵 (RECON)</button>
+                  <button data-loadout="BREACHER" class="btn-loadout-pill">重裝破障 (BREACHER)</button>
+                  <button data-loadout="SNIPER" class="btn-loadout-pill">暗夜狙擊 (SNIPER)</button>
+                </div>
+
                 <div class="showcase-sec-title">TACTICAL GRENADE // 戰術投擲裝備</div>
                 <div class="showcase-grenade-pills">
                   <button data-grenade="FRAG" class="btn-grenade-pill active">M67 破片雷 (FRAG)</button>

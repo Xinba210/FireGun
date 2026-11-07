@@ -21,7 +21,7 @@ import { WorldDetailsManager } from './world/details.ts';
 import { tacticalRadioAudio } from './game/audio.ts';
 import { hapticEngine } from './game/haptics.ts';
 import { OperatorShowcase, OperatorCamoScheme, OperatorId, TourFocusTarget } from './game/operator_showcase.ts';
-import { attachTacticalGear, TacticalGearNodes } from './game/tactical_gear.ts';
+import { attachTacticalGear, TacticalGearNodes, TacticalLoadoutType } from './game/tactical_gear.ts';
 import { createGrenadeMesh, GrenadeType, GRENADE_CONFIGS } from './game/grenades.ts';
 
 interface WeaponSpec {
@@ -4861,6 +4861,19 @@ function setupOperatorShowcaseUi() {
         activeOperatorShowcase.loadCharacter(op);
         player.operatorId = op;
         showKillBanner(`OPERATOR SELECTED // ${op === 'ROACH' ? 'ROACH (暗潮特遣隊)' : 'MAVERICK (TopGun特種空勤)'}`);
+      }
+    };
+  });
+
+  // 戰術裝備套組切換 (ASSAULT / RECON / BREACHER / SNIPER)
+  document.querySelectorAll<HTMLElement>('.btn-loadout-pill').forEach((btn) => {
+    btn.onclick = () => {
+      document.querySelectorAll('.btn-loadout-pill').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      const loadout = btn.dataset.loadout as TacticalLoadoutType;
+      if (loadout && activeOperatorShowcase) {
+        activeOperatorShowcase.setLoadout(loadout);
+        showKillBanner(`TACTICAL LOADOUT EQUIPPED // ${loadout}`);
       }
     };
   });

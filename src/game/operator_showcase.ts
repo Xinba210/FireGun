@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { attachTacticalGear, TacticalGearNodes } from './tactical_gear.ts';
+import { attachTacticalGear, TacticalGearNodes, TacticalLoadoutType } from './tactical_gear.ts';
 import { createGrenadeMesh, GrenadeType } from './grenades.ts';
 
 export interface OperatorShowcaseOptions {
@@ -37,6 +37,8 @@ export class OperatorShowcase {
   private grenadeSlot: THREE.Group;
   private currentGrenadeType: GrenadeType = 'FRAG';
   private currentActiveClipName = 'Idle_Loop';
+  public currentLoadoutType: TacticalLoadoutType = 'ASSAULT';
+  public currentCamoScheme: OperatorCamoScheme = 'MIDNIGHT';
 
   // 3D 導覽相機平滑過渡
   private camTargetPos = new THREE.Vector3(0, 1.25, 3.2);
@@ -185,7 +187,7 @@ export class OperatorShowcase {
     this.turntableGroup.add(this.modelRoot);
 
     // 裝配細緻化戰術配件與次級動態 (Tactical Gear & Secondary Motion)
-    this.gearNodes = attachTacticalGear(this.modelRoot, this.turntableGroup);
+    this.gearNodes = attachTacticalGear(this.modelRoot, this.turntableGroup, this.currentLoadoutType);
 
     // 掛載武器
     const rightHand = this.modelRoot.getObjectByName('hand_r') || this.modelRoot.getObjectByName('RightHand') || this.modelRoot.getObjectByName('spine_03');
@@ -231,6 +233,30 @@ export class OperatorShowcase {
       this.activeAction = defaultClip;
       this.currentActiveClipName = 'Idle_Loop';
     }
+  }
+
+  /**
+   * 切換不同戰術裝備套組 (ASSAULT / RECON / BREACHER / SNIPER)
+   */
+  public setLoadout(type: TacticalLoadoutType) {
+    this.currentLoadoutType = type;
+    if (!this.modelRoot) return;
+
+    // 重新裝配指定戰術裝備
+    this.gearNodes = attachTacticalGear(this.modelRoot, this.turntableGroup, type);
+
+    // 重新掛載手榴彈在戰術背心側袋
+    if (this.gearNodes && this.gearNodes.vestGroup) {
+      this.gearNodes.vestGroup.add(this.grenadeSlot);
+      this.grenadeSlot.position.set(-0.14, -0.04, 0.13);
+      this.setGrenadeAttachment(this.currentGrenadeType);
+    }
+
+    // 重新套用當前迷彩
+    this.setCamo(this.currentCamoScheme);
+
+    // 稍微給一個戰術整備震動效果
+    this.triggerImpulse('stop');
   }
 
   /**
@@ -326,6 +352,7 @@ export class OperatorShowcase {
   }
 
   public setCamo(scheme: OperatorCamoScheme) {
+    this.currentCamoScheme = scheme;
     const colors: Record<OperatorCamoScheme, number> = {
       MIDNIGHT: 0x1e293b,
       URBAN_WOLF: 0x475569,
