@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { attachTacticalGear, TacticalGearNodes, TacticalLoadoutType } from './tactical_gear.ts';
 import { createGrenadeMesh, GrenadeType } from './grenades.ts';
+import { applyUniformToModel, UniformStyleId, UNIFORM_CONFIGS } from './uniform_system.ts';
 
 export interface OperatorShowcaseOptions {
   container: HTMLElement;
@@ -39,6 +40,7 @@ export class OperatorShowcase {
   private currentActiveClipName = 'Idle_Loop';
   public currentLoadoutType: TacticalLoadoutType = 'ASSAULT';
   public currentCamoScheme: OperatorCamoScheme = 'MIDNIGHT';
+  public currentUniformStyle: UniformStyleId = 'SHADOW_BLACK';
 
   // 3D 導覽相機平滑過渡
   private camTargetPos = new THREE.Vector3(0, 1.25, 3.2);
@@ -233,6 +235,9 @@ export class OperatorShowcase {
       this.activeAction = defaultClip;
       this.currentActiveClipName = 'Idle_Loop';
     }
+
+    // 套用特戰作戰服設計 (Combat Uniform Style)
+    this.setUniform(this.currentUniformStyle);
   }
 
   /**
@@ -349,6 +354,16 @@ export class OperatorShowcase {
     }
     next.reset().fadeIn(0.2).play();
     this.activeAction = next;
+  }
+
+  /**
+   * 切換特戰作戰服風格設計 (Combat Uniform System)
+   * 包含抗撕裂織物貼圖、靴子、手套、護膝與頭套分層材質
+   */
+  public setUniform(styleId: UniformStyleId) {
+    this.currentUniformStyle = styleId;
+    if (!this.modelRoot) return;
+    applyUniformToModel(this.modelRoot, styleId);
   }
 
   public setCamo(scheme: OperatorCamoScheme) {

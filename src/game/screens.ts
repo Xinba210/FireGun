@@ -284,7 +284,15 @@ export class GameScreensManager {
                   <button data-operator="MAVERICK" class="btn-operator-pill">遊俠 MAVERICK (TopGun特種空勤)</button>
                 </div>
 
-                <div class="showcase-sec-title">TACTICAL LOADOUT // 戰術裝備套組</div>
+                <div class="showcase-sec-title">COMBAT UNIFORM // 特戰作戰服設計 (內層服飾)</div>
+                <div class="showcase-uniform-pills">
+                  <button data-uniform="SHADOW_BLACK" class="btn-uniform-pill active">暗潮黑影特勤服 (SHADOW)</button>
+                  <button data-uniform="ARCTIC_HEX" class="btn-uniform-pill">極地雪斑數碼服 (ARCTIC)</button>
+                  <button data-uniform="WOODLAND_TIGER" class="btn-uniform-pill">幽靈叢林虎斑服 (TIGER)</button>
+                  <button data-uniform="URBAN_PMC" class="btn-uniform-pill">都市傭兵行動服 (URBAN)</button>
+                </div>
+
+                <div class="showcase-sec-title">TACTICAL LOADOUT // 戰術裝備套組 (外掛防具)</div>
                 <div class="showcase-loadout-pills">
                   <button data-loadout="ASSAULT" class="btn-loadout-pill active">突擊先鋒 (ASSAULT)</button>
                   <button data-loadout="RECON" class="btn-loadout-pill">輕裝特偵 (RECON)</button>

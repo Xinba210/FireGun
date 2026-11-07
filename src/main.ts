@@ -23,6 +23,7 @@ import { hapticEngine } from './game/haptics.ts';
 import { OperatorShowcase, OperatorCamoScheme, OperatorId, TourFocusTarget } from './game/operator_showcase.ts';
 import { attachTacticalGear, TacticalGearNodes, TacticalLoadoutType } from './game/tactical_gear.ts';
 import { createGrenadeMesh, GrenadeType, GRENADE_CONFIGS } from './game/grenades.ts';
+import { UniformStyleId, UNIFORM_CONFIGS } from './game/uniform_system.ts';
 
 interface WeaponSpec {
   id: string;
@@ -4861,6 +4862,20 @@ function setupOperatorShowcaseUi() {
         activeOperatorShowcase.loadCharacter(op);
         player.operatorId = op;
         showKillBanner(`OPERATOR SELECTED // ${op === 'ROACH' ? 'ROACH (暗潮特遣隊)' : 'MAVERICK (TopGun特種空勤)'}`);
+      }
+    };
+  });
+
+  // 特戰作戰服風格切換 (COMBAT UNIFORMS: SHADOW_BLACK / ARCTIC_HEX / WOODLAND_TIGER / URBAN_PMC)
+  document.querySelectorAll<HTMLElement>('.btn-uniform-pill').forEach((btn) => {
+    btn.onclick = () => {
+      document.querySelectorAll('.btn-uniform-pill').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      const uStyle = btn.dataset.uniform as UniformStyleId;
+      if (uStyle && activeOperatorShowcase) {
+        activeOperatorShowcase.setUniform(uStyle);
+        const config = UNIFORM_CONFIGS[uStyle];
+        showKillBanner(`COMBAT UNIFORM EQUIPPED // ${config ? config.name : uStyle}`);
       }
     };
   });
