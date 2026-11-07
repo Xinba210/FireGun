@@ -24,6 +24,7 @@ import { OperatorShowcase, OperatorCamoScheme, OperatorId, TourFocusTarget } fro
 import { attachTacticalGear, TacticalGearNodes, TacticalLoadoutType } from './game/tactical_gear.ts';
 import { createGrenadeMesh, GrenadeType, GRENADE_CONFIGS } from './game/grenades.ts';
 import { UniformStyleId, UNIFORM_CONFIGS } from './game/uniform_system.ts';
+import { TacticalBootStyleId, TACTICAL_BOOT_CONFIGS } from './game/boots_system.ts';
 
 interface WeaponSpec {
   id: string;
@@ -4876,6 +4877,20 @@ function setupOperatorShowcaseUi() {
         activeOperatorShowcase.setUniform(uStyle);
         const config = UNIFORM_CONFIGS[uStyle];
         showKillBanner(`COMBAT UNIFORM EQUIPPED // ${config ? config.name : uStyle}`);
+      }
+    };
+  });
+
+  // 特戰作戰靴款式切換 (TACTICAL BOOTS: MILSPEC_HIGH_LACE / TACTICAL_ZIP_ASSAULT / HEAVY_BREACHER_ARMOR / COYOTE_STEALTH_SUEDE)
+  document.querySelectorAll<HTMLElement>('.btn-boot-pill').forEach((btn) => {
+    btn.onclick = () => {
+      document.querySelectorAll('.btn-boot-pill').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      const bStyle = btn.dataset.boot as TacticalBootStyleId;
+      if (bStyle && activeOperatorShowcase) {
+        activeOperatorShowcase.setBootStyle(bStyle);
+        const config = TACTICAL_BOOT_CONFIGS[bStyle];
+        showKillBanner(`TACTICAL BOOTS EQUIPPED // ${config ? config.name : bStyle}`);
       }
     };
   });

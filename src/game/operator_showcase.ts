@@ -3,6 +3,7 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { attachTacticalGear, TacticalGearNodes, TacticalLoadoutType } from './tactical_gear.ts';
 import { createGrenadeMesh, GrenadeType } from './grenades.ts';
 import { applyUniformToModel, UniformStyleId, UNIFORM_CONFIGS } from './uniform_system.ts';
+import { applyBootsToModel, TacticalBootStyleId, TACTICAL_BOOT_CONFIGS } from './boots_system.ts';
 
 export interface OperatorShowcaseOptions {
   container: HTMLElement;
@@ -41,6 +42,7 @@ export class OperatorShowcase {
   public currentLoadoutType: TacticalLoadoutType = 'ASSAULT';
   public currentCamoScheme: OperatorCamoScheme = 'MIDNIGHT';
   public currentUniformStyle: UniformStyleId = 'SHADOW_BLACK';
+  public currentBootStyle: TacticalBootStyleId = 'MILSPEC_HIGH_LACE';
 
   // 3D 導覽相機平滑過渡
   private camTargetPos = new THREE.Vector3(0, 1.25, 3.2);
@@ -238,6 +240,9 @@ export class OperatorShowcase {
 
     // 套用特戰作戰服設計 (Combat Uniform Style)
     this.setUniform(this.currentUniformStyle);
+
+    // 套用特戰靴款式 (Tactical Boots Style)
+    this.setBootStyle(this.currentBootStyle);
   }
 
   /**
@@ -364,6 +369,16 @@ export class OperatorShowcase {
     this.currentUniformStyle = styleId;
     if (!this.modelRoot) return;
     applyUniformToModel(this.modelRoot, styleId);
+  }
+
+  /**
+   * 切換特戰靴外觀與 3D 配件 (Tactical Boots System)
+   * 包含全地形高筒、快拆突擊、重裝破障防爆甲與麂皮匕首套
+   */
+  public setBootStyle(styleId: TacticalBootStyleId) {
+    this.currentBootStyle = styleId;
+    if (!this.modelRoot) return;
+    applyBootsToModel(this.modelRoot, styleId);
   }
 
   public setCamo(scheme: OperatorCamoScheme) {

@@ -292,6 +292,14 @@ export class GameScreensManager {
                   <button data-uniform="URBAN_PMC" class="btn-uniform-pill">都市傭兵行動服 (URBAN)</button>
                 </div>
 
+                <div class="showcase-sec-title">TACTICAL BOOTS // 特戰作戰靴款式</div>
+                <div class="showcase-boot-pills">
+                  <button data-boot="MILSPEC_HIGH_LACE" class="btn-boot-pill active">高筒作戰皮靴 (MIL-SPEC)</button>
+                  <button data-boot="TACTICAL_ZIP_ASSAULT" class="btn-boot-pill">快拆突擊靴 (SIDE-ZIP)</button>
+                  <button data-boot="HEAVY_BREACHER_ARMOR" class="btn-boot-pill">重裝鋼頭甲靴 (BREACHER)</button>
+                  <button data-boot="COYOTE_STEALTH_SUEDE" class="btn-boot-pill">狼棕麂皮匕首靴 (SUEDE)</button>
+                </div>
+
                 <div class="showcase-sec-title">TACTICAL LOADOUT // 戰術裝備套組 (外掛防具)</div>
                 <div class="showcase-loadout-pills">
                   <button data-loadout="ASSAULT" class="btn-loadout-pill active">突擊先鋒 (ASSAULT)</button>
